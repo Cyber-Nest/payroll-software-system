@@ -4,8 +4,8 @@ import { AuditLog } from '../models/AuditLog';
 import { Company } from '../models/Company';
 import { Employee } from '../models/Employee';
 import { User } from '../models/User';
-import { authenticate, AuthRequest, signToken } from '../middleware/auth';
-import { emailService } from '../services/email.service';
+import { authenticate, AuthRequest, requirePermission, signToken } from '../middleware/auth';
+import { requestPasswordReset, resetPassword } from '../services/passwordReset.service';
 import { hashPassword, validatePasswordRules, verifyPassword } from '../utils/security';
 
 const router = Router();
@@ -67,12 +67,22 @@ router.post('/login-customer-id', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
   if (parsed.success) {
-    await emailService.send({ to: parsed.data.email, subject: 'Payhours password reset', body: 'Password reset link: [stubbed]' });
+    await requestPasswordReset(parsed.data.email);
   }
   res.json({ message: 'If the account exists, a reset email has been sent.' });
 });
 
-router.post('/change-password', authenticate, async (req: AuthRequest, res) => {
+router.post('/reset-password', async (req, res) => {
+  const parsed = z.object({ token: z.string().min(20), newPassword: z.string(), confirmPassword: z.string() }).safeParse(req.body);
+  if (!parsed.success || parsed.data.newPassword !== parsed.data.confirmPassword) return res.status(400).json({ message: 'Invalid password reset request' });
+  const failures = validatePasswordRules(parsed.data.newPassword, '');
+  if (failures.length) return res.status(400).json({ message: 'Password does not meet Payhours rules', failures });
+  const ok = await resetPassword(parsed.data.token, parsed.data.newPassword);
+  if (!ok) return res.status(400).json({ message: 'Reset link is invalid or expired' });
+  res.json({ message: 'Password reset complete' });
+});
+
+router.post('/change-password', authenticate, requirePermission('self.security.edit'), async (req: AuthRequest, res) => {
   const parsed = z.object({ currentPassword: z.string(), newPassword: z.string(), confirmPassword: z.string() }).safeParse(req.body);
   if (!parsed.success || parsed.data.newPassword !== parsed.data.confirmPassword) return res.status(400).json({ message: 'Invalid password change request' });
   const user = await User.findById(req.user?.id);

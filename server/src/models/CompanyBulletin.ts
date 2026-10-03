@@ -6,6 +6,7 @@ export interface ICompanyBulletin {
   body: string;
   postedAt: Date;
   postedBy?: string;
+  readByEmployeeIds: mongoose.Types.ObjectId[];
 }
 
 const companyBulletinSchema = new Schema<ICompanyBulletin>({
@@ -13,7 +14,8 @@ const companyBulletinSchema = new Schema<ICompanyBulletin>({
   title: { type: String, required: true },
   body: { type: String, required: true },
   postedAt: { type: Date, default: Date.now },
-  postedBy: String
+  postedBy: String,
+  readByEmployeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }]
 });
 
 export const CompanyBulletin = mongoose.model<ICompanyBulletin>('CompanyBulletin', companyBulletinSchema);

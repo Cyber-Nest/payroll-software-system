@@ -1,141 +1,191 @@
 import mongoose from 'mongoose';
+import { configureDns } from '../config/dns';
 import { env } from '../config/env';
 import { Company } from '../models/Company';
+import { CompanyBulletin } from '../models/CompanyBulletin';
 import { Employee } from '../models/Employee';
+import { EmployerUser } from '../models/EmployerUser';
+import { Help } from '../models/Help';
 import { PayStatement } from '../models/PayStatement';
+import { PayrollRun } from '../models/PayrollRun';
+import { SuperAdmin } from '../models/SuperAdmin';
 import { TaxFormDocument } from '../models/TaxFormDocument';
 import { User } from '../models/User';
-import { decimalToMoney } from '../utils/money';
+import { defaultHelpContent } from '../data/helpContent';
+import { addMoney, decimalToMoney, multiplyMoney } from '../utils/money';
 import { encryptSin, hashPassword } from '../utils/security';
 
-const samplePayStatements = [
+const password = 'Payhours1!';
+
+const employers = [
   {
-    date: '2024-12-13',
-    period: 25,
-    periodRange: 'Nov 25, 2024 to Dec 8, 2024',
-    gross: '2030.20',
-    deductions: '442.78',
-    net: '1587.42',
-    ytdNet: '14774.24',
-    ytdGross: '21504.08'
+    customerId: 'A07998',
+    legalName: 'Gayatri Holding Medicine Hat A Inc',
+    operatingName: 'Gayatri Pharmacy',
+    businessNumber: '734512889RP0001',
+    admin: { name: 'Admin User', email: 'admin@abcsolutions.ca' },
+    address: { street: '1277 Trans Canada Way SE', city: 'Medicine Hat', province: 'AB', postalCode: 'T1B1H9', country: 'Canada' },
+    customerCarePhone: '(403) 555-0147',
+    employees: [
+      { number: '0006', first: 'ANILKUMAR', middle: 'MUKESHBHAI', last: 'SUHAGIYA', email: 'anil.suhagiya@example.com', role: 'Pharmacy Assistant', city: 'MEDICINE HAT', net: '1631.06' },
+      { number: '0007', first: 'Harpreet', last: 'Singh', email: 'harpreet.singh@example.com', role: 'Store Manager', city: 'Medicine Hat', net: '1968.44' },
+      { number: '0008', first: 'Jasleen', last: 'Kaur', email: 'jasleen.kaur@example.com', role: 'Cashier', city: 'Medicine Hat', net: '1284.22' }
+    ]
   },
   {
-    date: '2024-12-27',
-    period: 26,
-    periodRange: 'Dec 9, 2024 to Dec 22, 2024',
-    gross: '2081.04',
-    deductions: '449.98',
-    net: '1631.06',
-    ytdNet: '16405.30',
-    ytdGross: '23585.12'
+    customerId: 'MF1020',
+    legalName: 'Maple Foods Inc.',
+    operatingName: 'Maple Foods',
+    businessNumber: '881245612RP0001',
+    admin: { name: 'Simran Kaur', email: 'simran@maplefoods.ca' },
+    address: { street: '488 Granville Street', city: 'Vancouver', province: 'BC', postalCode: 'V6C1V4', country: 'Canada' },
+    customerCarePhone: '(604) 555-0147',
+    employees: [
+      { number: 'MF-001', first: 'Amanpreet', last: 'Gill', email: 'amanpreet.gill@maplefoods.ca', role: 'Shift Lead', city: 'Vancouver', net: '1742.15' },
+      { number: 'MF-002', first: 'Maria', last: 'Lopez', email: 'maria.lopez@maplefoods.ca', role: 'Kitchen Staff', city: 'Burnaby', net: '1428.90' }
+    ]
+  },
+  {
+    customerId: 'SP2040',
+    legalName: 'Spice Hub Restaurant Ltd.',
+    operatingName: 'Spice Hub',
+    businessNumber: '792230441RP0001',
+    admin: { name: 'Rahul Desai', email: 'rahul@spicehub.ca' },
+    address: { street: '91 17 Avenue SW', city: 'Calgary', province: 'AB', postalCode: 'T2S0A1', country: 'Canada' },
+    customerCarePhone: '(403) 555-0188',
+    employees: [
+      { number: 'SP-001', first: 'Priya', last: 'Verma', email: 'priya.verma@spicehub.ca', role: 'Server', city: 'Calgary', net: '1188.72' },
+      { number: 'SP-002', first: 'Dev', last: 'Patel', email: 'dev.patel@spicehub.ca', role: 'Cook', city: 'Calgary', net: '1519.38' }
+    ]
   }
 ];
 
-async function seed() {
-  await mongoose.connect(env.mongoUri);
-
-  const company = await Company.findOneAndUpdate(
-    { customerId: 'A07998' },
-    {
-      legalName: 'Gayatri Holding Medicine Hat A Inc',
-      operatingName: 'Gayatri Holding Medicine Hat A Inc',
-      customerId: 'A07998',
-      address: { street: '1277 Trans Canada Way SE', city: 'Medicine Hat', province: 'AB', postalCode: 'T1B1H9' }
-    },
-    { new: true, upsert: true }
-  );
-
+async function seedEmployee(company: mongoose.Document & { _id: mongoose.Types.ObjectId; legalName: string; customerId: string }, item: (typeof employers)[number]['employees'][number], index: number) {
   const user = await User.findOneAndUpdate(
-    { email: 'anil.suhagiya@example.com' },
-    {
-      email: 'anil.suhagiya@example.com',
-      passwordHash: await hashPassword('Payhours1!'),
-      mustChangePassword: false,
-      isActive: true
-    },
+    { email: item.email },
+    { email: item.email, passwordHash: await hashPassword(password), mustChangePassword: false, isActive: true },
     { new: true, upsert: true }
   );
-
   const employee = await Employee.findOneAndUpdate(
-    { companyId: company._id, employeeNumber: '0006' },
+    { companyId: company._id, employeeNumber: item.number },
     {
       userId: user._id,
       companyId: company._id,
-      employeeNumber: '0006',
-      legalFirstName: 'ANILKUMAR',
-      middleName: 'MUKESHBHAI',
-      legalLastName: 'SUHAGIYA',
-      preferredFirstName: 'Anilkumar',
-      preferredLastName: 'Suhagiya',
-      salutation: 'Mr.',
-      citizenship: 'Canada',
-      sinEncrypted: encryptSin('973263007'),
-      birthDate: new Date('1989-08-15'),
-      addresses: [{ street: '370 NORTHLANDS POINTE NE', city: 'MEDICINE HAT', province: 'AB', postalCode: 'T1C0C4' }],
-      phones: [{ type: 'Mobile', number: '403-555-0106' }],
-      personalEmail: 'anil.suhagiya@example.com',
+      employeeNumber: item.number,
+      legalFirstName: item.first,
+      middleName: item.middle || '',
+      legalLastName: item.last,
+      preferredFirstName: item.first,
+      sinEncrypted: encryptSin(`97326300${index}`.slice(0, 9)),
+      birthDate: new Date(`199${index}-08-15`),
+      addresses: [{ street: `${100 + index} Main Street`, city: item.city, province: 'AB', postalCode: 'T1C0C4' }],
+      phones: [{ type: 'Mobile', number: `403-555-010${index}` }],
+      personalEmail: item.email,
       notificationEmailPreference: 'personal',
-      emergencyContacts: [{ name: 'Jiya Suhagiya', relationship: 'Spouse', phone: '403-555-0111' }],
-      occupation: 'Pharmacy Assistant',
-      startDate: new Date('2024-01-08'),
-      seniorityDate: new Date('2024-01-08'),
+      emergencyContacts: [{ name: 'Emergency Contact', relationship: 'Family', phone: `403-555-020${index}` }],
+      occupation: item.role,
+      startDate: new Date('2025-04-15'),
+      seniorityDate: new Date('2025-04-15'),
       primaryEarningCode: 'Regular Pay',
-      payGroup: 'Bi-Weekly',
+      payGroup: 'Biweekly',
       taxProvince: 'Alberta',
-      wcbNumber: 'AB-44521',
+      wcbNumber: `WCB-${index}`,
       personalTaxCredits: { federalClaimAmount: decimalToMoney('16452.00'), provincialClaimAmount: decimalToMoney('22769.00') },
-      payStatementPreference: { emailStatement: true, language: 'English' }
+      payStatementPreference: { emailStatement: true, language: 'English' },
+      adminProfile: {
+        personal: { firstName: item.first, lastName: item.last, emailAddress: item.email, phoneNumber: `403-555-010${index}`, city: item.city, province: 'Alberta' },
+        employment: { employmentStatus: 'Active', employmentType: 'Full-Time', jobTitle: item.role, department: 'Operations', location: `${company.legalName} Main`, employeeNumber: item.number },
+        compensation: { payType: 'Hourly', hourlyRate: String(18 + index), payFrequency: 'Biweekly' },
+        tax: { provinceOfResidence: 'Alberta', residencyStatus: 'Resident of Canada', craTd1Form: 'Completed' },
+        vacation: { vacationPolicy: 'Accrue by Percentage (4%)' },
+        benefits: { extendedHealthCare: 'Single' },
+        banking: { directDeposit: 'Enabled', bankInstitution: 'Royal Bank of Canada (RBC)', accountType: 'Chequing' }
+      }
     },
     { new: true, upsert: true }
   );
-
   user.lastSelectedEmployeeId = employee._id;
   await user.save();
 
-  await Promise.all([
-    PayStatement.deleteMany({ employeeId: employee._id, companyId: company._id }),
-    TaxFormDocument.deleteMany({ employeeId: employee._id, companyId: company._id })
-  ]);
-
-  for (const statement of samplePayStatements) {
+  await PayStatement.deleteMany({ employeeId: employee._id, companyId: company._id });
+  const net = decimalToMoney(item.net);
+  for (const [offset, period] of [25, 26].entries()) {
+    const netWithOffset = addMoney(net, multiplyMoney(18, offset));
     await PayStatement.create({
       employeeId: employee._id,
       companyId: company._id,
-      payDate: new Date(statement.date),
-      payPeriodNumber: statement.period,
+      payDate: new Date(period === 25 ? '2024-12-13' : '2024-12-27'),
+      payPeriodNumber: period,
       payPeriodYear: 2024,
       type: 'Regular',
-      netPay: decimalToMoney(statement.net),
-      yearToDateNetPay: decimalToMoney(statement.ytdNet),
-      grossEarnings: [
-        { code: 'REG', description: 'Regular', amount: decimalToMoney(statement.period === 26 ? '2001.00' : '2030.20') },
-        { code: 'VAC', description: 'Vac Fach Pay', amount: decimalToMoney(statement.period === 26 ? '80.04' : '0.00') },
-        { code: 'TOTAL', description: 'Total', amount: decimalToMoney(statement.gross) }
-      ],
-      deductions: [
-        { code: 'TAX', description: 'Federal Tax', amount: decimalToMoney(statement.period === 26 ? '299.62' : '292.38') },
-        { code: 'CPP', description: 'CPP', amount: decimalToMoney(statement.period === 26 ? '115.81' : '115.85') },
-        { code: 'EI', description: 'EI', amount: decimalToMoney('34.55') },
-        { code: 'TOTAL', description: 'Total', amount: decimalToMoney(statement.deductions) }
-      ],
-      additionalInfo: [
-        { key: 'Pay Period', value: statement.periodRange },
-        { key: 'Period Number', value: String(statement.period) },
-        { key: 'Payroll Number', value: 'A07998' },
-        { key: 'Employee Number', value: '0006' },
-        { key: 'Department', value: '000000' },
-        { key: 'Deposit', value: `XXX-XXXXX-XXXXXX $ ${statement.net}` },
-        { key: 'Seq. Number', value: '208641062' },
-        { key: 'Additional Fed Tax', value: '$ 0' }
-      ],
-      isUnread: statement.period === 26
+      netPay: decimalToMoney(netWithOffset),
+      yearToDateNetPay: decimalToMoney(multiplyMoney(net, period === 25 ? 9 : 10)),
+      grossEarnings: [{ code: 'REG', description: 'Regular', amount: decimalToMoney(multiplyMoney(net, '1.28')) }],
+      deductions: [{ code: 'TOTAL', description: 'Total', amount: decimalToMoney(multiplyMoney(net, '0.28')) }],
+      additionalInfo: [{ key: 'Employee Number', value: item.number }, { key: 'Payroll Number', value: company.customerId }],
+      isUnread: period === 26
     });
   }
+  await TaxFormDocument.findOneAndUpdate({ employeeId: employee._id, companyId: company._id, taxYear: 2024, formType: 'T4' }, { employeeId: employee._id, companyId: company._id, taxYear: 2024, formType: 'T4' }, { upsert: true });
+}
 
-  await TaxFormDocument.create({ employeeId: employee._id, companyId: company._id, taxYear: 2024, formType: 'T4' });
+async function seed() {
+  configureDns();
+  await mongoose.connect(env.mongoUri);
 
-  console.log('Seeded Payhours employee portal. Login: anil.suhagiya@example.com / Payhours1!');
-  console.log("// Manual bulletin example: await CompanyBulletin.create({ companyId, title: 'Holiday schedule', body: 'Updated office hours are posted.', postedBy: 'Payroll' })");
+  await SuperAdmin.findOneAndUpdate(
+    { email: 'superadmin@payhours.ca' },
+    { name: 'Payhours Super Admin', email: 'superadmin@payhours.ca', passwordHash: await hashPassword(password), isActive: true },
+    { new: true, upsert: true }
+  );
+
+  for (const employer of employers) {
+    const company = await Company.findOneAndUpdate(
+      { customerId: employer.customerId },
+      {
+        legalName: employer.legalName,
+        operatingName: employer.operatingName,
+        customerId: employer.customerId,
+        businessNumber: employer.businessNumber,
+        businessType: 'Corporation',
+        industry: 'Food and Retail',
+        employeeCount: employer.employees.length,
+        customerCarePhone: employer.customerCarePhone,
+        status: 'active',
+        address: employer.address,
+        payrollConfiguration: { payFrequency: 'Biweekly', currency: 'CAD', standardHoursPerWeek: 40 },
+        subscription: { plan: 'Professional', billingFrequency: 'Monthly', startDate: '2026-09-01' },
+        features: { Employees: true, Payroll: true, Reports: true, Documents: true }
+      },
+      { new: true, upsert: true }
+    );
+
+    await EmployerUser.findOneAndUpdate(
+      { email: employer.admin.email },
+      { companyId: company._id, name: employer.admin.name, email: employer.admin.email, passwordHash: await hashPassword(password), role: 'Company Owner', isActive: true, mustChangePassword: false },
+      { new: true, upsert: true }
+    );
+
+    await Promise.all([
+      PayrollRun.deleteMany({ companyId: company._id }),
+      CompanyBulletin.deleteMany({ companyId: company._id })
+    ]);
+    await PayrollRun.create({ companyId: company._id, periodStart: new Date('2025-04-16'), periodEnd: new Date('2025-04-29'), payDate: new Date('2025-04-30'), employeeCount: employer.employees.length, totalHours: employer.employees.length * 78, estimatedGross: decimalToMoney(multiplyMoney(4200, employer.employees.length)), totalDeductions: decimalToMoney('0'), totalNetPay: decimalToMoney('0'), status: 'draft' });
+    await CompanyBulletin.create({ companyId: company._id, title: 'Payroll calendar updated', body: 'The next payroll run and document deadlines are ready for review.', postedBy: 'Payroll', postedAt: new Date('2026-09-04') });
+
+    for (const [index, employee] of employer.employees.entries()) {
+      await seedEmployee(company, employee, index + 1);
+    }
+  }
+
+  await Help.findOneAndUpdate({ key: defaultHelpContent.key }, defaultHelpContent, { new: true, upsert: true });
+
+  console.log('Seeded connected Payhours demo data.');
+  console.log('Super admin: superadmin@payhours.ca / Payhours1!');
+  console.log('Employer: admin@abcsolutions.ca / Payhours1!');
+  console.log('Employer: simran@maplefoods.ca / Payhours1!');
+  console.log('Employer: rahul@spicehub.ca / Payhours1!');
+  console.log('Employee: anil.suhagiya@example.com / Payhours1!  Customer ID A07998 / Employee # 0006');
   await mongoose.disconnect();
 }
 

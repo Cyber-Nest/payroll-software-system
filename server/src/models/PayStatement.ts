@@ -17,6 +17,20 @@ export interface IPayStatement {
   grossEarnings: Array<{ code: string; description: string; amount: mongoose.Types.Decimal128 }>;
   deductions: Array<{ code: string; description: string; amount: mongoose.Types.Decimal128 }>;
   additionalInfo: Array<{ key: string; value: string }>;
+  periodStart?: Date;
+  periodEnd?: Date;
+  regularHours?: number;
+  overtimeHours?: number;
+  statePayHours?: number;
+  statePayBaseHours?: number;
+  statePayProvince?: string;
+  statePayExplanation?: string;
+  hourlyRate?: mongoose.Types.Decimal128;
+  grossPay?: mongoose.Types.Decimal128;
+  revision: number;
+  supersedesStatementId?: mongoose.Types.ObjectId;
+  supersededByStatementId?: mongoose.Types.ObjectId;
+  changeSummary: string[];
   isUnread: boolean;
   pdfUrl?: string;
 }
@@ -33,6 +47,20 @@ const payStatementSchema = new Schema<IPayStatement>({
   grossEarnings: [moneyLineSchema],
   deductions: [moneyLineSchema],
   additionalInfo: [{ key: String, value: String }],
+  periodStart: Date,
+  periodEnd: Date,
+  regularHours: Number,
+  overtimeHours: Number,
+  statePayHours: Number,
+  statePayBaseHours: Number,
+  statePayProvince: String,
+  statePayExplanation: String,
+  hourlyRate: Schema.Types.Decimal128,
+  grossPay: Schema.Types.Decimal128,
+  revision: { type: Number, default: 1 },
+  supersedesStatementId: { type: Schema.Types.ObjectId, ref: 'PayStatement' },
+  supersededByStatementId: { type: Schema.Types.ObjectId, ref: 'PayStatement' },
+  changeSummary: [{ type: String }],
   isUnread: { type: Boolean, default: false },
   pdfUrl: String
 });

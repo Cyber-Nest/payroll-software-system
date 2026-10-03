@@ -4,6 +4,7 @@ import { formatMoney } from './money';
 import { maskSin } from './security';
 
 export function serializeMoney(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '0.00';
   return formatMoney(value as never);
 }
 
@@ -42,6 +43,7 @@ export function serializeEmployee(employee: IEmployee & { _id?: unknown }, compa
           provincialClaimAmount: serializeMoney(employee.personalTaxCredits.provincialClaimAmount)
         }
       : undefined,
-    payStatementPreference: employee.payStatementPreference
+    payStatementPreference: employee.payStatementPreference,
+    adminProfile: employee.adminProfile
   };
 }

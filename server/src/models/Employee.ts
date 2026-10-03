@@ -28,6 +28,15 @@ export interface IEmployee {
   wcbNumber?: string;
   personalTaxCredits?: { federalClaimAmount: mongoose.Types.Decimal128; provincialClaimAmount: mongoose.Types.Decimal128 };
   payStatementPreference: { emailStatement: boolean; language: 'English' | 'French' };
+  adminProfile?: {
+    personal?: Record<string, unknown>;
+    employment?: Record<string, unknown>;
+    compensation?: Record<string, unknown>;
+    tax?: Record<string, unknown>;
+    vacation?: Record<string, unknown>;
+    benefits?: Record<string, unknown>;
+    banking?: Record<string, unknown>;
+  };
 }
 
 const employeeSchema = new Schema<IEmployee>({
@@ -63,6 +72,15 @@ const employeeSchema = new Schema<IEmployee>({
   payStatementPreference: {
     emailStatement: { type: Boolean, default: true },
     language: { type: String, enum: ['English', 'French'], default: 'English' }
+  },
+  adminProfile: {
+    personal: Schema.Types.Mixed,
+    employment: Schema.Types.Mixed,
+    compensation: Schema.Types.Mixed,
+    tax: Schema.Types.Mixed,
+    vacation: Schema.Types.Mixed,
+    benefits: Schema.Types.Mixed,
+    banking: Schema.Types.Mixed
   }
 });
 

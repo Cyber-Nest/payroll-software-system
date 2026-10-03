@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 import app from './app';
 import { env } from './config/env';
+import { configureDns } from './config/dns';
 
 const startServer = async (): Promise<void> => {
   try {
-    await mongoose.connect(env.mongoUri);
+    configureDns();
+    await mongoose.connect(env.mongoUri, { family: 4, serverSelectionTimeoutMS: 10000 });
     console.log('MongoDB connected');
 
     app.listen(env.port, () => {
@@ -17,3 +19,5 @@ const startServer = async (): Promise<void> => {
 };
 
 startServer();
+
+
