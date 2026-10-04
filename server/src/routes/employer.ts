@@ -3432,6 +3432,50 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     amount: formatMoney(line.code === 'TOTAL' ? deductionTotalAmount(statementDeductions) : line.amount || 0),
     ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code || '')
   })));
+  const deductionsTotal = formatMoney(deductionTotalAmount(statementDeductions));
+  const payslipDeductions =
+    deductions.some((line) => line.code !== 'TOTAL' && moneyToNumber(line.amount) > 0) ||
+    moneyToNumber(deductionsTotal) === 0
+      ? deductions
+      : displayDeductionLines(
+          [
+            ...Object.entries(
+              statutoryDeductionsFromGross(
+                statement.grossPay ||
+                  statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount ||
+                  0,
+                company.address?.province,
+                payrollFrequencyRules[fallbackPayFrequency].payPeriods
+              )
+            )
+              .filter(([key]) => key !== 'deductionsTotal')
+              .map(([key, amount]) => ({
+                code:
+                  key === 'cpp'
+                    ? 'CPP'
+                    : key === 'cpp2'
+                      ? 'CPP2'
+                      : key === 'ei'
+                        ? 'EI'
+                        : key === 'federalTax'
+                          ? 'FTAX'
+                          : 'PTAX',
+                description:
+                  key === 'cpp'
+                    ? 'CPP'
+                    : key === 'cpp2'
+                      ? 'Additional CPP'
+                      : key === 'ei'
+                        ? 'EI'
+                        : key === 'federalTax'
+                          ? 'Federal tax'
+                          : 'Provincial income tax',
+                amount: formatMoney(amount),
+                ytd: formatMoney(amount)
+              })),
+            { code: 'TOTAL', description: 'Total deductions', amount: deductionsTotal, ytd: deductionsTotalYtd }
+          ]
+        );
   return {
     companyName: company.legalName,
     companyAddress: [company.address?.street, company.address?.line2, [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', ')].filter(Boolean) as string[],
@@ -3443,9 +3487,9 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     netPay: formatMoney(statement.netPay),
     yearToDateNetPay: formatMoney(sumMoney(history.map((item) => item.netPay))),
     grossPay: formatMoney(statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0),
-    deductionsTotal: formatMoney(deductionTotalAmount(statementDeductions)),
+    deductionsTotal,
     grossEarnings: earnings,
-    deductions,
+    deductions: payslipDeductions,
     additionalInfo: [
       ...(statement.periodStart && statement.periodEnd ? [{ key: 'Pay Period', value: `${statement.periodStart.toISOString().slice(0, 10)} to ${statement.periodEnd.toISOString().slice(0, 10)}` }] : []),
       { key: 'Period Number', value: String(statement.payPeriodNumber) },
