@@ -107,6 +107,7 @@ function addressLines(address?: {
 const hiddenDeductionCodes = new Set(['CPP2']);
 const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
+const requiredStatutoryDeductionCodes = new Set(['CPP', 'EI', 'FTAX', 'PTAX']);
 
 function payrollDeductionLabel(code?: string, description?: string): string {
   const normalizedCode = String(code || '').toUpperCase();
@@ -296,7 +297,7 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
       if (optionalZeroDeductionCodes.has(code) && moneyToNumber(line.amount) === 0) {
         return false;
       }
-      if (code !== 'TOTAL' && moneyToNumber(line.amount) === 0) return false;
+      if (code !== 'TOTAL' && !requiredStatutoryDeductionCodes.has(code) && moneyToNumber(line.amount) === 0) return false;
       return !hiddenDeductionCodes.has(code) && !lineDescriptionIncludes(line, hiddenDeductionDescriptions);
     })
     .map((line) => ({

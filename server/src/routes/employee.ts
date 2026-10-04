@@ -36,6 +36,7 @@ type DisplayLine = {
 const hiddenDeductionCodes = new Set(['CPP2']);
 const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
+const requiredStatutoryDeductionCodes = new Set(['CPP', 'EI', 'FTAX', 'PTAX']);
 
 function payrollDeductionLabel(code?: string, description?: string): string {
   const normalizedCode = String(code || '').toUpperCase();
@@ -103,7 +104,7 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
       if (optionalZeroDeductionCodes.has(code) && Number(serializeMoney(line.amount)) === 0) {
         return false;
       }
-      if (code !== 'TOTAL' && Number(serializeMoney(line.amount)) === 0) return false;
+      if (code !== 'TOTAL' && !requiredStatutoryDeductionCodes.has(code) && Number(serializeMoney(line.amount)) === 0) return false;
       return !hiddenDeductionCodes.has(code) && !lineDescriptionIncludes(line, hiddenDeductionDescriptions);
     })
     .map((line) => ({
@@ -415,6 +416,53 @@ async function payslipData(
   const additionalInfo = [...derivedInfo, ...dto.additionalInfo].filter(
     (line, index, lines) => line.value && lines.findIndex((item) => item.key === line.key) === index
   );
+  const hasDeductionDetails = dto.deductions.some(
+    (line) => line.code !== 'TOTAL' && Number(line.amount) > 0
+  );
+  const rebuiltDeductions =
+    !hasDeductionDetails && Number(dto.deductionsTotal) > 0 && Number(dto.hourlyRate) > 0
+      ? displayDeductionLines(
+          [
+            ...[
+              calculatePayrollLine({
+                employeeId: dto.employeeId,
+                regularHours: dto.regularHours,
+                overtimeHours: dto.overtimeHours,
+                hourlyRate: dto.hourlyRate,
+                statePayHours: dto.statePayHours,
+                statePayBaseHours: dto.statePayBaseHours,
+                province: normalizeProvince(
+                  company.address?.province ||
+                    employee.taxProvince ||
+                    profileValue(employee.adminProfile?.employment, 'provinceOfEmployment') ||
+                    'AB'
+                ) as 'AB' | 'BC' | 'MB' | 'SK' | 'ON',
+                payFrequency:
+                  String(company.payrollConfiguration?.payFrequency || employee.payGroup || 'biweekly')
+                    .toLowerCase()
+                    .replace(/\s+/g, '') === 'weekly'
+                    ? 'weekly'
+                    : String(company.payrollConfiguration?.payFrequency || employee.payGroup || 'biweekly')
+                          .toLowerCase()
+                          .replace(/\s+/g, '') === 'monthly'
+                      ? 'monthly'
+                      : 'biweekly'
+              })
+            ].flatMap((line) => [
+              { code: 'CPP', description: 'CPP', amount: serializeMoney(line.cpp) },
+              { code: 'CPP2', description: 'Additional CPP', amount: serializeMoney(line.cpp2) },
+              { code: 'EI', description: 'EI', amount: serializeMoney(line.ei) },
+              { code: 'FTAX', description: 'Federal tax', amount: serializeMoney(line.federalTax) },
+              { code: 'PTAX', description: 'Provincial tax', amount: serializeMoney(line.provincialTax) }
+            ]),
+            {
+              code: 'TOTAL',
+              description: 'Total deductions',
+              amount: dto.deductionsTotal
+            }
+          ]
+        )
+      : dto.deductions;
   return {
     companyName: company.legalName,
     companyAddress: addressLines(company.address),
@@ -470,7 +518,7 @@ async function payslipData(
             ? line.amount
             : ytdFor('grossEarnings', line.code)
     }))),
-    deductions: dto.deductions.map((line) => ({
+    deductions: rebuiltDeductions.map((line) => ({
       ...line,
       ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code)
     })),

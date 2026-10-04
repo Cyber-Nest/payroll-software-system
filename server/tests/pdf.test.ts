@@ -85,8 +85,10 @@ describe('PDF generation', () => {
     const text = pdfText(file);
     expect(text).toContain('Canada Pension Plan');
     expect(text).toContain('Employment Insurance');
-    expect(text).toContain('Federal income tax');
-    expect(text).toContain('315.85');
+    expect(text).toContain('Federal tax');
+    expect(text).toContain('Provincial tax');
+    expect(text).toContain('170.89');
+    expect(text).toContain('144.96');
     expect(text).toContain('463.92');
   });
 

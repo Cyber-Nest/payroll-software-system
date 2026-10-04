@@ -266,7 +266,7 @@ function combinePdfLines(lines: PdfLine[], codes: string[], description: string)
   const matching = lines.filter((line) => codes.includes(String(line.code || '').toUpperCase()));
   const amount = matching.reduce((total, line) => total + pdfMoney(line.amount), 0);
   const ytd = matching.reduce((total, line) => total + pdfMoney(line.ytd), 0);
-  if (amount === 0 && ytd === 0) return undefined;
+  if (!matching.length && amount === 0 && ytd === 0) return undefined;
   return { code: codes[0], description, amount: formatPdfMoney(amount), ytd: formatPdfMoney(ytd) };
 }
 
@@ -276,7 +276,8 @@ function payslipDeductionLines(lines: PdfLine[], deductionsTotal: string): PdfLi
   const normalized = [
     combinePdfLines(source, ['CPP', 'CPP2'], 'Canada Pension Plan'),
     combinePdfLines(source, ['EI'], 'Employment Insurance'),
-    combinePdfLines(source, ['FTAX', 'PTAX', 'TAX'], 'Federal income tax'),
+    combinePdfLines(source, ['FTAX', 'TAX'], 'Federal tax'),
+    combinePdfLines(source, ['PTAX'], 'Provincial tax'),
     ...source
       .filter((line) => !usedCodes.has(String(line.code || '').toUpperCase()))
       .filter((line) => pdfMoney(line.amount) !== 0 || pdfMoney(line.ytd) !== 0)
