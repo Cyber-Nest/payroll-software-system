@@ -2716,7 +2716,7 @@ const suggestedAdminProfile: AdminProfile = {
     location: 'Calgary - Main Branch',
     manager: 'Amit Patel',
     provinceOfEmployment: 'Alberta',
-    standardWeeklyHours: '40',
+    standardWeeklyHours: '44',
     standardDailyHours: '8',
     workSchedule: 'Day Shift (9 AM - 5 PM)',
     expectedEndDate: '',
@@ -2729,7 +2729,7 @@ const suggestedAdminProfile: AdminProfile = {
   compensation: {
     payType: 'Hourly',
     hourlyRate: '22.50',
-    standardHoursPerWeek: '40',
+    standardHoursPerWeek: '44',
     standardHoursPerDay: '8',
     overtimeEligible: 'Yes',
     overtimeAfter: '44',
@@ -3203,12 +3203,7 @@ function AddEmployee({
           onChange={(next) => update('employment', 'department', next)}
           options={['Operations', 'Payroll', 'Administration']}
         />
-        <AdminSelect
-          label="Location *"
-          value={v('employment', 'location')}
-          onChange={(next) => update('employment', 'location', next)}
-          options={['Calgary - Main Branch', 'Calgary - Main', 'Medicine Hat']}
-        />
+        {input('employment', 'location', 'Location *')}
         <AdminSelect
           label="Manager"
           value={v('employment', 'manager')}
@@ -12077,7 +12072,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           payrollConfiguration: {
             payFrequency: form.payFrequency,
             currency: 'CAD',
-            standardHoursPerWeek: 40,
+            standardHoursPerWeek: 44,
             defaultHoursPerDay: 8,
             vacation: {
               vacationAccrualRate: form.vacationPayRate
@@ -12263,7 +12258,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             payrollConfiguration: {
               payFrequency: form.payFrequency,
               currency: 'CAD',
-              standardHoursPerWeek: 40,
+              standardHoursPerWeek: 44,
             defaultHoursPerDay: 8,
             vacation: {
               vacationAccrualRate: form.vacationPayRate
@@ -12494,7 +12489,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           options={['Weekly', 'Biweekly', 'Monthly']}
         />
         <AdminInput label="Payroll Year Start *" value="2026-01-01" onChange={() => undefined} />
-        <AdminInput label="Standard Hours Per Week *" value="40" onChange={() => undefined} />
+        <AdminInput label="Standard Hours Per Week *" value="44" onChange={() => undefined} />
         <AdminInput label="Default Hours Per Day *" value="8" onChange={() => undefined} />
       </div>
       <div className="check-grid">

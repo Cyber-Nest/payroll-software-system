@@ -1596,14 +1596,14 @@ function payrollReadyProfile(
         'provinceOfEmployment',
         companyProvince
       ),
-      standardWeeklyHours: valueOrDefault(profile.employment, 'standardWeeklyHours', '40'),
+      standardWeeklyHours: valueOrDefault(profile.employment, 'standardWeeklyHours', '44'),
       standardDailyHours: valueOrDefault(profile.employment, 'standardDailyHours', '8')
     },
     compensation: {
       ...profile.compensation,
       payType: valueOrDefault(profile.compensation, 'payType', 'Hourly'),
       hourlyRate: valueOrDefault(profile.compensation, 'hourlyRate', '25.00'),
-      standardHoursPerWeek: valueOrDefault(profile.compensation, 'standardHoursPerWeek', '40'),
+      standardHoursPerWeek: valueOrDefault(profile.compensation, 'standardHoursPerWeek', '44'),
       standardHoursPerDay: valueOrDefault(profile.compensation, 'standardHoursPerDay', '8'),
       overtimeEligible: valueOrDefault(profile.compensation, 'overtimeEligible', 'Yes'),
       overtimeAfter: valueOrDefault(profile.compensation, 'overtimeAfter', '44'),
@@ -3270,7 +3270,7 @@ router.get('/government-filings/:id/view', authenticate, requirePermission('payr
         sin: employee.sinEncrypted ? decryptSin(employee.sinEncrypted) : '',
         lastName: employee.legalLastName, firstName: employee.legalFirstName, initial: employee.middleName?.charAt(0) || '',
         address: address ? [address.street, `${address.city}, ${address.province}`, address.postalCode] : [],
-        province: normalizeProvince(employee.taxProvince || address?.province || company?.address?.province || 'AB'),
+        province: normalizeProvince(company?.address?.province || 'AB'),
         employmentIncome: formatMoney(sumMoney(employeeStatements.map((item) =>
           item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
         ))),

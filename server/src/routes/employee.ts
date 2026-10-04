@@ -206,7 +206,7 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
           regularHours,
           overtimeHours: s.overtimeHours || 0,
           hourlyRate,
-          province: (company?.address?.province || profile?.tax?.provinceOfResidence || employee.taxProvince || 'AB') as
+          province: (company?.address?.province || 'AB') as
             | 'AB'
             | 'BC'
             | 'MB'
@@ -431,12 +431,12 @@ async function payslipData(
                 hourlyRate: dto.hourlyRate,
                 statePayHours: dto.statePayHours,
                 statePayBaseHours: dto.statePayBaseHours,
-                province: normalizeProvince(
-                  company.address?.province ||
-                    employee.taxProvince ||
-                    profileValue(employee.adminProfile?.employment, 'provinceOfEmployment') ||
-                    'AB'
-                ) as 'AB' | 'BC' | 'MB' | 'SK' | 'ON',
+                province: normalizeProvince(company.address?.province || 'AB') as
+                  | 'AB'
+                  | 'BC'
+                  | 'MB'
+                  | 'SK'
+                  | 'ON',
                 payFrequency:
                   String(company.payrollConfiguration?.payFrequency || employee.payGroup || 'biweekly')
                     .toLowerCase()
@@ -772,7 +772,7 @@ router.get(
           firstName: employee?.legalFirstName || 'ANILKUMAR',
           initial: employee?.middleName?.charAt(0) || 'M',
           address: address ? [address.street, `${address.city}, ${address.province}`, address.postalCode] : [],
-          province: normalizeProvince(employee?.taxProvince || address?.province || 'AB'),
+          province: normalizeProvince(company?.address?.province || 'AB'),
           employmentIncome,
           incomeTax: deduction('TAX', 'FTAX', 'PTAX'),
           cppContributions: deduction('CPP'),

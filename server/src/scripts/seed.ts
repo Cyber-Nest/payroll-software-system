@@ -153,7 +153,7 @@ async function seed() {
         customerCarePhone: employer.customerCarePhone,
         status: 'active',
         address: employer.address,
-        payrollConfiguration: { payFrequency: 'Biweekly', currency: 'CAD', standardHoursPerWeek: 40 },
+        payrollConfiguration: { payFrequency: 'Biweekly', currency: 'CAD', standardHoursPerWeek: 44 },
         subscription: { plan: 'Professional', billingFrequency: 'Monthly', startDate: '2026-09-01' },
         features: { Employees: true, Payroll: true, Reports: true, Documents: true }
       },

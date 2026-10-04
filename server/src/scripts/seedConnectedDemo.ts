@@ -154,7 +154,7 @@ async function seedConnectedDemo() {
           adminProfile: {
             personal: { firstName, lastName, emailAddress: email, phoneNumber: '(403) 555-0100', city: companySeed.city, province: companySeed.province },
             employment: { employeeNumber, jobTitle, department: 'Operations', location: companySeed.city, employmentStatus: 'Active', employmentType: 'Full-Time' },
-            compensation: { payType: 'Hourly', hourlyRate, standardHoursPerWeek: '40', payFrequency: 'Biweekly' },
+            compensation: { payType: 'Hourly', hourlyRate, standardHoursPerWeek: '44', payFrequency: 'Biweekly' },
             tax: { provinceOfResidence: companySeed.province, craTd1Form: 'Completed' },
             vacation: { vacationPolicy: 'Accrue by Percentage (4%)' },
             benefits: { extendedHealthCare: 'Single', dentalCare: 'Single' },
