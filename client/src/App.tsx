@@ -2952,7 +2952,7 @@ function OldAddEmployee({
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b>{index + 1 < step ? 'Done' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}
@@ -3805,7 +3805,7 @@ function AddEmployee({
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b>{index + 1 < step ? 'Done' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}
@@ -4866,7 +4866,7 @@ function NewPayrollRun({
               className={index + 1 <= step ? 'active' : ''}
               onClick={() => setStep(index + 1)}
             >
-              <b>{index + 1 < step ? 'Done' : index + 1}</b>
+              <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
               <span>{name}</span>
             </button>
           )
@@ -5066,7 +5066,7 @@ function NewPayrollRun({
       )}
       {step === 5 && (
         <div className="wizard-card complete-screen">
-          <div>Done</div>
+          <div aria-label="Payroll run submitted">✓</div>
           <h2>Payroll Run Submitted</h2>
           <p>Status: {run ? statusLabel(run.status) : 'In Review'}</p>
           <div className="info-card">
@@ -12816,7 +12816,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b>{index + 1 < step ? 'Done' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}

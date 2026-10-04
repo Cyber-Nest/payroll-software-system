@@ -70,6 +70,26 @@ describe('PDF generation', () => {
     expect(pageCount(file)).toBe(1);
   });
 
+  it('formats payslip deductions with payroll tax detail from statement lines', () => {
+    const file = payslipPdf({
+      ...payslip,
+      deductionsTotal: '463.92',
+      deductions: [
+        { code: 'CPP', description: 'CPP', amount: '114.51', ytd: '114.51' },
+        { code: 'EI', description: 'EI', amount: '33.56', ytd: '33.56' },
+        { code: 'FTAX', description: 'Federal tax', amount: '170.89', ytd: '170.89' },
+        { code: 'PTAX', description: 'Provincial tax', amount: '144.96', ytd: '144.96' },
+        { code: 'TOTAL', description: 'Total deductions', amount: '463.92', ytd: '463.92' }
+      ]
+    });
+    const text = pdfText(file);
+    expect(text).toContain('Canada Pension Plan');
+    expect(text).toContain('Employment Insurance');
+    expect(text).toContain('Federal income tax');
+    expect(text).toContain('315.85');
+    expect(text).toContain('463.92');
+  });
+
   it('generates multi-page payslip PDFs', () => {
     const file = payslipsPdf([payslip, payslip]);
     expect(pageCount(file)).toBe(2);

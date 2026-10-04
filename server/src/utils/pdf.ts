@@ -253,10 +253,51 @@ function buildPdf(pages: Array<{ width: number; height: number; content: string 
   return Buffer.from(body, 'utf8');
 }
 
+function pdfMoney(value: unknown): number {
+  const amount = Number(String(value ?? '0').replace(/,/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function formatPdfMoney(value: number): string {
+  return value.toFixed(2);
+}
+
+function combinePdfLines(lines: PdfLine[], codes: string[], description: string): PdfLine | undefined {
+  const matching = lines.filter((line) => codes.includes(String(line.code || '').toUpperCase()));
+  const amount = matching.reduce((total, line) => total + pdfMoney(line.amount), 0);
+  const ytd = matching.reduce((total, line) => total + pdfMoney(line.ytd), 0);
+  if (amount === 0 && ytd === 0) return undefined;
+  return { code: codes[0], description, amount: formatPdfMoney(amount), ytd: formatPdfMoney(ytd) };
+}
+
+function payslipDeductionLines(lines: PdfLine[], deductionsTotal: string): PdfLine[] {
+  const source = Array.isArray(lines) ? lines : [];
+  const usedCodes = new Set(['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX', 'TAX', 'TOTAL']);
+  const normalized = [
+    combinePdfLines(source, ['CPP', 'CPP2'], 'Canada Pension Plan'),
+    combinePdfLines(source, ['EI'], 'Employment Insurance'),
+    combinePdfLines(source, ['FTAX', 'PTAX', 'TAX'], 'Federal income tax'),
+    ...source
+      .filter((line) => !usedCodes.has(String(line.code || '').toUpperCase()))
+      .filter((line) => pdfMoney(line.amount) !== 0 || pdfMoney(line.ytd) !== 0)
+  ].filter(Boolean) as PdfLine[];
+  const total = source.find((line) => String(line.code || '').toUpperCase() === 'TOTAL');
+  normalized.push({
+    code: 'TOTAL',
+    description: 'Total deductions',
+    amount: total?.amount || deductionsTotal,
+    ytd: total?.ytd || total?.amount || deductionsTotal
+  });
+  return normalized;
+}
+
 function drawPayslip(data: PayslipPdfData): PdfPage {
   const page = new PdfPage(792, 612);
   const grossEarnings = Array.isArray(data.grossEarnings) ? data.grossEarnings : [];
-  const deductions = Array.isArray(data.deductions) ? data.deductions : [];
+  const deductions = payslipDeductionLines(
+    Array.isArray(data.deductions) ? data.deductions : [],
+    data.deductionsTotal
+  );
   const additionalInfo = Array.isArray(data.additionalInfo) ? data.additionalInfo : [];
   drawDocumentHeader(page, 792, 606, 'EARNINGS STATEMENT', data.companyName, compactLines(data.companyAddress));
   page.text(truncateText(data.employeeName, 44), 405, 544, 8, true);
