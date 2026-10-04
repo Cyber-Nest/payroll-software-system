@@ -2952,7 +2952,7 @@ function OldAddEmployee({
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '\u2713' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}
@@ -3800,7 +3800,7 @@ function AddEmployee({
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '\u2713' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}
@@ -4861,7 +4861,7 @@ function NewPayrollRun({
               className={index + 1 <= step ? 'active' : ''}
               onClick={() => setStep(index + 1)}
             >
-              <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
+              <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '\u2713' : index + 1}</b>
               <span>{name}</span>
             </button>
           )
@@ -12811,7 +12811,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             className={index + 1 <= step ? 'active' : ''}
             onClick={() => setStep(index + 1)}
           >
-            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '✓' : index + 1}</b>
+            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '\u2713' : index + 1}</b>
             <span>{name}</span>
           </button>
         ))}
