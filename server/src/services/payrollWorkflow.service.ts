@@ -9,6 +9,7 @@ import {
   sumMoney
 } from '../utils/money';
 import { calculateStatutoryDeductions } from './taxEngine.service';
+import { normalizeProvince, vacationPolicyForProvince } from './vacationPolicy.service';
 
 export const payrollTransitions: Record<PayrollRunStatus, PayrollRunStatus[]> = {
   draft: ['in_review'],
@@ -48,7 +49,7 @@ export type PayrollHoursInput = {
   statePayRegularDay?: boolean;
   statePayAlternativeDayOff?: boolean;
   hourlyRate?: string | number;
-  province?: 'AB' | 'BC' | 'MB' | 'SK' | 'ON';
+  province?: string;
   payPeriods?: number;
   payFrequency?: PayrollFrequency;
   bonus?: string | number;
@@ -78,7 +79,10 @@ export function calculatePayrollLine(
   const overtimePay = multiplyMoney(multiplyMoney(input.hourlyRate, '1.5'), overtimeHours);
   const statePayHours = input.statePayHours || 0;
   const statePayBaseHours = input.statePayBaseHours || 0;
-  const province = input.province || 'AB';
+  const province = normalizeProvince(input.province || 'AB') as 'AB' | 'BC' | 'MB' | 'SK' | 'ON';
+  if (!['AB', 'BC', 'MB', 'SK', 'ON'].includes(province)) {
+    throw new Error(`Payroll tax configuration is not available for province "${province}"`);
+  }
   const regularDay = input.statePayRegularDay !== false;
   const alternativeDayOff = input.statePayAlternativeDayOff === true;
   const basePay = multiplyMoney(input.hourlyRate, statePayBaseHours);
@@ -134,9 +138,9 @@ export function calculatePayrollLine(
     sumMoney([regularPay, overtimePay, statePay, bonus, commission, otherEarnings])
   );
   // Vacation pay is a company-province rule, not an employee-entered earning.
-  const vacationPay = vacationableEarnings.times(
-    moneyToDecimal(input.vacationAccrualRate || 0).div(100)
-  );
+  const vacationAccrualRate =
+    input.vacationAccrualRate ?? vacationPolicyForProvince(province).vacationAccrualRate;
+  const vacationPay = vacationableEarnings.times(moneyToDecimal(vacationAccrualRate).div(100));
   const reimbursement = moneyToDecimal(input.reimbursement || 0);
   const preTaxDeductions = moneyToDecimal(input.preTaxDeductions || 0);
   const postTaxDeductions = moneyToDecimal(input.postTaxDeductions || 0);

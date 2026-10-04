@@ -85,7 +85,20 @@ const hiddenDeductionCodes = new Set(['CPP2']);
 const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
-const moneyNumber = (value: unknown) => Number(String(value ?? '0').replace(/,/g, '')) || 0;
+const moneyNumber = (value: unknown) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.$numberDecimal === 'string') {
+      return Number(record.$numberDecimal.replace(/,/g, '')) || 0;
+    }
+    if (typeof record.toString === 'function') {
+      const text = record.toString();
+      if (text && text !== '[object Object]') return Number(text.replace(/,/g, '')) || 0;
+    }
+  }
+  return Number(String(value ?? '0').replace(/[$,]/g, '')) || 0;
+};
 const lineMatchesAny = (line: { code?: string; description?: string }, values: string[]) => {
   const description = normalizeFilterValue(line.description);
   return values.some((value) => description.includes(value));
@@ -4586,8 +4599,8 @@ function PayrollPage({
   );
 }
 
-function moneyText(value: string | number) {
-  const amount = typeof value === 'number' ? value : Number(value || 0);
+function moneyText(value: unknown) {
+  const amount = moneyNumber(value);
   return `$${amount.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
