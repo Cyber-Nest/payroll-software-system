@@ -2873,7 +2873,7 @@ function AdminInput({
   const inputType = type || (isDateField(label) ? 'date' : 'text');
   const dateProps =
     inputType === 'date' ? { placeholder: 'yyyy-mm-dd', pattern: '\\d{4}-\\d{2}-\\d{2}' } : {};
-  const inputPlaceholder = placeholder || dateProps.placeholder;
+  const inputPlaceholder = placeholder || dateProps.placeholder || label.replace(/\s\*/g, '');
   return (
     <label>
       {label}
@@ -4640,9 +4640,9 @@ function NewPayrollRun({
   onCancel: () => void;
 }) {
   const [step, setStep] = useState(1);
-  const [periodStart, setPeriodStart] = useState('2026-01-01');
-  const [periodEnd, setPeriodEnd] = useState('2026-01-14');
-  const [payDate, setPayDate] = useState('2026-01-19');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const [payDate, setPayDate] = useState('');
   const [payFrequency, setPayFrequency] = useState<PayrollFrequency>('biweekly');
   const [run, setRun] = useState<PayrollRun | undefined>();
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
@@ -4693,7 +4693,7 @@ function NewPayrollRun({
       .then((result) => {
         setStatePaySettings(result.statePay);
         setPayFrequency(result.payFrequency);
-        applySuggestedDates(periodStart, result.payFrequency);
+        if (periodStart) applySuggestedDates(periodStart, result.payFrequency);
       })
       .catch(() =>
         setStatePaySettings({ enabled: false, holidays: [], defaultHoursPerDay: 8 })
@@ -4864,10 +4864,21 @@ function NewPayrollRun({
               <AdminInput
                 label="Pay Period Start Date *"
                 value={periodStart}
+                placeholder="yyyy-mm-dd"
                 onChange={updatePeriodStart}
               />
-              <AdminInput label="Pay Period End Date *" value={periodEnd} onChange={setPeriodEnd} />
-              <AdminInput label="Pay Date *" value={payDate} onChange={setPayDate} />
+              <AdminInput
+                label="Pay Period End Date *"
+                value={periodEnd}
+                placeholder="yyyy-mm-dd"
+                onChange={setPeriodEnd}
+              />
+              <AdminInput
+                label="Pay Date *"
+                value={payDate}
+                placeholder="yyyy-mm-dd"
+                onChange={setPayDate}
+              />
             </div>
           </div>
           <aside className="info-card">
@@ -4914,7 +4925,8 @@ function NewPayrollRun({
                   <td>{moneyText(employeeHourlyRate(employee))}</td>
                   <td>
                     <input
-                      value={hours[employee.employeeNumber] ?? String(regularHoursLimit)}
+                      value={hours[employee.employeeNumber] ?? ''}
+                      placeholder={String(regularHoursLimit)}
                       onChange={(event) =>
                         setHours((current) => ({
                           ...current,
@@ -4929,9 +4941,9 @@ function NewPayrollRun({
                         aria-label={`Holiday entitlement hours for ${employeeName(employee)}`}
                         type="number"
                         min="0"
+                        placeholder={String(defaultStatePayBaseHours)}
                         value={
-                          statePayBaseHours[employee.employeeNumber] ??
-                          String(defaultStatePayBaseHours)
+                          statePayBaseHours[employee.employeeNumber] ?? ''
                         }
                         onChange={(event) =>
                           setStatePayBaseHours((current) => ({
@@ -4948,7 +4960,8 @@ function NewPayrollRun({
                         aria-label={`Holiday hours worked for ${employeeName(employee)}`}
                         type="number"
                         min="0"
-                        value={statePayHours[employee.employeeNumber] ?? '0'}
+                        placeholder="0"
+                        value={statePayHours[employee.employeeNumber] ?? ''}
                         onChange={(event) =>
                           setStatePayHours((current) => ({
                             ...current,
@@ -7077,7 +7090,7 @@ function parseStatePayHolidays(value: string): Array<{ name: string; date: strin
     return [];
   }
 }
-const defaultEmployerForm = {
+const employerFormPlaceholders = {
   legalName: 'ABC Restaurant Ltd.',
   operatingName: 'ABC Restaurant',
   businessNumber: '123456789',
@@ -7110,6 +7123,15 @@ const defaultEmployerForm = {
   plan: 'Standard',
   billingFrequency: 'Monthly'
 };
+const defaultEmployerForm = {
+  ...Object.fromEntries(
+    Object.keys(employerFormPlaceholders).map((key) => [
+      key,
+      key === 'statePayEnabled' ? false : key === 'statePayHolidays' ? '[]' : ''
+    ])
+  ),
+  vacationPayRate: '4.00'
+} as typeof employerFormPlaceholders;
 
 function Pill({ children, tone = 'blue' }: { children: React.ReactNode; tone?: string }) {
   return <span className={`access-pill ${tone}`}>{children}</span>;
@@ -12327,7 +12349,11 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const field = (key: keyof typeof defaultEmployerForm, label: string) => (
     <label>
       {label}
-      <input value={String(form[key])} onChange={(event) => update(key, event.target.value)} />
+      <input
+        value={String(form[key])}
+        placeholder={String(employerFormPlaceholders[key] || '')}
+        onChange={(event) => update(key, event.target.value)}
+      />
     </label>
   );
   const stepBody = [
@@ -12631,6 +12657,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         <button
           className="run-payroll"
           onClick={() => {
+            setForm(defaultEmployerForm);
+            setEditingEmployerId('');
+            setEditingStatus('active');
             setPage('Create Employer');
             setStep(1);
           }}
