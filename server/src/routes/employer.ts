@@ -544,6 +544,20 @@ router.get(
       )
     ]);
     const latestRun = runs[0];
+    const fallbackStatements = latestRun && (latestRun.lines || []).length
+      ? []
+      : await PayStatement.find({
+          companyId,
+          supersededByStatementId: { $exists: false },
+          ...(latestRun
+            ? {
+                periodStart: latestRun.periodStart,
+                periodEnd: latestRun.periodEnd,
+                payDate: latestRun.payDate
+              }
+            : {})
+        }).sort({ payDate: -1, _id: -1 });
+    const latestStatement = fallbackStatements[0];
     const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
     const rows = latestRun
       ? (latestRun.lines || []).map((line, index) => {
@@ -589,7 +603,75 @@ router.get(
           };
         })
       : [];
-    const totals = rows.reduce(
+    const statementRows = rows.length
+      ? []
+      : fallbackStatements
+          .filter((statement) => {
+            if (!latestRun && latestStatement) {
+              return (
+                dateLabel(statement.periodStart || statement.payDate) === dateLabel(latestStatement.periodStart || latestStatement.payDate) &&
+                dateLabel(statement.periodEnd || statement.payDate) === dateLabel(latestStatement.periodEnd || latestStatement.payDate) &&
+                dateLabel(statement.payDate) === dateLabel(latestStatement.payDate)
+              );
+            }
+            return true;
+          })
+          .map((statement, index) => {
+            const employee = employeeById.get(String(statement.employeeId));
+            const grossPay = safeMoneyToNumber(
+              statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
+            );
+            const deductions = safeMoneyToNumber(sumMoney(statement.deductions.map((line) => line.amount)));
+            const netPay = safeMoneyToNumber(statement.netPay);
+            const deductionByCode = (code: string) =>
+              statement.deductions.find((line) => String(line.code || '').toUpperCase() === code)?.amount;
+            const earningByDescription = (terms: string[]) =>
+              statement.grossEarnings.find((line) => lineDescriptionIncludes(line, terms))?.amount;
+            const cpp = safeMoneyToNumber(deductionByCode('CPP')) + safeMoneyToNumber(deductionByCode('CPP2'));
+            const ei = safeMoneyToNumber(deductionByCode('EI'));
+            const employerCosts = Number((cpp + ei * 1.4).toFixed(2));
+            const regularHours = Number(statement.regularHours || 0);
+            const overtimeHours = Number(statement.overtimeHours || 0);
+            const statePayHours = Number(statement.statePayHours || 0);
+            return {
+              index: index + 1,
+              employeeName: employee
+                ? `${employee.legalFirstName} ${employee.legalLastName}`.trim()
+                : 'Unknown employee',
+              employeeNumber: employee?.employeeNumber || '',
+              department:
+                String(employee?.adminProfile?.employment?.department || employee?.occupation || ''),
+              hours: Number((regularHours + overtimeHours + statePayHours).toFixed(2)),
+              grossPay,
+              deductions,
+              netPay,
+              employerCosts,
+              payGroup: latestRun?.payFrequency || 'biweekly',
+              payDate: dateLabel(statement.payDate),
+              status: latestRun?.status || 'finalized',
+              statementId: String(statement._id),
+              hourlyRate: safeMoneyToNumber(statement.hourlyRate),
+              regularHours,
+              overtimeHours,
+              statePayHours,
+              vacationPay: safeMoneyToNumber(earningByDescription(['vacation'])),
+              statePay: safeMoneyToNumber(earningByDescription(['statutory', 'holiday'])),
+              otherEarnings: 0,
+              cpp,
+              ei,
+              federalTax: displayedFederalIncomeTax(deductionByCode('FTAX'), deductionByCode('PTAX')),
+              provincialTax: 0,
+              preTaxDeductions: 0,
+              postTaxDeductions: deductions
+            };
+          });
+    const reportRows = rows.length ? rows : statementRows;
+    const reportPayDate = latestRun?.payDate || latestStatement?.payDate;
+    const reportPeriodStart = latestRun?.periodStart || latestStatement?.periodStart || latestStatement?.payDate;
+    const reportPeriodEnd = latestRun?.periodEnd || latestStatement?.periodEnd || latestStatement?.payDate;
+    const payRunCount = runs.length || (latestStatement ? 1 : 0);
+    const latestRunNumber = latestRun ? runs.length : latestStatement?.payPeriodNumber;
+    const totals = reportRows.reduce(
       (sum, row) => ({
         hours: sum.hours + row.hours,
         grossPay: sum.grossPay + row.grossPay,
@@ -599,33 +681,33 @@ router.get(
       }),
       { hours: 0, grossPay: 0, deductions: 0, netPay: 0, employerCosts: 0 }
     );
-    const periodLabel = latestRun
-      ? `${dateLabel(latestRun.periodStart)} - ${dateLabel(latestRun.periodEnd)} (#${runs.length})`
+    const periodLabel = reportPayDate
+      ? `${dateLabel(reportPeriodStart)} - ${dateLabel(reportPeriodEnd)} (#${latestRunNumber || payRunCount})`
       : '';
     res.json({
       metrics: {
-        totalPayRuns: runs.length,
+        totalPayRuns: payRunCount,
         totalGrossPay: safeFormatMoney(totals.grossPay),
-        totalEmployeesPaid: rows.length,
-        lastPayRun: latestRun ? `#${runs.length}` : '-',
-        lastPayRunDate: latestRun ? dateLabel(latestRun.payDate) : '-'
+        totalEmployeesPaid: reportRows.length,
+        lastPayRun: latestRunNumber || payRunCount ? `#${latestRunNumber || payRunCount}` : '-',
+        lastPayRunDate: reportPayDate ? dateLabel(reportPayDate) : '-'
       },
       filters: {
-        payPeriods: latestRun ? [periodLabel] : [],
-        departments: Array.from(new Set(['All Departments', ...rows.map((row) => row.department)])),
-        employees: ['All Employees', ...rows.map((row) => row.employeeName)],
-        payGroups: Array.from(new Set(['All Pay Groups', ...rows.map((row) => row.payGroup)]))
+        payPeriods: periodLabel ? [periodLabel] : [],
+        departments: Array.from(new Set(['All Departments', ...reportRows.map((row) => row.department)])),
+        employees: ['All Employees', ...reportRows.map((row) => row.employeeName)],
+        payGroups: Array.from(new Set(['All Pay Groups', ...reportRows.map((row) => row.payGroup)]))
       },
       summary: {
         payPeriod: periodLabel,
-        employeesPaid: rows.length,
+        employeesPaid: reportRows.length,
         totalHours: Number(totals.hours.toFixed(2)),
         totalGrossPay: safeFormatMoney(totals.grossPay),
         totalDeductions: safeFormatMoney(totals.deductions),
         totalNetPay: safeFormatMoney(totals.netPay),
         totalEmployerCosts: safeFormatMoney(totals.employerCosts)
       },
-      rows
+      rows: reportRows
     });
   }
 );
