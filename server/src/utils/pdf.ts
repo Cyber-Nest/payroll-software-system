@@ -274,10 +274,9 @@ function payslipDeductionLines(lines: PdfLine[], deductionsTotal: string): PdfLi
   const source = Array.isArray(lines) ? lines : [];
   const usedCodes = new Set(['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX', 'TAX', 'TOTAL']);
   const normalized = [
-    combinePdfLines(source, ['CPP', 'CPP2'], 'Canada Pension Plan'),
-    combinePdfLines(source, ['EI'], 'Employment Insurance'),
-    combinePdfLines(source, ['FTAX', 'TAX'], 'Federal tax'),
-    combinePdfLines(source, ['PTAX'], 'Provincial tax'),
+    combinePdfLines(source, ['CPP', 'CPP2'], 'CPP'),
+    combinePdfLines(source, ['EI'], 'EI'),
+    combinePdfLines(source, ['FTAX', 'PTAX', 'TAX'], 'Federal tax'),
     ...source
       .filter((line) => !usedCodes.has(String(line.code || '').toUpperCase()))
       .filter((line) => pdfMoney(line.amount) !== 0 || pdfMoney(line.ytd) !== 0)
