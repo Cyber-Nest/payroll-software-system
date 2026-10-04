@@ -102,6 +102,15 @@ function addressLines(address?: {
 const hiddenDeductionCodes = new Set(['CPP2', 'PTAX']);
 const hiddenDeductionDescriptions = ['additional cpp', 'provincial income tax', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
+
+function payrollDeductionLabel(code?: string, description?: string): string {
+  const normalizedCode = String(code || '').toUpperCase();
+  const normalizedDescription = normalizedDisplayText(description);
+  if (normalizedCode === 'CPP' || normalizedDescription === 'canada pension plan') return 'CPP';
+  if (normalizedCode === 'EI' || normalizedDescription === 'employment insurance') return 'EI';
+  if (normalizedCode === 'FTAX' || normalizedDescription === 'federal income tax') return 'Federal tax';
+  return description || '';
+}
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
 
@@ -140,7 +149,7 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
       if (String(line.code || '').toUpperCase() !== 'FTAX') return line;
       return {
         ...line,
-        description: line.description || 'Federal income tax',
+        description: line.description || 'Federal tax',
         amount: moneySumText(line.amount, provincial?.amount),
         ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
       };
@@ -151,7 +160,11 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
         return false;
       }
       return !hiddenDeductionCodes.has(code) && !lineDescriptionIncludes(line, hiddenDeductionDescriptions);
-    });
+    })
+    .map((line) => ({
+      ...line,
+      description: payrollDeductionLabel(line.code, line.description)
+    }));
 }
 
 function dateLabel(value: Date | string | null | undefined): string {
@@ -2235,10 +2248,10 @@ router.post(
             { code: 'TOTAL', description: 'Total gross pay', amount: line.grossPay }
           ],
           deductions: [
-            { code: 'CPP', description: 'Canada Pension Plan', amount: line.cpp },
+            { code: 'CPP', description: 'CPP', amount: line.cpp },
             { code: 'CPP2', description: 'Additional CPP', amount: line.cpp2 },
-            { code: 'EI', description: 'Employment Insurance', amount: line.ei },
-            { code: 'FTAX', description: 'Federal income tax', amount: line.federalTax },
+            { code: 'EI', description: 'EI', amount: line.ei },
+            { code: 'FTAX', description: 'Federal tax', amount: line.federalTax },
             { code: 'PTAX', description: 'Provincial income tax', amount: line.provincialTax },
             { code: 'PRE', description: 'Other pre-tax deductions', amount: line.preTaxDeductions },
             {
@@ -2562,10 +2575,10 @@ router.put(
           { code: 'TOTAL', description: 'Total gross pay', amount: line.grossPay }
         ],
         deductions: [
-          { code: 'CPP', description: 'Canada Pension Plan', amount: line.cpp },
+          { code: 'CPP', description: 'CPP', amount: line.cpp },
           { code: 'CPP2', description: 'Additional CPP', amount: line.cpp2 },
-          { code: 'EI', description: 'Employment Insurance', amount: line.ei },
-          { code: 'FTAX', description: 'Federal income tax', amount: line.federalTax },
+          { code: 'EI', description: 'EI', amount: line.ei },
+          { code: 'FTAX', description: 'Federal tax', amount: line.federalTax },
           { code: 'PTAX', description: 'Provincial income tax', amount: line.provincialTax },
           { code: 'PRE', description: 'Other pre-tax deductions', amount: line.preTaxDeductions },
           {

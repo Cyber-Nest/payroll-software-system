@@ -36,6 +36,15 @@ type DisplayLine = {
 const hiddenDeductionCodes = new Set(['CPP2', 'PTAX']);
 const hiddenDeductionDescriptions = ['additional cpp', 'provincial income tax', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
+
+function payrollDeductionLabel(code?: string, description?: string): string {
+  const normalizedCode = String(code || '').toUpperCase();
+  const normalizedDescription = normalizedDisplayText(description);
+  if (normalizedCode === 'CPP' || normalizedDescription === 'canada pension plan') return 'CPP';
+  if (normalizedCode === 'EI' || normalizedDescription === 'employment insurance') return 'EI';
+  if (normalizedCode === 'FTAX' || normalizedDescription === 'federal income tax') return 'Federal tax';
+  return description || '';
+}
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
 
@@ -78,7 +87,7 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
       if (String(line.code || '').toUpperCase() !== 'FTAX') return line;
       return {
         ...line,
-        description: line.description || 'Federal income tax',
+        description: line.description || 'Federal tax',
         amount: moneySumText(line.amount, provincial?.amount),
         ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
       };
@@ -89,7 +98,11 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
         return false;
       }
       return !hiddenDeductionCodes.has(code) && !lineDescriptionIncludes(line, hiddenDeductionDescriptions);
-    });
+    })
+    .map((line) => ({
+      ...line,
+      description: payrollDeductionLabel(line.code, line.description)
+    }));
 }
 
 router.get('/help', async (req: AuthRequest, res) => {
@@ -187,10 +200,10 @@ function payDto(statement: unknown, employee?: IEmployee) {
       0.02;
   const deductionLines = reconstructedMatches
     ? [
-        { code: 'CPP', description: 'Canada Pension Plan', amount: reconstructed.cpp },
+        { code: 'CPP', description: 'CPP', amount: reconstructed.cpp },
         { code: 'CPP2', description: 'Additional CPP', amount: reconstructed.cpp2 },
-        { code: 'EI', description: 'Employment Insurance', amount: reconstructed.ei },
-        { code: 'FTAX', description: 'Federal income tax', amount: reconstructed.federalTax },
+        { code: 'EI', description: 'EI', amount: reconstructed.ei },
+        { code: 'FTAX', description: 'Federal tax', amount: reconstructed.federalTax },
         { code: 'PTAX', description: 'Provincial income tax', amount: reconstructed.provincialTax },
         { code: 'TOTAL', description: 'Total deductions', amount: reconstructed.deductionsTotal }
       ]

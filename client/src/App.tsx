@@ -113,7 +113,7 @@ const displayDeductionLines = <T extends DisplayMoneyLine>(lines: T[]) => {
       if (code !== 'FTAX') return line;
       return {
         ...line,
-        description: line.description || 'Federal income tax',
+        description: line.description || 'Federal tax',
         amount: moneySumText(line.amount, provincial?.amount),
         ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
       };
@@ -6324,7 +6324,7 @@ function PayrollDetailPanel({
   const taxes = [
     ['CPP', row.cpp],
     ['EI', row.ei],
-    ['Federal Income Tax', combinedIncomeTax(row)],
+    ['Federal tax', combinedIncomeTax(row)],
     ['Provincial Income Tax', 0]
   ];
   const employerCpp = row.cpp;
