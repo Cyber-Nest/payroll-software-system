@@ -2138,6 +2138,14 @@ button {
   color: #fff;
 }
 
+.steps b.step-complete::before {
+  content: "\2713";
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .steps span {
   font-size: 12px;
   font-weight: 700;
@@ -2226,6 +2234,15 @@ button {
 .wizard-fields select,
 .wizard-fields textarea {
   width: 100%;
+}
+
+.field-error {
+  color: #c62828;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: -2px;
 }
 
 textarea {

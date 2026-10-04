@@ -2878,7 +2878,8 @@ function AdminInput({
   onChange,
   type,
   placeholder,
-  disabled = false
+  disabled = false,
+  error
 }: {
   label: string;
   value: string;
@@ -2886,6 +2887,7 @@ function AdminInput({
   type?: string;
   placeholder?: string;
   disabled?: boolean;
+  error?: string;
 }) {
   const inputType = type || (isDateField(label) ? 'date' : 'text');
   const dateProps =
@@ -2903,6 +2905,7 @@ function AdminInput({
         {...(inputType === 'date' ? { pattern: dateProps.pattern } : {})}
       />
       {inputType === 'date' && <small className="date-format-hint">format: yyyy-mm-dd</small>}
+      {error && <small className="field-error">{error}</small>}
     </label>
   );
 }
@@ -3012,13 +3015,15 @@ function AdminSelect({
   value,
   onChange,
   options,
-  className = ''
+  className = '',
+  error
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
   className?: string;
+  error?: string;
 }) {
   return (
     <label className={className}>
@@ -3028,6 +3033,7 @@ function AdminSelect({
           <option key={option}>{option}</option>
         ))}
       </select>
+      {error && <small className="field-error">{error}</small>}
     </label>
   );
 }
@@ -3075,6 +3081,7 @@ function AddEmployee({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const isEdit = Boolean(employee);
   const steps = [
     'Personal Information',
@@ -3086,19 +3093,131 @@ function AddEmployee({
     'Banking Details',
     'Review & Save'
   ];
+  const requiredFields: Record<number, Array<[keyof AdminProfile, string, string]>> = {
+    1: [
+      ['personal', 'firstName', 'First Name'],
+      ['personal', 'lastName', 'Last Name'],
+      ['personal', 'birthDate', 'Date of Birth'],
+      ['personal', 'gender', 'Gender'],
+      ['personal', 'sin', 'Social Insurance Number (SIN)'],
+      ['personal', 'emailAddress', 'Email Address'],
+      ['personal', 'phoneNumber', 'Phone Number'],
+      ['personal', 'address', 'Address'],
+      ['personal', 'city', 'City'],
+      ['personal', 'province', 'Province'],
+      ['personal', 'postalCode', 'Postal Code']
+    ],
+    2: [
+      ['employment', 'employmentStatus', 'Employment Status'],
+      ['employment', 'employmentType', 'Employment Type'],
+      ['employment', 'hireDate', 'Hire Date'],
+      ['employment', 'jobTitle', 'Job Title'],
+      ['employment', 'department', 'Department'],
+      ['employment', 'location', 'Location'],
+      ['employment', 'provinceOfEmployment', 'Province of Employment'],
+      ['employment', 'standardWeeklyHours', 'Standard Weekly Hours']
+    ],
+    3: [
+      ['compensation', 'payType', 'Pay Type'],
+      ['compensation', 'hourlyRate', 'Hourly Rate'],
+      ['compensation', 'standardHoursPerWeek', 'Standard Hours per Week'],
+      ['compensation', 'overtimeEligible', 'Overtime Eligible'],
+      ['compensation', 'overtimeAfter', 'Overtime After'],
+      ['compensation', 'overtimeRateMultiplier', 'Overtime Rate Multiplier'],
+      ['compensation', 'payFrequency', 'Pay Frequency']
+    ],
+    4: [
+      ['tax', 'provinceOfResidence', 'Province of Residence'],
+      ['tax', 'cityRegion', 'City / Region'],
+      ['tax', 'residencyStatus', 'Residency Status'],
+      ['tax', 'sin', 'Social Insurance Number (SIN)'],
+      ['tax', 'craTd1Form', 'CRA TD1 Form']
+    ],
+    5: [
+      ['vacation', 'vacationPolicy', 'Vacation Policy'],
+      ['vacation', 'vacationAccrualRate', 'Vacation Accrual Rate'],
+      ['vacation', 'accrualFrequency', 'Accrual Frequency'],
+      ['vacation', 'vacationStartDate', 'Vacation Start Date'],
+      ['vacation', 'province', 'Province']
+    ],
+    7: [
+      ['banking', 'bankInstitution', 'Bank Institution'],
+      ['banking', 'transitNumber', 'Transit Number'],
+      ['banking', 'institutionNumber', 'Institution Number'],
+      ['banking', 'accountNumber', 'Account Number'],
+      ['banking', 'accountType', 'Account Type']
+    ]
+  };
   const update = (section: keyof AdminProfile, key: string, value: string) =>
     setProfile((current) => ({ ...current, [section]: { ...current[section], [key]: value } }));
   const v = (section: keyof AdminProfile, key: string) => profile[section][key] || '';
+  const errorKey = (section: keyof AdminProfile, key: string) => `${section}.${key}`;
+  const updateField = (section: keyof AdminProfile, key: string, value: string) => {
+    update(section, key, value);
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next[errorKey(section, key)];
+      return next;
+    });
+  };
+  const validateStep = (targetStep: number) => {
+    const errors: Record<string, string> = {};
+    (requiredFields[targetStep] || []).forEach(([section, key, label]) => {
+      if (!String(v(section, key)).trim()) {
+        errors[errorKey(section, key)] = `${label} is required.`;
+      }
+    });
+    return errors;
+  };
+  const validateThroughStep = (targetStep: number) => {
+    const errors: Record<string, string> = {};
+    for (let currentStep = 1; currentStep <= Math.min(targetStep, 7); currentStep += 1) {
+      Object.assign(errors, validateStep(currentStep));
+    }
+    return errors;
+  };
+  const firstInvalidStep = (errors: Record<string, string>) => {
+    for (let currentStep = 1; currentStep <= 7; currentStep += 1) {
+      const hasStepError = (requiredFields[currentStep] || []).some(([section, key]) =>
+        Boolean(errors[errorKey(section, key)])
+      );
+      if (hasStepError) return currentStep;
+    }
+    return step;
+  };
+  const goToStep = (nextStep: number) => {
+    if (nextStep <= step) {
+      setStep(nextStep);
+      return;
+    }
+    const errors = validateThroughStep(nextStep - 1);
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
+      setError('Please complete the required fields before moving to another section.');
+      setStep(firstInvalidStep(errors));
+      return;
+    }
+    setError('');
+    setStep(nextStep);
+  };
   const input = (section: keyof AdminProfile, key: string, label: string) => (
     <AdminInput
       key={`${section}.${key}`}
       label={label}
       value={v(section, key)}
       placeholder={suggestedAdminProfile[section][key]}
-      onChange={(next) => update(section, key, next)}
+      error={fieldErrors[errorKey(section, key)]}
+      onChange={(next) => updateField(section, key, next)}
     />
   );
   async function save() {
+    const validationErrors = validateThroughStep(7);
+    if (Object.keys(validationErrors).length) {
+      setFieldErrors(validationErrors);
+      setError('Please complete the required fields before saving this employee.');
+      setStep(firstInvalidStep(validationErrors));
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -3147,19 +3266,20 @@ function AddEmployee({
         <AdminSelect
           label="Gender *"
           value={v('personal', 'gender')}
-          onChange={(next) => update('personal', 'gender', next)}
+          error={fieldErrors[errorKey('personal', 'gender')]}
+          onChange={(next) => updateField('personal', 'gender', next)}
           options={['Male', 'Female', 'Other']}
         />
         <AdminSelect
           label="Marital Status"
           value={v('personal', 'maritalStatus')}
-          onChange={(next) => update('personal', 'maritalStatus', next)}
+          onChange={(next) => updateField('personal', 'maritalStatus', next)}
           options={['Single', 'Married', 'Common-Law']}
         />
         <AdminSelect
           label="Language Preference"
           value={v('personal', 'languagePreference')}
-          onChange={(next) => update('personal', 'languagePreference', next)}
+          onChange={(next) => updateField('personal', 'languagePreference', next)}
           options={['English', 'French']}
         />
         {input('personal', 'sin', 'Social Insurance Number (SIN) *')}
@@ -3172,7 +3292,8 @@ function AddEmployee({
         <AdminSelect
           label="Province *"
           value={v('personal', 'province')}
-          onChange={(next) => update('personal', 'province', next)}
+          error={fieldErrors[errorKey('personal', 'province')]}
+          onChange={(next) => updateField('personal', 'province', next)}
           options={canadaProvinceOptions}
         />
         {input('personal', 'postalCode', 'Postal Code *')}
@@ -3185,13 +3306,15 @@ function AddEmployee({
         <AdminSelect
           label="Employment Status *"
           value={v('employment', 'employmentStatus')}
-          onChange={(next) => update('employment', 'employmentStatus', next)}
+          error={fieldErrors[errorKey('employment', 'employmentStatus')]}
+          onChange={(next) => updateField('employment', 'employmentStatus', next)}
           options={['Active', 'On Leave', 'Terminated']}
         />
         <AdminSelect
           label="Employment Type *"
           value={v('employment', 'employmentType')}
-          onChange={(next) => update('employment', 'employmentType', next)}
+          error={fieldErrors[errorKey('employment', 'employmentType')]}
+          onChange={(next) => updateField('employment', 'employmentType', next)}
           options={['Full-Time', 'Part-Time', 'Casual']}
         />
         {input('employment', 'hireDate', 'Hire Date *')}
@@ -3200,14 +3323,15 @@ function AddEmployee({
         <AdminSelect
           label="Department *"
           value={v('employment', 'department')}
-          onChange={(next) => update('employment', 'department', next)}
+          error={fieldErrors[errorKey('employment', 'department')]}
+          onChange={(next) => updateField('employment', 'department', next)}
           options={['Operations', 'Payroll', 'Administration']}
         />
         {input('employment', 'location', 'Location *')}
         <AdminSelect
           label="Manager"
           value={v('employment', 'manager')}
-          onChange={(next) => update('employment', 'manager', next)}
+          onChange={(next) => updateField('employment', 'manager', next)}
           options={['Amit Patel', 'Store Owner', 'Admin User']}
         />
       </div>
@@ -3217,7 +3341,8 @@ function AddEmployee({
           <AdminSelect
             label="Province of Employment *"
             value={v('employment', 'provinceOfEmployment')}
-            onChange={(next) => update('employment', 'provinceOfEmployment', next)}
+            error={fieldErrors[errorKey('employment', 'provinceOfEmployment')]}
+            onChange={(next) => updateField('employment', 'provinceOfEmployment', next)}
             options={canadaProvinceOptions}
           />
           {input('employment', 'standardWeeklyHours', 'Standard Weekly Hours *')}
@@ -3225,7 +3350,7 @@ function AddEmployee({
           <AdminSelect
             label="Work Schedule"
             value={v('employment', 'workSchedule')}
-            onChange={(next) => update('employment', 'workSchedule', next)}
+            onChange={(next) => updateField('employment', 'workSchedule', next)}
             options={['Day Shift (9 AM - 5 PM)', 'Evening Shift', 'Rotating']}
           />
           {input('employment', 'expectedEndDate', 'Expected End Date')}
@@ -3233,13 +3358,13 @@ function AddEmployee({
           <AdminSelect
             label="Union Member"
             value={v('employment', 'unionMember')}
-            onChange={(next) => update('employment', 'unionMember', next)}
+            onChange={(next) => updateField('employment', 'unionMember', next)}
             options={['No', 'Yes']}
           />
           <AdminSelect
             label="Employee Group"
             value={v('employment', 'employeeGroup')}
-            onChange={(next) => update('employment', 'employeeGroup', next)}
+            onChange={(next) => updateField('employment', 'employeeGroup', next)}
             options={['Management', 'Hourly Staff']}
           />
         </div>
@@ -3251,7 +3376,7 @@ function AddEmployee({
           <AdminSelect
             label="Cost Centre"
             value={v('employment', 'costCentre')}
-            onChange={(next) => update('employment', 'costCentre', next)}
+            onChange={(next) => updateField('employment', 'costCentre', next)}
             options={['', 'Operations', 'Head Office']}
           />
           <button className="upload-btn">Upload File</button>
@@ -3273,7 +3398,7 @@ function AddEmployee({
               <button
                 key={payType}
                 className={v('compensation', 'payType') === payType ? 'selected' : ''}
-                onClick={() => update('compensation', 'payType', payType)}
+                onClick={() => updateField('compensation', 'payType', payType)}
               >
                 {payType}
                 <small>
@@ -3296,14 +3421,16 @@ function AddEmployee({
             <AdminSelect
               label="Overtime Eligible *"
               value={v('compensation', 'overtimeEligible')}
-              onChange={(next) => update('compensation', 'overtimeEligible', next)}
+              error={fieldErrors[errorKey('compensation', 'overtimeEligible')]}
+              onChange={(next) => updateField('compensation', 'overtimeEligible', next)}
               options={['Yes', 'No']}
             />
             {input('compensation', 'overtimeAfter', 'Overtime After (hours per week) *')}
             <AdminSelect
               label="Overtime Rate Multiplier *"
               value={v('compensation', 'overtimeRateMultiplier')}
-              onChange={(next) => update('compensation', 'overtimeRateMultiplier', next)}
+              error={fieldErrors[errorKey('compensation', 'overtimeRateMultiplier')]}
+              onChange={(next) => updateField('compensation', 'overtimeRateMultiplier', next)}
               options={['1.5x', '2x']}
             />
           </div>
@@ -3372,14 +3499,16 @@ function AddEmployee({
             <AdminSelect
               label="Province of Residence *"
               value={v('tax', 'provinceOfResidence')}
-              onChange={(next) => update('tax', 'provinceOfResidence', next)}
+              error={fieldErrors[errorKey('tax', 'provinceOfResidence')]}
+              onChange={(next) => updateField('tax', 'provinceOfResidence', next)}
               options={canadaProvinceOptions}
             />
             {input('tax', 'cityRegion', 'City / Region *')}
             <AdminSelect
               label="Residency Status *"
               value={v('tax', 'residencyStatus')}
-              onChange={(next) => update('tax', 'residencyStatus', next)}
+              error={fieldErrors[errorKey('tax', 'residencyStatus')]}
+              onChange={(next) => updateField('tax', 'residencyStatus', next)}
               options={['Resident of Canada', 'Non-Resident']}
             />
           </div>
@@ -3392,7 +3521,8 @@ function AddEmployee({
             <AdminSelect
               label="CRA TD1 Form *"
               value={v('tax', 'craTd1Form')}
-              onChange={(next) => update('tax', 'craTd1Form', next)}
+              error={fieldErrors[errorKey('tax', 'craTd1Form')]}
+              onChange={(next) => updateField('tax', 'craTd1Form', next)}
               options={['Completed', 'Pending']}
             />
           </div>
@@ -3403,7 +3533,7 @@ function AddEmployee({
             <AdminSelect
               label="Claim Personal Amount"
               value={v('tax', 'claimPersonalAmount')}
-              onChange={(next) => update('tax', 'claimPersonalAmount', next)}
+              onChange={(next) => updateField('tax', 'claimPersonalAmount', next)}
               options={['Yes (Standard)', 'No']}
             />
             {input('tax', 'additionalTaxToDeduct', 'Additional Tax to Deduct')}
@@ -3446,14 +3576,16 @@ function AddEmployee({
         <AdminSelect
           label="Vacation Policy *"
           value={v('vacation', 'vacationPolicy')}
-          onChange={(next) => update('vacation', 'vacationPolicy', next)}
+          error={fieldErrors[errorKey('vacation', 'vacationPolicy')]}
+          onChange={(next) => updateField('vacation', 'vacationPolicy', next)}
           options={['Accrue by Percentage (4%)', 'Accrue by Hours']}
         />
         {input('vacation', 'vacationAccrualRate', 'Vacation Accrual Rate *')}
         <AdminSelect
           label="Accrual Frequency *"
           value={v('vacation', 'accrualFrequency')}
-          onChange={(next) => update('vacation', 'accrualFrequency', next)}
+          error={fieldErrors[errorKey('vacation', 'accrualFrequency')]}
+          onChange={(next) => updateField('vacation', 'accrualFrequency', next)}
           options={['Biweekly', 'Monthly']}
         />
         <aside className="info-card">
@@ -3463,13 +3595,13 @@ function AddEmployee({
         <AdminSelect
           label="Carry Forward Unused Vacation"
           value={v('vacation', 'carryForwardUnusedVacation')}
-          onChange={(next) => update('vacation', 'carryForwardUnusedVacation', next)}
+          onChange={(next) => updateField('vacation', 'carryForwardUnusedVacation', next)}
           options={['As per provincial rules', 'No carry forward']}
         />
         <AdminSelect
           label="Vacation Payout on Termination"
           value={v('vacation', 'vacationPayoutOnTermination')}
-          onChange={(next) => update('vacation', 'vacationPayoutOnTermination', next)}
+          onChange={(next) => updateField('vacation', 'vacationPayoutOnTermination', next)}
           options={['As per provincial rules', 'Do not payout']}
         />
       </div>
@@ -3478,7 +3610,8 @@ function AddEmployee({
         <AdminSelect
           label="Province *"
           value={v('vacation', 'province')}
-          onChange={(next) => update('vacation', 'province', next)}
+          error={fieldErrors[errorKey('vacation', 'province')]}
+          onChange={(next) => updateField('vacation', 'province', next)}
           options={canadaProvinceOptions}
         />
         <div>
@@ -3555,7 +3688,7 @@ function AddEmployee({
               <AdminSelect
                 label=""
                 value={v('benefits', key)}
-                onChange={(next) => update('benefits', key, next)}
+                onChange={(next) => updateField('benefits', key, next)}
                 options={[v('benefits', key) || 'Single', 'Not Enrolled', 'Included']}
               />
             </div>
@@ -3617,7 +3750,8 @@ function AddEmployee({
             className="span-3"
             label="Bank Institution *"
             value={v('banking', 'bankInstitution')}
-            onChange={(next) => update('banking', 'bankInstitution', next)}
+            error={fieldErrors[errorKey('banking', 'bankInstitution')]}
+            onChange={(next) => updateField('banking', 'bankInstitution', next)}
             options={['Royal Bank of Canada (RBC)', 'TD Canada Trust', 'Scotiabank']}
           />
           {input('banking', 'transitNumber', 'Transit Number *')}
@@ -3627,7 +3761,8 @@ function AddEmployee({
             className="span-3"
             label="Account Type *"
             value={v('banking', 'accountType')}
-            onChange={(next) => update('banking', 'accountType', next)}
+            error={fieldErrors[errorKey('banking', 'accountType')]}
+            onChange={(next) => updateField('banking', 'accountType', next)}
             options={['Chequing', 'Savings']}
           />
           {input('banking', 'accountNickname', 'Account Nickname (Optional)')}
@@ -3767,7 +3902,7 @@ function AddEmployee({
             <article key={title} className={index === 6 ? 'span-all' : ''}>
               <h3>
                 {title}
-                <button onClick={() => setStep(Math.min(index + 1, 7))}>Edit</button>
+                <button onClick={() => goToStep(Math.min(index + 1, 7))}>Edit</button>
               </h3>
               {rows.map(([label, value]) => (
                 <p key={label}>
@@ -3798,9 +3933,14 @@ function AddEmployee({
           <button
             key={name}
             className={index + 1 <= step ? 'active' : ''}
-            onClick={() => setStep(index + 1)}
+            onClick={() => goToStep(index + 1)}
           >
-            <b aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}>{index + 1 < step ? '\u2713' : index + 1}</b>
+            <b
+              aria-label={index + 1 < step ? `${name} complete` : `Step ${index + 1}`}
+              className={index + 1 < step ? 'step-complete' : ''}
+            >
+              {index + 1 < step ? '' : index + 1}
+            </b>
             <span>{name}</span>
           </button>
         ))}
@@ -3846,7 +3986,7 @@ function AddEmployee({
         <button
           className="run-payroll"
           disabled={busy}
-          onClick={step === 8 ? save : () => setStep(step + 1)}
+          onClick={step === 8 ? save : () => goToStep(step + 1)}
         >
           {busy
             ? 'Saving...'
