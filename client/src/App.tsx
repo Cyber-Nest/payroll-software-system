@@ -3021,7 +3021,12 @@ function AddEmployee({
   onDelete
 }: {
   token: string;
-  onSaved: () => void;
+  onSaved: (result?: {
+    employee?: EmployeeProfile;
+    temporaryPassword?: string;
+    emailSent?: boolean;
+    emailError?: string;
+  }) => void;
   onCancel: () => void;
   employee?: EmployeeProfile;
   onDelete?: (employee: EmployeeProfile) => void;
@@ -3058,7 +3063,12 @@ function AddEmployee({
     setError('');
     setMessage('');
     try {
-      const response = await api<{ emailSent?: boolean; emailError?: string }>(
+      const response = await api<{
+        employee?: EmployeeProfile;
+        temporaryPassword?: string;
+        emailSent?: boolean;
+        emailError?: string;
+      }>(
         isEdit && employee ? `/employer/employees/${employee.id}` : '/employer/employees',
         token,
         { method: isEdit ? 'PUT' : 'POST', body: JSON.stringify(profile) }
@@ -3070,7 +3080,7 @@ function AddEmployee({
             ? `Employee created. Welcome email was not sent: ${response.emailError}`
             : 'Employee created successfully.'
       );
-      onSaved();
+      onSaved(response);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -3825,12 +3835,25 @@ function EmployeesPage({
   employees,
   onAdd,
   onEdit,
-  onDelete
+  onDelete,
+  onShowPassword,
+  passwordNotice,
+  resettingEmployeeId
 }: {
   employees: EmployeeProfile[];
   onAdd: () => void;
   onEdit: (employee: EmployeeProfile) => void;
   onDelete: (employee: EmployeeProfile) => void;
+  onShowPassword: (employee: EmployeeProfile) => void;
+  passwordNotice?: {
+    employeeName: string;
+    login: string;
+    temporaryPassword?: string;
+    emailSent?: boolean;
+    emailError?: string;
+    error?: string;
+  };
+  resettingEmployeeId?: string;
 }) {
   return (
     <section className="admin-panel employees-page">
@@ -3843,6 +3866,23 @@ function EmployeesPage({
           + Add Employee
         </button>
       </div>
+      {passwordNotice && (
+        <div className="success-note" role="status">
+          <b>{passwordNotice.employeeName} password ready.</b>
+          {passwordNotice.error ? (
+            <span>{passwordNotice.error}</span>
+          ) : (
+            <span>
+              Login: {passwordNotice.login} | Temporary password:{' '}
+              {passwordNotice.temporaryPassword} | Email sent:{' '}
+              {passwordNotice.emailSent ? 'Yes' : 'No'}
+            </span>
+          )}
+          {!passwordNotice.emailSent && passwordNotice.emailError && (
+            <span>Email error: {passwordNotice.emailError}</span>
+          )}
+        </div>
+      )}
       <table>
         <thead>
           <tr>
@@ -3873,6 +3913,13 @@ function EmployeesPage({
               <td className="table-actions">
                 <button type="button" onClick={() => onEdit(employee)}>
                   Edit
+                </button>
+                <button
+                  type="button"
+                  disabled={resettingEmployeeId === employee.id}
+                  onClick={() => onShowPassword(employee)}
+                >
+                  {resettingEmployeeId === employee.id ? 'Resetting...' : 'Show Password'}
                 </button>
                 <button type="button" className="danger-button" onClick={() => onDelete(employee)}>
                   Delete
@@ -5515,6 +5562,15 @@ function EmployerDashboard({
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [refresh, setRefresh] = useState(0);
   const [employerNotificationCount, setEmployerNotificationCount] = useState(0);
+  const [employeePasswordNotice, setEmployeePasswordNotice] = useState<{
+    employeeName: string;
+    login: string;
+    temporaryPassword?: string;
+    emailSent?: boolean;
+    emailError?: string;
+    error?: string;
+  }>();
+  const [resettingEmployeeId, setResettingEmployeeId] = useState('');
   useEffect(() => {
     api<{ employees: EmployeeProfile[] }>('/employer/employees', token)
       .then((result) => setEmployees(result.employees))
@@ -5588,6 +5644,35 @@ function EmployerDashboard({
     if (editingEmployee?.id === employee.id) setEditingEmployee(undefined);
     setRefresh((value) => value + 1);
     setAdminPage('Employees');
+  }
+  async function showEmployeePassword(employee: EmployeeProfile) {
+    if (!employee.id) return;
+    setResettingEmployeeId(employee.id);
+    try {
+      const result = await api<{
+        employee: EmployeeProfile;
+        temporaryPassword: string;
+        emailSent?: boolean;
+        emailError?: string;
+      }>(`/employer/employees/${employee.id}/reset-password`, token, { method: 'POST' });
+      setEmployeePasswordNotice({
+        employeeName: employeeName(result.employee),
+        login: result.employee.personalEmail || employee.personalEmail || '-',
+        temporaryPassword: result.temporaryPassword,
+        emailSent: result.emailSent,
+        emailError: result.emailError
+      });
+      setRefresh((value) => value + 1);
+    } catch (caught) {
+      setEmployeePasswordNotice({
+        employeeName: employeeName(employee),
+        login: employee.personalEmail || '-',
+        emailSent: false,
+        error: caught instanceof Error ? `Could not reset password: ${caught.message}` : 'Could not reset password'
+      });
+    } finally {
+      setResettingEmployeeId('');
+    }
   }
   const dashboard = (
     <>
@@ -5714,12 +5799,24 @@ function EmployerDashboard({
         }}
         onEdit={editEmployee}
         onDelete={deleteEmployee}
+        onShowPassword={showEmployeePassword}
+        passwordNotice={employeePasswordNotice}
+        resettingEmployeeId={resettingEmployeeId}
       />
     ) : adminPage === 'Add Employee' ? (
       <AddEmployee
         token={token}
         onCancel={() => setAdminPage('Employees')}
-        onSaved={() => {
+        onSaved={(result) => {
+          if (result?.temporaryPassword && result.employee) {
+            setEmployeePasswordNotice({
+              employeeName: employeeName(result.employee),
+              login: result.employee.personalEmail || '-',
+              temporaryPassword: result.temporaryPassword,
+              emailSent: result.emailSent,
+              emailError: result.emailError
+            });
+          }
           setRefresh((value) => value + 1);
           setAdminPage('Employees');
         }}

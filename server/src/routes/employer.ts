@@ -3266,6 +3266,61 @@ router.post(
   }
 );
 
+router.post(
+  '/employees/:employeeId/reset-password',
+  authenticate,
+  requirePermission('employee.edit'),
+  async (req: AuthRequest, res) => {
+    const companyId = requireEmployer(req, res);
+    if (!companyId) return;
+
+    const [employee, company] = await Promise.all([
+      Employee.findOne({ _id: req.params.employeeId, companyId }),
+      Company.findById(companyId)
+    ]);
+    if (!employee) return res.status(404).json({ message: 'Employee not found' });
+
+    const temporaryPassword = generateTemporaryPassword();
+    const user = await User.findByIdAndUpdate(
+      employee.userId,
+      {
+        passwordHash: await hashPassword(temporaryPassword),
+        mustChangePassword: true,
+        isActive: true,
+        lastSelectedEmployeeId: employee._id
+      },
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: 'Employee login not found' });
+
+    let emailSent = false;
+    let emailError: string | undefined;
+    try {
+      await sendEmployeeCredentialsEmail(String(user._id), String(employee._id), temporaryPassword);
+      emailSent = true;
+    } catch (error) {
+      emailError =
+        error instanceof Error ? error.message : 'Unable to send employee welcome email';
+      console.error('Employee credentials email failed:', error);
+    }
+
+    await AuditLog.create({
+      userId: req.user?.id,
+      employeeId: employee._id,
+      companyId,
+      eventType: 'USER_UPDATED',
+      metadata: { action: 'Employee password reset' }
+    });
+
+    res.json({
+      employee: serializeEmployee(employee, company || undefined),
+      temporaryPassword,
+      emailSent,
+      emailError
+    });
+  }
+);
+
 router.put(
   '/employees/:employeeId',
   authenticate,
