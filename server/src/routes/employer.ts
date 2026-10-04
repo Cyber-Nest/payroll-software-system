@@ -1576,7 +1576,21 @@ function emailList(items: string[]) {
 }
 
 function htmlList(items: string[]) {
-  return `<ul>${items.map((item) => `<li>${escapeHtml(item.replace(/^- /, ''))}</li>`).join('')}</ul>`;
+  const rows = (items.length ? items : ['None'])
+    .map((item) => {
+      const cleanItem = item.replace(/^- /, '');
+      const separatorIndex = cleanItem.indexOf(':');
+      const label = separatorIndex >= 0 ? cleanItem.slice(0, separatorIndex) : '';
+      const value = separatorIndex >= 0 ? cleanItem.slice(separatorIndex + 1).trim() : cleanItem;
+      return [
+        '<tr>',
+        `<td style="padding:8px 12px;border:1px solid #dbe4f0;background:#f8fafc;font-weight:700;color:#1e3a8a;">${escapeHtml(label || 'Item')}</td>`,
+        `<td style="padding:8px 12px;border:1px solid #dbe4f0;color:#111827;">${escapeHtml(value)}</td>`,
+        '</tr>'
+      ].join('');
+    })
+    .join('');
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:680px;margin:8px 0 18px;font-size:14px;">${rows}</table>`;
 }
 
 async function sendPayStatementNotificationEmail(input: {
