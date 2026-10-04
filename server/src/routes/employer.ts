@@ -1428,6 +1428,66 @@ const createPayrollRunSchema = z.object({
   originalRunId: z.string().optional()
 });
 
+function valueOrDefault<T extends Record<string, unknown>>(
+  values: T,
+  key: string,
+  fallback: string
+) {
+  return text(values[key], fallback);
+}
+
+function payrollReadyProfile(
+  profile: z.infer<typeof employeePayload>,
+  company?: { address?: { province?: string }; payrollConfiguration?: Record<string, unknown> }
+) {
+  const companyProvince = company?.address?.province || 'Alberta';
+  const vacationDefaults =
+    company?.payrollConfiguration?.vacation &&
+    typeof company.payrollConfiguration.vacation === 'object'
+      ? (company.payrollConfiguration.vacation as Record<string, unknown>)
+      : vacationPolicyForProvince(companyProvince);
+  return {
+    ...profile,
+    employment: {
+      ...profile.employment,
+      employmentStatus: valueOrDefault(profile.employment, 'employmentStatus', 'Active'),
+      employmentType: valueOrDefault(profile.employment, 'employmentType', 'Full-Time'),
+      provinceOfEmployment: valueOrDefault(
+        profile.employment,
+        'provinceOfEmployment',
+        companyProvince
+      ),
+      standardWeeklyHours: valueOrDefault(profile.employment, 'standardWeeklyHours', '40'),
+      standardDailyHours: valueOrDefault(profile.employment, 'standardDailyHours', '8')
+    },
+    compensation: {
+      ...profile.compensation,
+      payType: valueOrDefault(profile.compensation, 'payType', 'Hourly'),
+      hourlyRate: valueOrDefault(profile.compensation, 'hourlyRate', '25.00'),
+      standardHoursPerWeek: valueOrDefault(profile.compensation, 'standardHoursPerWeek', '40'),
+      standardHoursPerDay: valueOrDefault(profile.compensation, 'standardHoursPerDay', '8'),
+      overtimeEligible: valueOrDefault(profile.compensation, 'overtimeEligible', 'Yes'),
+      overtimeAfter: valueOrDefault(profile.compensation, 'overtimeAfter', '44'),
+      overtimeRateMultiplier: valueOrDefault(profile.compensation, 'overtimeRateMultiplier', '1.5x'),
+      payFrequency: valueOrDefault(profile.compensation, 'payFrequency', 'Biweekly')
+    },
+    tax: {
+      ...profile.tax,
+      provinceOfResidence: valueOrDefault(profile.tax, 'provinceOfResidence', companyProvince),
+      residencyStatus: valueOrDefault(profile.tax, 'residencyStatus', 'Resident of Canada'),
+      craTd1Form: valueOrDefault(profile.tax, 'craTd1Form', 'Completed'),
+      claimPersonalAmount: valueOrDefault(profile.tax, 'claimPersonalAmount', 'Yes (Standard)'),
+      additionalTaxToDeduct: valueOrDefault(profile.tax, 'additionalTaxToDeduct', '0.00'),
+      cppExempt: valueOrDefault(profile.tax, 'cppExempt', 'No'),
+      eiExempt: valueOrDefault(profile.tax, 'eiExempt', 'No')
+    },
+    vacation: {
+      ...vacationDefaults,
+      ...profile.vacation
+    }
+  };
+}
+
 const hoursEarningsSchema = z.object({
   lines: z
     .array(
@@ -1495,7 +1555,7 @@ async function calculateCompanyPayrollLines(
     Employee.find({
       companyId,
       _id: { $in: lines.map((line) => line.employeeId) }
-    }).select('taxProvince adminProfile.employment adminProfile.tax')
+    }).select('taxProvince adminProfile.employment adminProfile.tax adminProfile.compensation')
   ]);
   const statePayConfig = company?.payrollConfiguration?.statePay as
     | { enabled?: boolean; dates?: string[]; holidays?: Array<{ name: string; date: string }> }
@@ -1517,18 +1577,26 @@ async function calculateCompanyPayrollLines(
     vacationConfig?.vacationAccrualRate ||
     vacationPolicyForProvince(company?.address?.province).vacationAccrualRate;
   const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
-  return lines.map((line) =>
+  return lines.map((line) => {
+    const employee = employeeById.get(line.employeeId);
+    const hourlyRate =
+      Number(line.hourlyRate || 0) > 0
+        ? line.hourlyRate
+        : text(employee?.adminProfile?.compensation?.hourlyRate, '25.00');
+    return (
     calculatePayrollLine({
       ...line,
+      hourlyRate,
       statePayHours: eligibleDates.length ? line.statePayHours : 0,
       statePayBaseHours: eligibleDates.length
         ? line.statePayBaseHours ?? eligibleDates.length * defaultHoursPerDay
         : 0,
       vacationAccrualRate,
       payFrequency,
-      province: employeeProvince(employeeById.get(line.employeeId), company?.address?.province)
+      province: employeeProvince(employee, company?.address?.province)
     })
-  );
+    );
+  });
 }
 
 const statePaySettingsSchema = z.object({
@@ -1758,6 +1826,7 @@ function employeeFieldsFromProfile(
   email: string,
   company?: { address?: { province?: string }; payrollConfiguration?: Record<string, unknown> }
 ) {
+  profile = payrollReadyProfile(profile, company);
   const personal = profile.personal;
   const employment = profile.employment;
   const tax = profile.tax;
