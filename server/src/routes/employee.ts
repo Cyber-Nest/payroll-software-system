@@ -62,6 +62,18 @@ function moneySumText(...values: unknown[]) {
   );
 }
 
+function deductionTotalAmount(lines: Array<{ code?: string; amount: unknown }>): MoneyValue {
+  const explicitTotal = lines.find((line) => line.code === 'TOTAL')?.amount;
+  const lineTotal = sumMoney(
+    lines.filter((line) => line.code !== 'TOTAL').map((line) => serializeMoney(line.amount))
+  );
+  if (explicitTotal === undefined || explicitTotal === null) return lineTotal;
+  if (Number(serializeMoney(explicitTotal)) === 0 && Number(serializeMoney(lineTotal)) !== 0) {
+    return lineTotal;
+  }
+  return serializeMoney(explicitTotal);
+}
+
 function lineDescriptionIncludes(line: { description?: string }, values: string[]) {
   const description = normalizedDisplayText(line.description);
   return values.some((value) => description.includes(value));
@@ -158,9 +170,7 @@ function payDto(statement: unknown, employee?: IEmployee) {
   const grossTotal =
     s.grossEarnings.find((line) => line.code === 'TOTAL')?.amount ||
     sumMoney(s.grossEarnings.map((line) => line.amount as MoneyValue));
-  const deductionsTotal =
-    s.deductions.find((line) => line.code === 'TOTAL')?.amount ||
-    sumMoney(s.deductions.map((line) => line.amount as MoneyValue));
+  const deductionsTotal = deductionTotalAmount(s.deductions);
   const grossValue = Number(serializeMoney(grossTotal));
   const profile = employee?.adminProfile as
     | {
@@ -259,7 +269,7 @@ function payDto(statement: unknown, employee?: IEmployee) {
       code: line.code || (index === lines.length - 1 ? 'TOTAL' : 'DED'),
       description:
         line.description || (index === lines.length - 1 ? 'Total deductions' : 'Payroll deduction'),
-      amount: serializeMoney(line.amount)
+      amount: serializeMoney(line.code === 'TOTAL' ? deductionsTotal : line.amount)
     })),
     additionalInfo: [
       ...(profile?.banking?.accountNumber
@@ -348,7 +358,7 @@ async function payslipData(
   const deductionsTotalYtd = serializeMoney(
     sumMoney(
       history.map(
-        (statement) => statement.deductions.find((line) => line.code === 'TOTAL')?.amount || 0
+        (statement) => deductionTotalAmount(statement.deductions)
       )
     )
   );

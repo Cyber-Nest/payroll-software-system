@@ -3156,7 +3156,7 @@ function AddEmployee({
           label="Province *"
           value={v('personal', 'province')}
           onChange={(next) => update('personal', 'province', next)}
-          options={['Alberta', 'Ontario', 'British Columbia', 'Quebec']}
+          options={canadaProvinceOptions}
         />
         {input('personal', 'postalCode', 'Postal Code *')}
       </div>
@@ -3206,7 +3206,7 @@ function AddEmployee({
             label="Province of Employment *"
             value={v('employment', 'provinceOfEmployment')}
             onChange={(next) => update('employment', 'provinceOfEmployment', next)}
-            options={['Alberta', 'Ontario', 'British Columbia']}
+            options={canadaProvinceOptions}
           />
           {input('employment', 'standardWeeklyHours', 'Standard Weekly Hours *')}
           {input('employment', 'standardDailyHours', 'Standard Daily Hours')}
@@ -3361,14 +3361,9 @@ function AddEmployee({
               label="Province of Residence *"
               value={v('tax', 'provinceOfResidence')}
               onChange={(next) => update('tax', 'provinceOfResidence', next)}
-              options={['Alberta', 'Ontario', 'British Columbia']}
+              options={canadaProvinceOptions}
             />
-            <AdminSelect
-              label="City / Region *"
-              value={v('tax', 'cityRegion')}
-              onChange={(next) => update('tax', 'cityRegion', next)}
-              options={['Calgary', 'Medicine Hat', 'Toronto']}
-            />
+            {input('tax', 'cityRegion', 'City / Region *')}
             <AdminSelect
               label="Residency Status *"
               value={v('tax', 'residencyStatus')}
@@ -3472,7 +3467,7 @@ function AddEmployee({
           label="Province *"
           value={v('vacation', 'province')}
           onChange={(next) => update('vacation', 'province', next)}
-          options={['Alberta', 'Ontario', 'British Columbia']}
+          options={canadaProvinceOptions}
         />
         <div>
           <b>9</b>
@@ -7024,21 +7019,21 @@ const employerWizardSteps = [
   'Features & Permissions',
   'Review & Activate'
 ];
-const provinceCities: Record<string, string[]> = {
-  Alberta: ['Calgary', 'Edmonton', 'Red Deer', 'Lethbridge', 'Medicine Hat'],
-  'British Columbia': ['Vancouver', 'Victoria', 'Surrey', 'Burnaby', 'Kelowna'],
-  Manitoba: ['Winnipeg', 'Brandon', 'Steinbach', 'Thompson', 'Portage la Prairie'],
-  'New Brunswick': ['Fredericton', 'Moncton', 'Saint John', 'Miramichi', 'Dieppe'],
-  'Newfoundland and Labrador': ["St. John's", 'Mount Pearl', 'Corner Brook', 'Gander', 'Labrador City'],
-  'Nova Scotia': ['Halifax', 'Sydney', 'Dartmouth', 'Truro', 'New Glasgow'],
-  'Northwest Territories': ['Yellowknife', 'Hay River', 'Inuvik', 'Fort Smith'],
-  Nunavut: ['Iqaluit', 'Rankin Inlet', 'Arviat', 'Cambridge Bay'],
-  Ontario: ['Toronto', 'Ottawa', 'Mississauga', 'Brampton', 'Hamilton', 'London'],
-  'Prince Edward Island': ['Charlottetown', 'Summerside', 'Stratford', 'Cornwall'],
-  Quebec: ['Montreal', 'Quebec City', 'Laval', 'Gatineau', 'Sherbrooke'],
-  Saskatchewan: ['Saskatoon', 'Regina', 'Prince Albert', 'Moose Jaw', 'Swift Current'],
-  Yukon: ['Whitehorse', 'Dawson City', 'Watson Lake', 'Haines Junction']
-};
+const canadaProvinceOptions = [
+  'Alberta',
+  'British Columbia',
+  'Manitoba',
+  'New Brunswick',
+  'Newfoundland and Labrador',
+  'Nova Scotia',
+  'Northwest Territories',
+  'Nunavut',
+  'Ontario',
+  'Prince Edward Island',
+  'Quebec',
+  'Saskatchewan',
+  'Yukon'
+];
 const provinceVacationRates: Record<string, string> = {
   Alberta: '4.00',
   'British Columbia': '4.00',
@@ -12362,20 +12357,12 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
               setForm((current) => ({
                 ...current,
                 province: value,
-                city: provinceCities[value]?.[0] || '',
                 vacationPayRate: provinceVacationRates[value] || '4.00'
               }))
             }
-            options={Object.keys(provinceCities)}
+            options={canadaProvinceOptions}
           />
-          <AdminSelect
-            label="City *"
-            value={form.city}
-            onChange={(value) => update('city', value)}
-            options={[
-              ...new Set([...(provinceCities[form.province] || []), ...(form.city ? [form.city] : [])])
-            ]}
-          />
+          {field('city', 'City *')}
           <label>
             Vacation Pay Rate (2026) *
             <input readOnly value={`${form.vacationPayRate}%`} />

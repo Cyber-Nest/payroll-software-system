@@ -124,6 +124,20 @@ function moneySumText(...values: Array<MoneyValue | string | undefined>) {
   );
 }
 
+function deductionTotalAmount(lines: Array<{ code?: string; amount?: MoneyValue | string }>): MoneyValue {
+  const explicitTotal = lines.find((line) => line.code === 'TOTAL')?.amount;
+  const lineTotal = sumMoney(
+    lines
+      .filter((line) => line.code !== 'TOTAL' && line.amount !== undefined)
+      .map((line) => line.amount as MoneyValue)
+  );
+  if (explicitTotal === undefined || explicitTotal === null) return lineTotal;
+  if (moneyToNumber(explicitTotal) === 0 && moneyToNumber(lineTotal) !== 0) {
+    return lineTotal;
+  }
+  return explicitTotal;
+}
+
 function lineDescriptionIncludes(line: { description?: string }, values: string[]) {
   const description = normalizedDisplayText(line.description);
   return values.some((value) => description.includes(value));
@@ -1169,7 +1183,7 @@ router.get(
       )
     );
     const ytdDeductions = sumMoney(
-      statements.map((statement) => statement.deductions.find((item) => item.code === 'TOTAL')?.amount || 0)
+      statements.map((statement) => deductionTotalAmount(statement.deductions))
     );
     const ytdNet = sumMoney(statements.map((statement) => statement.netPay));
     const ytdHours = statements.reduce(
@@ -1252,7 +1266,7 @@ router.get(
           const period = periodStart && periodEnd
             ? `${periodStart} - ${periodEnd} (#${statement.payPeriodNumber})`
             : `Pay period #${statement.payPeriodNumber}`;
-          const deductionsTotal = statement.deductions.find((item) => item.code === 'TOTAL')?.amount || 0;
+          const deductionsTotal = deductionTotalAmount(statement.deductions);
           return {
             id: String(statement._id),
             payDate: dateLabel(statement.payDate),
@@ -1769,7 +1783,7 @@ async function sendPayStatementNotificationEmail(input: {
     `Pay period: ${dateOnly(input.periodStart)} to ${dateOnly(input.periodEnd)}`,
     `Pay date: ${dateOnly(input.statement.payDate)}`,
     `Gross pay: ${formatMoney(input.statement.grossPay || 0)}`,
-    `Total deductions: ${formatMoney(input.statement.deductions.find((line) => line.code === 'TOTAL')?.amount || 0)}`,
+    `Total deductions: ${formatMoney(deductionTotalAmount(input.statement.deductions))}`,
     `Net pay: ${formatMoney(input.statement.netPay)}`
   ];
   const body = [
@@ -2914,9 +2928,9 @@ router.get(
           yearToDateGrossPay: formatMoney(sumMoney(ytdStatements.map((item) =>
             item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
           ))),
-          deductionsTotal: formatMoney(statement.deductions.find((line) => line.code === 'TOTAL')?.amount || 0),
+          deductionsTotal: formatMoney(deductionTotalAmount(statement.deductions)),
           deductionsTotalYtd: formatMoney(sumMoney(ytdStatements.map((item) =>
-            item.deductions.find((line) => line.code === 'TOTAL')?.amount || 0
+            deductionTotalAmount(item.deductions)
           ))),
           regularHours: statement.regularHours || 0,
           overtimeHours: statement.overtimeHours || 0,
@@ -3180,7 +3194,7 @@ router.get('/deductions', authenticate, requirePermission('payroll.view'), async
         periodStart: statement.periodStart,
         periodEnd: statement.periodEnd,
         payDate: statement.payDate,
-        total: formatMoney(statement.deductions.find((line) => line.code === 'TOTAL')?.amount || sumMoney(lines.map((line) => line.amount))),
+        total: formatMoney(deductionTotalAmount(statement.deductions)),
         statutory: formatMoney(statutory),
         voluntary: formatMoney(voluntary),
         lines
@@ -3203,7 +3217,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
   const regularHoursYtd = history.reduce((total, item) => total + (item.regularHours || 0), 0);
   const overtimeHoursYtd = history.reduce((total, item) => total + (item.overtimeHours || 0), 0);
   const deductionsTotalYtd = formatMoney(sumMoney(history.map((item) =>
-    item.deductions.find((line) => line.code === 'TOTAL')?.amount || 0
+    deductionTotalAmount(item.deductions)
   )));
   const grossTotalYtd = formatMoney(sumMoney(history.map((item) =>
     item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
@@ -3229,7 +3243,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
   const deductions = displayDeductionLines(statement.deductions.map((line) => ({
     code: line.code,
     description: line.description || '',
-    amount: formatMoney(line.amount || 0),
+    amount: formatMoney(line.code === 'TOTAL' ? deductionTotalAmount(statement.deductions) : line.amount || 0),
     ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code || '')
   })));
   return {
@@ -3243,7 +3257,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     netPay: formatMoney(statement.netPay),
     yearToDateNetPay: formatMoney(sumMoney(history.map((item) => item.netPay))),
     grossPay: formatMoney(statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0),
-    deductionsTotal: formatMoney(statement.deductions.find((line) => line.code === 'TOTAL')?.amount || 0),
+    deductionsTotal: formatMoney(deductionTotalAmount(statement.deductions)),
     grossEarnings: earnings,
     deductions,
     additionalInfo: [
