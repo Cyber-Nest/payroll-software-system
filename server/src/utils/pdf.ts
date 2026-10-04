@@ -282,11 +282,13 @@ function payslipDeductionLines(lines: PdfLine[], deductionsTotal: string): PdfLi
       .filter((line) => pdfMoney(line.amount) !== 0 || pdfMoney(line.ytd) !== 0)
   ].filter(Boolean) as PdfLine[];
   const total = source.find((line) => String(line.code || '').toUpperCase() === 'TOTAL');
+  const totalAmount = total && pdfMoney(total.amount) !== 0 ? total.amount : deductionsTotal;
+  const totalYtd = total && pdfMoney(total.ytd) !== 0 ? total.ytd : totalAmount;
   normalized.push({
     code: 'TOTAL',
     description: 'Total deductions',
-    amount: total?.amount || deductionsTotal,
-    ytd: total?.ytd || total?.amount || deductionsTotal
+    amount: totalAmount,
+    ytd: totalYtd
   });
   return normalized;
 }

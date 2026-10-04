@@ -165,8 +165,15 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
   const grossTotal =
     s.grossEarnings.find((line) => line.code === 'TOTAL')?.amount ||
     sumMoney(s.grossEarnings.map((line) => line.amount as MoneyValue));
-  const deductionsTotal = deductionTotalAmount(s.deductions);
+  const storedDeductionsTotal = deductionTotalAmount(s.deductions);
   const grossValue = Number(serializeMoney(grossTotal));
+  const inferredDeductionsTotal = grossValue - Number(serializeMoney(s.netPay));
+  const deductionsTotal =
+    Number(serializeMoney(storedDeductionsTotal)) !== 0
+      ? storedDeductionsTotal
+      : inferredDeductionsTotal > 0
+        ? inferredDeductionsTotal.toFixed(2)
+        : storedDeductionsTotal;
   const profile = employee?.adminProfile as
     | {
         compensation?: { hourlyRate?: string | number };

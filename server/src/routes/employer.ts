@@ -215,6 +215,7 @@ function effectiveStatementDeductions(
     deductions: Array<{ code?: string; description?: string; amount?: MoneyValue | string }>;
     grossPay?: MoneyValue | string;
     grossEarnings?: Array<{ code?: string; amount?: MoneyValue | string }>;
+    netPay?: MoneyValue | string;
     payDate?: Date;
     additionalInfo?: Array<{ key?: string; value?: string }>;
   },
@@ -223,6 +224,10 @@ function effectiveStatementDeductions(
   fallbackPayFrequency: keyof typeof payrollFrequencyRules = 'biweekly'
 ) {
   const currentTotal = moneyToNumber(deductionTotalAmount(statement.deductions));
+  const grossPay =
+    statement.grossPay || statement.grossEarnings?.find((line) => line.code === 'TOTAL')?.amount || 0;
+  const inferredTotal = moneyToNumber(grossPay) - moneyToNumber(statement.netPay || 0);
+  const effectiveTotal = currentTotal || (inferredTotal > 0 ? inferredTotal : 0);
   const statutoryDetailTotal = moneyToNumber(
     sumMoney(
       statement.deductions
@@ -232,10 +237,20 @@ function effectiveStatementDeductions(
   );
   if (currentTotal !== 0 && statutoryDetailTotal !== 0) return statement.deductions;
   const runDeductions = payrollRunDeductionsForStatement(statement, runsById, fallbackProvince);
-  if (runDeductions && moneyToNumber(deductionTotalAmount(runDeductions)) !== 0) return runDeductions;
-  if (currentTotal !== 0 && statutoryDetailTotal === 0) {
+  const runDeductionsTotal = runDeductions ? moneyToNumber(deductionTotalAmount(runDeductions)) : 0;
+  const runDetailTotal = runDeductions
+    ? moneyToNumber(
+        sumMoney(
+          runDeductions
+            .filter((line) => ['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX'].includes(String(line.code || '').toUpperCase()))
+            .map((line) => line.amount || 0)
+        )
+      )
+    : 0;
+  if (runDeductions && runDeductionsTotal !== 0 && runDetailTotal !== 0) return runDeductions;
+  if (effectiveTotal !== 0 && statutoryDetailTotal === 0) {
     const rebuilt = statutoryDeductionsFromGross(
-      statement.grossPay || statement.grossEarnings?.find((line) => line.code === 'TOTAL')?.amount,
+      grossPay,
       fallbackProvince,
       payrollFrequencyRules[fallbackPayFrequency].payPeriods
     );

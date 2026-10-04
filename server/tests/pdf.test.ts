@@ -90,6 +90,17 @@ describe('PDF generation', () => {
     expect(text).toContain('463.92');
   });
 
+  it('does not let a stale zero total deduction line override the payslip total', () => {
+    const file = payslipPdf({
+      ...payslip,
+      deductionsTotal: '463.92',
+      deductions: [{ code: 'TOTAL', description: 'Total deductions', amount: '0.00', ytd: '927.84' }]
+    });
+    const text = pdfText(file);
+    expect(text).toContain('Total deductions');
+    expect(text).toContain('463.92');
+  });
+
   it('generates multi-page payslip PDFs', () => {
     const file = payslipsPdf([payslip, payslip]);
     expect(pageCount(file)).toBe(2);
