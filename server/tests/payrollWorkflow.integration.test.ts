@@ -225,6 +225,11 @@ describe('payroll workflow integration', () => {
     await request(`/employer/payroll-runs/${runId}/finalize`, token, { method: 'POST' });
 
     statements[0].deductions = [{ code: 'TOTAL', description: 'Total deductions', amount: decimalToMoney('0') }];
+    runs[0].lines[0].cpp = decimalToMoney('0');
+    runs[0].lines[0].cpp2 = decimalToMoney('0');
+    runs[0].lines[0].ei = decimalToMoney('0');
+    runs[0].lines[0].federalTax = decimalToMoney('0');
+    runs[0].lines[0].provincialTax = decimalToMoney('0');
     jest.spyOn(Employee, 'countDocuments').mockResolvedValue(1 as never);
     jest.spyOn(PayrollRun, 'find').mockResolvedValue(runs as never);
     jest.spyOn(PayStatement, 'find').mockImplementation((() => ({
