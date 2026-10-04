@@ -11826,6 +11826,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   >('active');
   const [result, setResult] = useState<{
     emailSent: boolean;
+    emailError?: string;
     temporaryPassword: string;
     employer: { legalName: string; customerId: string; primaryContactEmail: string };
   }>();
@@ -12533,6 +12534,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             Email sent: {result.emailSent ? 'Yes' : 'No'} | Login:{' '}
             {result.employer.primaryContactEmail} | Temporary password: {result.temporaryPassword}
           </span>
+          {!result.emailSent && result.emailError && (
+            <span>Email error: {result.emailError}</span>
+          )}
         </div>
       )}
       <div className="metric-grid">

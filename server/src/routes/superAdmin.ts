@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import { AuditLog } from '../models/AuditLog';
 import { AccessRole } from '../models/AccessRole';
@@ -919,6 +920,54 @@ router.put('/employers/:id', authenticate, requirePermission('users.manage'), as
 
   await auditEvent(req, { userId: req.superAdminContext!.superAdminId, companyId: company._id, eventType: 'EMPLOYER_UPDATED', metadata: { action: `Updated ${company.legalName}` } });
   res.json({ employer: { id: String(company._id), legalName: company.legalName, operatingName: company.operatingName, customerId: company.customerId, status: company.status, employeeCount: company.employeeCount || 0, plan: company.subscription?.plan || 'Standard' } });
+});
+
+router.post('/employers/:id/resend-activation', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const company = await Company.findById(req.params.id);
+  if (!company) return res.status(404).json({ message: 'Employer not found' });
+
+  const employer = await EmployerUser.findOne({ companyId: company._id }).sort({ createdAt: 1 });
+  if (!employer) return res.status(404).json({ message: 'Employer login not found' });
+
+  const temporaryPassword = generateTemporaryPassword();
+  employer.passwordHash = await hashPassword(temporaryPassword);
+  employer.isActive = true;
+  employer.mustChangePassword = true;
+  employer.companyId = company._id;
+  employer.companyIds = Array.from(new Set([String(company._id), ...(employer.companyIds || []).map(String)]))
+    .map((id) => new mongoose.Types.ObjectId(id));
+  employer.lastSelectedCompanyId = company._id;
+  await employer.save();
+
+  let emailSent = false;
+  let emailError: string | undefined;
+  try {
+    await sendEmployerCredentialsEmail(String(employer._id), temporaryPassword);
+    emailSent = true;
+  } catch (error) {
+    emailError = error instanceof Error ? error.message : 'Unable to send employer email';
+    console.error('Employer activation email failed:', error);
+  }
+
+  await auditEvent(req, {
+    userId: req.superAdminContext!.superAdminId,
+    companyId: company._id,
+    eventType: 'EMPLOYER_UPDATED',
+    metadata: { action: 'Activation email resent', employerUserId: employer._id, emailSent }
+  });
+
+  res.json({
+    employer: {
+      id: String(company._id),
+      legalName: company.legalName,
+      customerId: company.customerId,
+      primaryContactEmail: employer.email
+    },
+    temporaryPassword,
+    emailSent,
+    emailError
+  });
 });
 
 router.delete('/employers/:id', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {

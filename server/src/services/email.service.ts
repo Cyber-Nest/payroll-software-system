@@ -161,7 +161,15 @@ export class EmailService {
     });
 
     if (!response.ok) {
-      throw new Error(`Resend email failed: ${response.status} ${await response.text()}`);
+      const body = await response.text();
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body) as { message?: string; name?: string };
+        detail = parsed.message || parsed.name || body;
+      } catch {
+        detail = body;
+      }
+      throw new Error(`Resend email failed: ${response.status} ${detail}`);
     }
   }
 
