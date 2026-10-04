@@ -22,6 +22,27 @@ describe('payroll workflow state machine', () => {
     expect(formatMoney(line.netPay)).toBe('1375.62');
   });
 
+  it('keeps visible deduction lines separate and reconciled to the total', () => {
+    const line = calculatePayrollLine({
+      employeeId: '64b7f8f8f8f8f8f8f8f8f8f2',
+      regularHours: 80,
+      overtimeHours: 2,
+      hourlyRate: '20.10'
+    });
+    const visibleDeductions =
+      Number(formatMoney(line.cpp)) +
+      Number(formatMoney(line.cpp2)) +
+      Number(formatMoney(line.ei)) +
+      Number(formatMoney(line.federalTax)) +
+      Number(formatMoney(line.provincialTax)) +
+      Number(formatMoney(line.preTaxDeductions)) +
+      Number(formatMoney(line.postTaxDeductions));
+
+    expect(Number(formatMoney(line.federalTax))).toBeGreaterThan(0);
+    expect(Number(formatMoney(line.provincialTax))).toBeGreaterThan(0);
+    expect(visibleDeductions.toFixed(2)).toBe(formatMoney(line.deductionsTotal));
+  });
+
   it.each([
     ['weekly', 44],
     ['biweekly', 88],

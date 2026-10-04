@@ -156,6 +156,7 @@ export function calculatePayrollLine(
     province,
     payPeriods: input.payPeriods || frequencyRule.payPeriods
   });
+  const provincialTax = statutory.incomeTax.minus(statutory.federalTax);
   return {
     employeeId: new mongoose.Types.ObjectId(input.employeeId),
     regularHours,
@@ -179,7 +180,7 @@ export function calculatePayrollLine(
     cpp2: decimalToMoney(statutory.cpp2),
     ei: decimalToMoney(statutory.ei),
     federalTax: decimalToMoney(statutory.federalTax),
-    provincialTax: decimalToMoney(statutory.provincialTax),
+    provincialTax: decimalToMoney(provincialTax),
     carryForwardAdjustment: decimalToMoney(0),
     carryForwardAdjustmentIds: [],
     note: input.note,

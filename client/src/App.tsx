@@ -81,15 +81,11 @@ const isAllFilter = (selected: string, allValue: string) => filterEquals(selecte
 const matchesFilter = (value: unknown, selected: string, allValue: string) =>
   isAllFilter(selected, allValue) || filterEquals(value, selected);
 type DisplayMoneyLine = { code?: string; description?: string; amount: string; ytd?: string };
-const hiddenDeductionCodes = new Set(['CPP2', 'PTAX']);
-const hiddenDeductionDescriptions = ['additional cpp', 'provincial income tax', 'other tax'];
+const hiddenDeductionCodes = new Set(['CPP2']);
+const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
 const moneyNumber = (value: unknown) => Number(String(value ?? '0').replace(/,/g, '')) || 0;
-const moneySumText = (...values: unknown[]) =>
-  values.reduce<number>((total, value) => total + moneyNumber(value), 0).toFixed(2);
-const combinedIncomeTax = (row: { federalTax: number; provincialTax: number }) =>
-  row.federalTax + row.provincialTax;
 const lineMatchesAny = (line: { code?: string; description?: string }, values: string[]) => {
   const description = normalizeFilterValue(line.description);
   return values.some((value) => description.includes(value));
@@ -102,22 +98,7 @@ const displayEarningLines = <T extends DisplayMoneyLine>(lines: T[]) =>
     return !optional || moneyNumber(line.amount) !== 0;
   });
 const displayDeductionLines = <T extends DisplayMoneyLine>(lines: T[]) => {
-  const provincial = lines.find(
-    (line) =>
-      String(line.code || '').toUpperCase() === 'PTAX' ||
-      lineMatchesAny(line, ['provincial income tax'])
-  );
   return lines
-    .map((line) => {
-      const code = String(line.code || '').toUpperCase();
-      if (code !== 'FTAX') return line;
-      return {
-        ...line,
-        description: line.description || 'Federal tax',
-        amount: moneySumText(line.amount, provincial?.amount),
-        ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
-      };
-    })
     .filter((line) => {
       const code = String(line.code || '').toUpperCase();
       return !hiddenDeductionCodes.has(code) && !lineMatchesAny(line, hiddenDeductionDescriptions);
@@ -4497,8 +4478,8 @@ function PayrollPage({
                         <b>CPP {moneyText(line.cpp)}</b>
                         <b>CPP2 {moneyText(line.cpp2)}</b>
                         <b>EI {moneyText(line.ei)}</b>
-                        <b>Federal tax {moneyText(moneyNumber(line.federalTax) + moneyNumber(line.provincialTax))}</b>
-                        <b>Provincial tax {moneyText(0)}</b>
+                        <b>Federal tax {moneyText(line.federalTax)}</b>
+                        <b>Provincial tax {moneyText(line.provincialTax)}</b>
                         <b>Total gross {moneyText(line.grossPay)}</b>
                         <b>Total deductions {moneyText(line.deductionsTotal)}</b>
                         <b>Net pay {moneyText(line.netPay)}</b>
@@ -6273,7 +6254,7 @@ function EmployerPayrollReportsPage({ token, onBack }: { token: string; onBack: 
           {activeTab === 'Payroll Details' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Employee ID</th><th>Department</th><th>Pay Group</th><th>Hours</th><th>Gross Pay</th><th>Deductions</th><th>Net Pay</th><th>Actions</th></tr></thead><tbody>{payrollDetailRows.flatMap((row) => { const rowKey = payrollDetailKey(row); const isExpanded = rowKey === activePayrollDetailKey; return [<tr key={rowKey} className={isExpanded ? 'selected-detail-row' : ''}><td>{row.index}</td><td>{row.employeeName}</td><td>{row.employeeNumber}</td><td>{row.department || '-'}</td><td>{row.payGroup || '-'}</td><td>{row.hours.toFixed(2)}</td><td>{moneyValue(row.grossPay)}</td><td>{moneyValue(row.deductions)}</td><td>{moneyValue(row.netPay)}</td><td><button className="row-expand-button" type="button" aria-label={`View details for ${row.employeeName}`} onClick={() => setExpandedPayrollDetailKey(rowKey)}>{isExpanded ? '^' : 'v'}</button></td></tr>, ...(isExpanded ? [<tr key={`detail-${rowKey}`} className="payroll-detail-panel-row"><td colSpan={10}><PayrollDetailPanel row={row} moneyValue={moneyValue} payPeriod={data.summary.payPeriod} /></td></tr>] : [])]; })}{!visibleRows.length && <tr><td colSpan={10}>No payroll run data found in the database.</td></tr>}</tbody></table></div>}
           {activeTab === 'Pay Run Comparison' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Current Gross</th><th>Current Deductions</th><th>Current Net</th><th>Employer Costs</th><th>Gross % of Run</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{moneyValue(row.grossPay)}</td><td>{moneyValue(row.deductions)}</td><td>{moneyValue(row.netPay)}</td><td>{moneyValue(row.employerCosts)}</td><td>{filteredTotals.grossPay ? `${(row.grossPay / filteredTotals.grossPay * 100).toFixed(1)}%` : '0.0%'}</td></tr>)}{!visibleRows.length && <tr><td colSpan={7}>No payroll run data found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{moneyValue(filteredTotals.grossPay)}</td><td>{moneyValue(filteredTotals.deductions)}</td><td>{moneyValue(filteredTotals.netPay)}</td><td>{moneyValue(filteredTotals.employerCosts)}</td><td>100.0%</td></tr></tfoot></table></div>}
           {activeTab === 'Earnings Report' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Regular Hours</th><th>Regular Pay</th><th>Overtime Hours</th><th>Overtime Pay</th><th>Vacation Pay</th><th>Stat Holiday Pay</th><th>Other Earnings</th><th>Total Earnings</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{row.regularHours.toFixed(2)}</td><td>{moneyValue(row.regularHours * row.hourlyRate)}</td><td>{row.overtimeHours.toFixed(2)}</td><td>{moneyValue(row.overtimeHours * row.hourlyRate * 1.5)}</td><td>{moneyValue(row.vacationPay)}</td><td>{moneyValue(row.statePay)}</td><td>{moneyValue(row.otherEarnings)}</td><td>{moneyValue(row.grossPay)}</td></tr>)}{!visibleRows.length && <tr><td colSpan={10}>No employee earnings found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{filteredTotals.regularHours.toFixed(2)}</td><td></td><td>{filteredTotals.overtimeHours.toFixed(2)}</td><td></td><td>{moneyValue(filteredTotals.vacationPay)}</td><td>{moneyValue(filteredTotals.statePay)}</td><td>{moneyValue(filteredTotals.otherEarnings)}</td><td>{moneyValue(filteredTotals.grossPay)}</td></tr></tfoot></table></div>}
-          {activeTab === 'Deductions Report' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>CPP</th><th>EI</th><th>Federal Tax</th><th>Provincial Tax</th><th>Pre-tax</th><th>Post-tax</th><th>Total Deductions</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{moneyValue(row.cpp)}</td><td>{moneyValue(row.ei)}</td><td>{moneyValue(combinedIncomeTax(row))}</td><td>{moneyValue(0)}</td><td>{moneyValue(row.preTaxDeductions)}</td><td>{moneyValue(row.postTaxDeductions)}</td><td>{moneyValue(row.deductions)}</td></tr>)}{!visibleRows.length && <tr><td colSpan={9}>No employee deductions found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{moneyValue(filteredTotals.cpp)}</td><td>{moneyValue(filteredTotals.ei)}</td><td>{moneyValue(combinedIncomeTax(filteredTotals))}</td><td>{moneyValue(0)}</td><td>{moneyValue(filteredTotals.preTaxDeductions)}</td><td>{moneyValue(filteredTotals.postTaxDeductions)}</td><td>{moneyValue(filteredTotals.deductions)}</td></tr></tfoot></table></div>}
+          {activeTab === 'Deductions Report' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>CPP</th><th>EI</th><th>Federal Tax</th><th>Provincial Tax</th><th>Pre-tax</th><th>Post-tax</th><th>Total Deductions</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{moneyValue(row.cpp)}</td><td>{moneyValue(row.ei)}</td><td>{moneyValue(row.federalTax)}</td><td>{moneyValue(row.provincialTax)}</td><td>{moneyValue(row.preTaxDeductions)}</td><td>{moneyValue(row.postTaxDeductions)}</td><td>{moneyValue(row.deductions)}</td></tr>)}{!visibleRows.length && <tr><td colSpan={9}>No employee deductions found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{moneyValue(filteredTotals.cpp)}</td><td>{moneyValue(filteredTotals.ei)}</td><td>{moneyValue(filteredTotals.federalTax)}</td><td>{moneyValue(filteredTotals.provincialTax)}</td><td>{moneyValue(filteredTotals.preTaxDeductions)}</td><td>{moneyValue(filteredTotals.postTaxDeductions)}</td><td>{moneyValue(filteredTotals.deductions)}</td></tr></tfoot></table></div>}
           {activeTab === 'Net Pay Report' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Gross Pay</th><th>Employee Deductions</th><th>Net Pay</th><th>Net % of Gross</th><th>Pay Date</th><th>Status</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{moneyValue(row.grossPay)}</td><td>{moneyValue(row.deductions)}</td><td>{moneyValue(row.netPay)}</td><td>{row.grossPay ? `${(row.netPay / row.grossPay * 100).toFixed(1)}%` : '0.0%'}</td><td>{row.payDate ? formatDate(row.payDate, 'en') : '-'}</td><td>{row.status || '-'}</td></tr>)}{!visibleRows.length && <tr><td colSpan={8}>No net pay records found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{moneyValue(filteredTotals.grossPay)}</td><td>{moneyValue(filteredTotals.deductions)}</td><td>{moneyValue(filteredTotals.netPay)}</td><td>{filteredTotals.grossPay ? `${(filteredTotals.netPay / filteredTotals.grossPay * 100).toFixed(1)}%` : '0.0%'}</td><td></td><td></td></tr></tfoot></table></div>}
           {activeTab === 'Year to Date Summary' && <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>YTD Hours</th><th>YTD Gross</th><th>YTD Deductions</th><th>YTD Net</th><th>Employer Costs</th></tr></thead><tbody>{payrollDetailRows.map((row) => <tr key={payrollDetailKey(row)}><td>{row.index}</td><td>{row.employeeName}</td><td>{row.hours.toFixed(2)}</td><td>{moneyValue(row.grossPay)}</td><td>{moneyValue(row.deductions)}</td><td>{moneyValue(row.netPay)}</td><td>{moneyValue(row.employerCosts)}</td></tr>)}{!visibleRows.length && <tr><td colSpan={7}>No year to date payroll data found in the database.</td></tr>}</tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Employees</td><td>{filteredTotals.hours.toFixed(2)}</td><td>{moneyValue(filteredTotals.grossPay)}</td><td>{moneyValue(filteredTotals.deductions)}</td><td>{moneyValue(filteredTotals.netPay)}</td><td>{moneyValue(filteredTotals.employerCosts)}</td></tr></tfoot></table></div>}
           <footer>
@@ -6341,16 +6322,16 @@ function PayrollDetailPanel({
   const deductions = [
     ['CPP (Employee)', row.cpp],
     ['EI (Employee)', row.ei],
-    ['Income Tax (Federal)', combinedIncomeTax(row)],
-    ['Income Tax (Provincial)', 0],
+    ['Income Tax (Federal)', row.federalTax],
+    ['Income Tax (Provincial)', row.provincialTax],
     ['Pre-tax Deductions', row.preTaxDeductions],
     ['Post-tax Deductions', row.postTaxDeductions]
   ];
   const taxes = [
     ['CPP', row.cpp],
     ['EI', row.ei],
-    ['Federal tax', combinedIncomeTax(row)],
-    ['Provincial Income Tax', 0]
+    ['Federal tax', row.federalTax],
+    ['Provincial Income Tax', row.provincialTax]
   ];
   const employerCpp = row.cpp;
   const employerEi = Number((row.ei * 1.4).toFixed(2));
@@ -6937,9 +6918,9 @@ function EmployerDeductionsReportPage({ token, onBack }: { token: string; onBack
         <div className="payroll-report-layout">
           <section className="payroll-report-main"><header><div><h2>Deductions Report</h2><p>Breakdown of all employee deductions for the selected period.</p></div><ReportExportButtons title="Deductions Report" /></header>
             <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Employee ID</th><th>Department</th><th>CPP</th><th>EI</th><th>Income Tax (Federal)</th><th>Income Tax (Provincial)</th><th>Other Deductions</th><th>Total Deductions</th></tr></thead><tbody>
-              {visibleRows.slice(0, 25).map((row) => <tr key={row.employeeNumber || row.index}><td>{row.index}</td><td>{row.employeeName}</td><td>{row.employeeNumber}</td><td>{row.department || '-'}</td><td>{moneyValue(row.cpp)}</td><td>{moneyValue(row.ei)}</td><td>{moneyValue(combinedIncomeTax(row))}</td><td>{moneyValue(0)}</td><td>{moneyValue(row.otherDeductions)}</td><td><b>{moneyValue(row.totalDeductions)}</b></td></tr>)}
+              {visibleRows.slice(0, 25).map((row) => <tr key={row.employeeNumber || row.index}><td>{row.index}</td><td>{row.employeeName}</td><td>{row.employeeNumber}</td><td>{row.department || '-'}</td><td>{moneyValue(row.cpp)}</td><td>{moneyValue(row.ei)}</td><td>{moneyValue(row.federalTax)}</td><td>{moneyValue(row.provincialTax)}</td><td>{moneyValue(row.otherDeductions)}</td><td><b>{moneyValue(row.totalDeductions)}</b></td></tr>)}
               {!visibleRows.length && <tr><td colSpan={10}>No employee deductions found in the database.</td></tr>}
-            </tbody><tfoot><tr><td>Total ({visibleRows.length} Employees)</td><td></td><td></td><td></td><td>{moneyValue(totals.cpp)}</td><td>{moneyValue(totals.ei)}</td><td>{moneyValue(combinedIncomeTax(totals))}</td><td>{moneyValue(0)}</td><td>{moneyValue(totals.otherDeductions)}</td><td>{moneyValue(totals.totalDeductions)}</td></tr></tfoot></table></div>
+            </tbody><tfoot><tr><td>Total ({visibleRows.length} Employees)</td><td></td><td></td><td></td><td>{moneyValue(totals.cpp)}</td><td>{moneyValue(totals.ei)}</td><td>{moneyValue(totals.federalTax)}</td><td>{moneyValue(totals.provincialTax)}</td><td>{moneyValue(totals.otherDeductions)}</td><td>{moneyValue(totals.totalDeductions)}</td></tr></tfoot></table></div>
             <footer><span>Showing 1 - {Math.min(25, visibleRows.length)} of {visibleRows.length} employees</span><div><button>&lt;</button><button className="active">1</button><button>&gt;</button></div><select defaultValue="25"><option>25 / page</option></select></footer>
           </section>
           <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Deductions Report"><option>Deductions Report</option></select></label><label>Pay Period<select value={data.summary.payPeriod} onChange={() => undefined}><option>{data.summary.payPeriod}</option></select></label><b>Include in Report</b>{['CPP', 'EI', 'Income Tax (Federal)', 'Income Tax (Provincial)', 'Other Deductions', 'Total Deductions'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<label>Sort By<select defaultValue="Employee Name (A - Z)"><option>Employee Name (A - Z)</option></select></label><button type="button">Generate Report</button></aside>

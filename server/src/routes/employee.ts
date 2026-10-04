@@ -33,8 +33,8 @@ type DisplayLine = {
   rate?: string;
 };
 
-const hiddenDeductionCodes = new Set(['CPP2', 'PTAX']);
-const hiddenDeductionDescriptions = ['additional cpp', 'provincial income tax', 'other tax'];
+const hiddenDeductionCodes = new Set(['CPP2']);
+const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
 
 function payrollDeductionLabel(code?: string, description?: string): string {
@@ -43,6 +43,8 @@ function payrollDeductionLabel(code?: string, description?: string): string {
   if (normalizedCode === 'CPP' || normalizedDescription === 'canada pension plan') return 'CPP';
   if (normalizedCode === 'EI' || normalizedDescription === 'employment insurance') return 'EI';
   if (normalizedCode === 'FTAX' || normalizedDescription === 'federal income tax') return 'Federal tax';
+  if (normalizedCode === 'PTAX' || normalizedDescription === 'provincial income tax')
+    return 'Provincial income tax';
   return description || '';
 }
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
@@ -50,16 +52,6 @@ const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'ot
 
 function normalizedDisplayText(value: unknown) {
   return String(value || '').trim().toLowerCase();
-}
-
-function moneySumText(...values: unknown[]) {
-  return serializeMoney(
-    sumMoney(
-      values
-        .filter((value) => value !== undefined && value !== null)
-        .map((value) => serializeMoney(value))
-    )
-  );
 }
 
 function deductionTotalAmount(lines: Array<{ code?: string; amount: unknown }>): MoneyValue {
@@ -89,21 +81,7 @@ function displayEarningLines<T extends DisplayLine>(lines: T[]) {
 }
 
 function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
-  const provincial = lines.find(
-    (line) =>
-      String(line.code || '').toUpperCase() === 'PTAX' ||
-      lineDescriptionIncludes(line, ['provincial income tax'])
-  );
   return lines
-    .map((line) => {
-      if (String(line.code || '').toUpperCase() !== 'FTAX') return line;
-      return {
-        ...line,
-        description: line.description || 'Federal tax',
-        amount: moneySumText(line.amount, provincial?.amount),
-        ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
-      };
-    })
     .filter((line) => {
       const code = String(line.code || '').toUpperCase();
       if (optionalZeroDeductionCodes.has(code) && Number(serializeMoney(line.amount)) === 0) {

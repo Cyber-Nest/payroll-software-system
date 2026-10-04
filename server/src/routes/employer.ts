@@ -70,10 +70,6 @@ function safeFormatMoney(value: MoneyValue | null | undefined): string {
   return formatMoney(safeMoneyToNumber(value));
 }
 
-function displayedFederalIncomeTax(federalTax: MoneyValue | null | undefined, provincialTax: MoneyValue | null | undefined): number {
-  return safeMoneyToNumber(federalTax) + safeMoneyToNumber(provincialTax);
-}
-
 type DisplayLine = {
   code?: string;
   description?: string;
@@ -99,8 +95,8 @@ function addressLines(address?: {
   ].filter(Boolean) as string[];
 }
 
-const hiddenDeductionCodes = new Set(['CPP2', 'PTAX']);
-const hiddenDeductionDescriptions = ['additional cpp', 'provincial income tax', 'other tax'];
+const hiddenDeductionCodes = new Set(['CPP2']);
+const hiddenDeductionDescriptions = ['additional cpp', 'other tax'];
 const optionalZeroDeductionCodes = new Set(['PRE', 'POST']);
 
 function payrollDeductionLabel(code?: string, description?: string): string {
@@ -109,6 +105,8 @@ function payrollDeductionLabel(code?: string, description?: string): string {
   if (normalizedCode === 'CPP' || normalizedDescription === 'canada pension plan') return 'CPP';
   if (normalizedCode === 'EI' || normalizedDescription === 'employment insurance') return 'EI';
   if (normalizedCode === 'FTAX' || normalizedDescription === 'federal income tax') return 'Federal tax';
+  if (normalizedCode === 'PTAX' || normalizedDescription === 'provincial income tax')
+    return 'Provincial income tax';
   return description || '';
 }
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
@@ -116,12 +114,6 @@ const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'ot
 
 function normalizedDisplayText(value: unknown) {
   return String(value || '').trim().toLowerCase();
-}
-
-function moneySumText(...values: Array<MoneyValue | string | undefined>) {
-  return formatMoney(
-    sumMoney(values.filter((value): value is MoneyValue | string => value !== undefined))
-  );
 }
 
 function deductionTotalAmount(lines: Array<{ code?: string; amount?: MoneyValue | string }>): MoneyValue {
@@ -153,21 +145,7 @@ function displayEarningLines<T extends DisplayLine>(lines: T[]) {
 }
 
 function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
-  const provincial = lines.find(
-    (line) =>
-      String(line.code || '').toUpperCase() === 'PTAX' ||
-      lineDescriptionIncludes(line, ['provincial income tax'])
-  );
   return lines
-    .map((line) => {
-      if (String(line.code || '').toUpperCase() !== 'FTAX') return line;
-      return {
-        ...line,
-        description: line.description || 'Federal tax',
-        amount: moneySumText(line.amount, provincial?.amount),
-        ...(line.ytd !== undefined ? { ytd: moneySumText(line.ytd, provincial?.ytd) } : {})
-      };
-    })
     .filter((line) => {
       const code = String(line.code || '').toUpperCase();
       if (optionalZeroDeductionCodes.has(code) && moneyToNumber(line.amount) === 0) {
@@ -677,8 +655,8 @@ router.get(
             otherEarnings: safeMoneyToNumber(line.otherEarnings),
             cpp,
             ei,
-            federalTax: displayedFederalIncomeTax(line.federalTax, line.provincialTax),
-            provincialTax: 0,
+            federalTax: safeMoneyToNumber(line.federalTax),
+            provincialTax: safeMoneyToNumber(line.provincialTax),
             preTaxDeductions: safeMoneyToNumber(line.preTaxDeductions),
             postTaxDeductions: safeMoneyToNumber(line.postTaxDeductions)
           };
@@ -702,7 +680,7 @@ router.get(
             const grossPay = safeMoneyToNumber(
               statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
             );
-            const deductions = safeMoneyToNumber(sumMoney(statement.deductions.map((line) => line.amount)));
+            const deductions = safeMoneyToNumber(deductionTotalAmount(statement.deductions));
             const netPay = safeMoneyToNumber(statement.netPay);
             const deductionByCode = (code: string) =>
               statement.deductions.find((line) => String(line.code || '').toUpperCase() === code)?.amount;
@@ -740,10 +718,10 @@ router.get(
               otherEarnings: 0,
               cpp,
               ei,
-              federalTax: displayedFederalIncomeTax(deductionByCode('FTAX'), deductionByCode('PTAX')),
-              provincialTax: 0,
-              preTaxDeductions: 0,
-              postTaxDeductions: deductions
+              federalTax: safeMoneyToNumber(deductionByCode('FTAX')),
+              provincialTax: safeMoneyToNumber(deductionByCode('PTAX')),
+              preTaxDeductions: safeMoneyToNumber(deductionByCode('PRE')),
+              postTaxDeductions: safeMoneyToNumber(deductionByCode('POST'))
             };
           });
     const reportRows = rows.length ? rows : statementRows;
@@ -1195,8 +1173,8 @@ router.get(
       ? [
           ['CPP', moneyToNumber(serializedLine.cpp) + moneyToNumber(serializedLine.cpp2), moneyToNumber(serializedLine.cpp) + moneyToNumber(serializedLine.cpp2)],
           ['EI', moneyToNumber(serializedLine.ei), Number((moneyToNumber(serializedLine.ei) * 1.4).toFixed(2))],
-          ['Income Tax (Federal)', moneyToNumber(serializedLine.federalTax) + moneyToNumber(serializedLine.provincialTax), 0],
-          ['Income Tax (Provincial)', 0, 0],
+          ['Income Tax (Federal)', moneyToNumber(serializedLine.federalTax), 0],
+          ['Income Tax (Provincial)', moneyToNumber(serializedLine.provincialTax), 0],
           ['Pre-tax Deductions', moneyToNumber(serializedLine.preTaxDeductions), 0],
           ['Post-tax Deductions', moneyToNumber(serializedLine.postTaxDeductions), 0]
         ].map(([name, employeeAmount, employerAmount]) => ({ name, employeeAmount, employerAmount }))
@@ -1294,8 +1272,8 @@ router.get('/reports/deductions-summary', authenticate, requirePermission('repor
     const employee = employeeById.get(String(line.employeeId));
     const cpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
     const ei = moneyToNumber(line.ei);
-    const federalTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
-    const provincialTax = 0;
+    const federalTax = moneyToNumber(line.federalTax);
+    const provincialTax = moneyToNumber(line.provincialTax);
     const otherDeductions = moneyToNumber(line.preTaxDeductions) + moneyToNumber(line.postTaxDeductions);
     const totalDeductions = moneyToNumber(line.deductionsTotal);
     return {
