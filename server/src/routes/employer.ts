@@ -3448,6 +3448,7 @@ router.get('/paystubs/:id/download', authenticate, requirePermission('payroll.vi
   if (!employee || !company) return res.status(404).json({ message: 'Employee or company not found' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="paystub-${statement._id}.pdf"`);
+  res.setHeader('Cache-Control', 'no-store');
   res.send(payslipPdf(await employerPayslipData(statement, employee, company)));
 });
 
@@ -3490,6 +3491,7 @@ router.post('/paystubs/download-selected', authenticate, requirePermission('payr
   const pages = await Promise.all(statements.map((statement) => employerPayslipData(statement, byId.get(String(statement.employeeId))!, company)));
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="paystubs.pdf"');
+  res.setHeader('Cache-Control', 'no-store');
   res.send(payslipsPdf(pages));
 });
 

@@ -332,10 +332,11 @@ async function payslipData(
     payDate: { $lte: dto.payDate },
     supersededByStatementId: { $exists: false }
   })).filter((statement) => isInPayStatementYtd(statement, dto));
+  const historyDtos = history.map((statement) => payDto(statement, employee, company));
   const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) =>
     serializeMoney(
       sumMoney(
-        history.flatMap((statement) =>
+        historyDtos.flatMap((statement) =>
           statement[kind].filter((line) => line.code === code).map((line) => line.amount)
         )
       )
@@ -364,9 +365,7 @@ async function payslipData(
   );
   const deductionsTotalYtd = serializeMoney(
     sumMoney(
-      history.map(
-        (statement) => deductionTotalAmount(statement.deductions)
-      )
+      historyDtos.map((statement) => statement.deductionsTotal)
     )
   );
   const netPayYtd = serializeMoney(sumMoney(history.map((statement) => statement.netPay)));
@@ -615,6 +614,7 @@ router.post(
     );
     res
       .type('application/pdf')
+      .setHeader('Cache-Control', 'no-store')
       .setHeader('Content-Disposition', 'attachment; filename="payhours-selected-payslips.pdf"')
       .send(payslipsPdf(pages));
   }
@@ -668,6 +668,7 @@ router.get(
     const dto = payDto(statement, employee, company);
     res
       .type('application/pdf')
+      .setHeader('Cache-Control', 'no-store')
       .setHeader(
         'Content-Disposition',
         `attachment; filename="payhours-payslip-${statement.payPeriodYear}-${statement.payPeriodNumber}.pdf"`
