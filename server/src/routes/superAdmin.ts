@@ -338,10 +338,38 @@ function rpAccount(company: { businessNumber?: string; craPayroll?: Record<strin
   return textValue(cra.payrollAccount, `${company.businessNumber || '000000000'}RP${textValue(cra.accountSuffix, '0001')}`);
 }
 
-function nextRemittanceDate(remitterType: string) {
+function remittanceFrequencyFromCra(cra: Record<string, unknown>) {
+  const frequency = textValue(cra.remittanceFrequency, textValue(cra.frequency));
+  if (frequency) return frequency;
+  const remitterType = textValue(cra.remitterType, 'Regular');
+  return remitterType.toLowerCase().includes('quarter')
+    ? 'Quarterly'
+    : remitterType.toLowerCase().includes('accelerated')
+      ? 'Weekly'
+      : 'Monthly';
+}
+
+function nextRemittanceDate(frequencyOrRemitterType: string) {
   const date = new Date();
-  date.setMonth(date.getMonth() + (remitterType.toLowerCase().includes('quarter') ? 3 : 1), 15);
+  date.setMonth(
+    date.getMonth() + (frequencyOrRemitterType.toLowerCase().includes('quarter') ? 3 : 1),
+    15
+  );
   return date;
+}
+
+function normalizedCraPayroll(value: unknown) {
+  const cra = asRecord(value);
+  const frequency = remittanceFrequencyFromCra(cra);
+  return {
+    ...cra,
+    remitterType: textValue(
+      cra.remitterType,
+      frequency === 'Monthly' ? 'Regular' : frequency
+    ),
+    remittanceFrequency: frequency,
+    frequency
+  };
 }
 
 async function buildPayrollAccountsPayload() {
@@ -358,12 +386,13 @@ async function buildPayrollAccountsPayload() {
     const cra = asRecord(company.craPayroll);
     const banking = asRecord(company.banking);
     const remitterType = textValue(cra.remitterType, textValue(cra.remittanceFrequency, 'Regular'));
+    const frequency = remittanceFrequencyFromCra(cra);
     const companyRuns = runsByCompany.get(String(company._id)) || [];
     const grossLiability = companyRuns.length ? Number(formatMoney(sumMoney(companyRuns.slice(0, 4).map((run) => run.totalDeductions)))) : Number(textValue(cra.currentLiability, '0.00'));
     const payments = Array.isArray(cra.payments) ? cra.payments : [];
     const paidAmount = payments.reduce((sum, payment) => sum + Number(asRecord(payment).amount || 0), 0);
     const liability = Math.max(0, grossLiability - paidAmount).toFixed(2);
-    const due = textValue(cra.nextRemittanceDue) || formatDate(nextRemittanceDate(remitterType));
+    const due = textValue(cra.nextRemittanceDue) || formatDate(nextRemittanceDate(frequency));
     return {
       id: String(company._id),
       employer: company.legalName,
@@ -371,7 +400,7 @@ async function buildPayrollAccountsPayload() {
       businessNumber: company.businessNumber || '',
       rpAccountNumber: rpAccount(company),
       remitterType,
-      frequency: textValue(cra.frequency, remitterType.toLowerCase().includes('quarter') ? 'Quarterly' : remitterType.toLowerCase().includes('accelerated') ? 'Weekly' : 'Monthly'),
+      frequency,
       nextRemittanceDue: due,
       currentCraLiability: liability,
       status: textValue(cra.accountStatus, company.status === 'active' ? 'Active' : 'Setup Required'),
@@ -797,7 +826,7 @@ router.post('/employers', authenticate, requirePermission('users.manage'), async
     naicsCode: data.naicsCode,
     employeeCount: data.employeeCount,
     address: data.address,
-    craPayroll: data.craPayroll,
+    craPayroll: normalizedCraPayroll(data.craPayroll),
     payrollConfiguration: withVacationPolicy(data.payrollConfiguration, data.address?.province),
     banking: data.banking,
     subscription: data.subscription,
@@ -894,7 +923,7 @@ router.put('/employers/:id', authenticate, requirePermission('users.manage'), as
   if (data.naicsCode !== undefined) company.naicsCode = data.naicsCode;
   if (data.employeeCount !== undefined) company.employeeCount = data.employeeCount;
   if (data.address !== undefined) company.address = data.address;
-  if (data.craPayroll !== undefined) company.craPayroll = data.craPayroll;
+  if (data.craPayroll !== undefined) company.craPayroll = normalizedCraPayroll(data.craPayroll);
   if (data.payrollConfiguration !== undefined || data.address?.province !== undefined) {
     company.payrollConfiguration = withVacationPolicy(
       data.payrollConfiguration || company.payrollConfiguration,
@@ -1033,6 +1062,7 @@ router.post('/payroll-accounts', authenticate, requirePermission('users.manage')
     accountSuffix: data.payrollAccount.slice(-4),
     remitterType: data.remitterType,
     frequency: data.frequency,
+    remittanceFrequency: data.frequency,
     nextRemittanceDue: data.nextRemittanceDue,
     province: data.province,
     accountStatus: 'Active',
@@ -1077,7 +1107,17 @@ router.post('/payroll-accounts/:id/remitter-type', authenticate, requirePermissi
   const company = await Company.findById(req.params.id);
   if (!company) return res.status(404).json({ message: 'Employer not found' });
   const cra = asRecord(company.craPayroll);
-  company.craPayroll = { ...cra, remitterType: parsed.data.remitterType, remitterHistory: [...(Array.isArray(cra.remitterHistory) ? cra.remitterHistory : []), { ...parsed.data, changedAt: new Date().toISOString(), changedBy: 'Super Admin' }] };
+  company.craPayroll = {
+    ...cra,
+    remitterType: parsed.data.remitterType,
+    remittanceFrequency:
+      parsed.data.remitterType === 'Regular' ? 'Monthly' : parsed.data.remitterType,
+    frequency: parsed.data.remitterType === 'Regular' ? 'Monthly' : parsed.data.remitterType,
+    remitterHistory: [
+      ...(Array.isArray(cra.remitterHistory) ? cra.remitterHistory : []),
+      { ...parsed.data, changedAt: new Date().toISOString(), changedBy: 'Super Admin' }
+    ]
+  };
   await company.save();
   await auditEvent(req, { userId: req.superAdminContext!.superAdminId, companyId: company._id, eventType: 'REMITTER_TYPE_CHANGED', metadata: { action: `Changed remitter type effective ${parsed.data.effectiveDate}`, module: 'Payroll Accounts' } });
   res.json({ account: (await buildPayrollAccountsPayload()).accounts.find((account) => account.id === String(company._id)) });

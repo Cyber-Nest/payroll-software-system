@@ -7533,6 +7533,38 @@ th {
   font-size: 15px;
   font-weight: 800;
 }
+.payslip-deduction-table-wrap {
+  overflow-x: auto;
+  padding: 12px 16px 16px;
+}
+.payslip-deduction-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 360px;
+  width: 100%;
+}
+.payslip-deduction-table th,
+.payslip-deduction-table td {
+  border: 0;
+  padding: 8px 6px;
+}
+.payslip-deduction-table th {
+  color: #102f57;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+.payslip-deduction-table th:nth-child(2),
+.payslip-deduction-table th:nth-child(3),
+.payslip-deduction-table td:nth-child(2),
+.payslip-deduction-table td:nth-child(3) {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.payslip-deduction-table tbody tr.total td {
+  font-weight: 800;
+}
 @media (max-width: 620px) {
   .employee-section-content .pay-breakdown-head,
   .employee-section-content > p {

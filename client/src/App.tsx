@@ -50,8 +50,8 @@ type PayStatement = {
   netPay: string;
   yearToDateNetPay: string;
   deductionsTotal: string;
-  grossEarnings: Array<{ code: string; description: string; amount: string }>;
-  deductions: Array<{ code: string; description: string; amount: string }>;
+  grossEarnings: Array<{ code: string; description: string; amount: string; ytd?: string }>;
+  deductions: Array<{ code: string; description: string; amount: string; ytd?: string }>;
   additionalInfo: Array<{ key: string; value: string }>;
   periodStart?: string;
   periodEnd?: string;
@@ -101,7 +101,25 @@ const displayDeductionLines = <T extends DisplayMoneyLine>(lines: T[]) => {
   return lines
     .filter((line) => {
       const code = String(line.code || '').toUpperCase();
-      return !hiddenDeductionCodes.has(code) && !lineMatchesAny(line, hiddenDeductionDescriptions);
+      if (hiddenDeductionCodes.has(code) || lineMatchesAny(line, hiddenDeductionDescriptions)) {
+        return false;
+      }
+      return code === 'TOTAL' || moneyNumber(line.amount) !== 0;
+    })
+    .map((line) => {
+      const code = String(line.code || '').toUpperCase();
+      const description = normalizeFilterValue(line.description);
+      const label =
+        code === 'CPP' || description === 'canada pension plan'
+          ? 'CPP'
+          : code === 'EI' || description === 'employment insurance'
+            ? 'EI'
+            : code === 'FTAX' || description === 'federal income tax'
+              ? 'Federal tax'
+              : code === 'PTAX' || description === 'provincial income tax'
+                ? 'Provincial tax'
+                : line.description;
+      return { ...line, description: label };
     });
 };
 type Bulletin = {
@@ -2152,20 +2170,25 @@ function PayDetail({
             <b>{openSection === 'deductions' ? '-' : '+'}</b>
           </button>
           {openSection === 'deductions' && (
-            <div className="employee-section-content">
-              <div className="pay-breakdown-head">
-                <span>Deduction and jurisdiction</span>
-                <span>Current amount</span>
-              </div>
-              {deductionLines.map((line) => (
-                <p className={line.code === 'TOTAL' ? 'total' : ''} key={line.code}>
-                  <span>
-                    <b>{line.code || 'DED'}</b>
-                    {line.description || 'Payroll deduction'}
-                  </span>
-                  <strong>{moneyText(line.amount)}</strong>
-                </p>
-              ))}
+            <div className="employee-section-content payslip-deduction-table-wrap">
+              <table className="payslip-deduction-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Current</th>
+                    <th>YTD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deductionLines.map((line) => (
+                    <tr className={line.code === 'TOTAL' ? 'total' : ''} key={line.code}>
+                      <td>{line.description || 'Payroll deduction'}</td>
+                      <td>{moneyText(line.amount)}</td>
+                      <td>{moneyText(line.ytd || line.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
@@ -7093,6 +7116,7 @@ const employerFormPlaceholders = {
   jobTitle: 'Owner',
   payrollAccount: 'RP0001',
   accountSuffix: '0001',
+  remittanceFrequency: 'Monthly',
   payFrequency: 'Biweekly',
   statePayEnabled: false,
   statePayDates: '',
@@ -7111,7 +7135,8 @@ const defaultEmployerForm = {
       key === 'statePayEnabled' ? false : key === 'statePayHolidays' ? '[]' : ''
     ])
   ),
-  vacationPayRate: '4.00'
+  vacationPayRate: '4.00',
+  remittanceFrequency: 'Monthly'
 } as typeof employerFormPlaceholders;
 
 function Pill({ children, tone = 'blue' }: { children: React.ReactNode; tone?: string }) {
@@ -9037,8 +9062,8 @@ function SuperAdminPayrollAccounts({
           storedRpAccount || (businessNumber ? `${businessNumber}RP0001` : '')
         ),
         province: employer.address?.province || value(cra.province, 'Alberta'),
-        remitterType: value(cra.remitterType, 'Regular'),
-        frequency: value(cra.frequency, 'Monthly'),
+        remitterType: value(cra.remitterType, value(cra.remittanceFrequency, 'Regular')),
+        frequency: value(cra.remittanceFrequency, value(cra.frequency, 'Monthly')),
         nextRemittanceDue: /^\d{4}-\d{2}-\d{2}/.test(dueDate) ? dueDate.slice(0, 10) : '',
         contactName: value(
           contact.name,
@@ -12031,8 +12056,10 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           craPayroll: {
             payrollAccount: form.payrollAccount,
             accountSuffix: form.accountSuffix,
-            remitterType: 'Regular',
-            remittanceFrequency: 'Monthly'
+            remitterType:
+              form.remittanceFrequency === 'Monthly' ? 'Regular' : form.remittanceFrequency,
+            remittanceFrequency: form.remittanceFrequency,
+            frequency: form.remittanceFrequency
           },
           payrollConfiguration: {
             payFrequency: form.payFrequency,
@@ -12146,6 +12173,12 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         phone: detail.primaryContact?.phone || '',
         payrollAccount: String(detail.craPayroll.payrollAccount || ''),
         accountSuffix: String(detail.craPayroll.accountSuffix || ''),
+        remittanceFrequency: String(
+          detail.craPayroll.remittanceFrequency ||
+            detail.craPayroll.frequency ||
+            detail.craPayroll.remitterType ||
+            'Monthly'
+        ),
         payFrequency: String(detail.payrollConfiguration.payFrequency || 'Biweekly'),
         statePayEnabled: Boolean(
           (detail.payrollConfiguration.statePay as { enabled?: boolean } | undefined)?.enabled
@@ -12209,8 +12242,10 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             craPayroll: {
               payrollAccount: form.payrollAccount,
               accountSuffix: form.accountSuffix,
-              remitterType: 'Regular',
-              remittanceFrequency: 'Monthly'
+              remitterType:
+                form.remittanceFrequency === 'Monthly' ? 'Regular' : form.remittanceFrequency,
+              remittanceFrequency: form.remittanceFrequency,
+              frequency: form.remittanceFrequency
             },
             payrollConfiguration: {
               payFrequency: form.payFrequency,
@@ -12426,9 +12461,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         {field('accountSuffix', 'Account Suffix *')}
         <AdminSelect
           label="Remittance Frequency *"
-          value="Monthly"
-          onChange={() => undefined}
-          options={['Monthly']}
+          value={form.remittanceFrequency}
+          onChange={(value) => update('remittanceFrequency', value)}
+          options={['Monthly', 'Quarterly', 'Accelerated Threshold 1', 'Accelerated Threshold 2']}
         />
       </div>
       <div className="success-note">
@@ -12559,6 +12594,17 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <p>
             <span>Email</span>
             <b>{form.contactEmail}</b>
+          </p>
+        </article>
+        <article>
+          <h3>3. CRA Payroll Account</h3>
+          <p>
+            <span>RP Account</span>
+            <b>{form.payrollAccount}</b>
+          </p>
+          <p>
+            <span>Remittance</span>
+            <b>{form.remittanceFrequency}</b>
           </p>
         </article>
         <article>

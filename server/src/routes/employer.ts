@@ -106,7 +106,7 @@ function payrollDeductionLabel(code?: string, description?: string): string {
   if (normalizedCode === 'EI' || normalizedDescription === 'employment insurance') return 'EI';
   if (normalizedCode === 'FTAX' || normalizedDescription === 'federal income tax') return 'Federal tax';
   if (normalizedCode === 'PTAX' || normalizedDescription === 'provincial income tax')
-    return 'Provincial income tax';
+    return 'Provincial tax';
   return description || '';
 }
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
@@ -151,6 +151,7 @@ function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
       if (optionalZeroDeductionCodes.has(code) && moneyToNumber(line.amount) === 0) {
         return false;
       }
+      if (code !== 'TOTAL' && moneyToNumber(line.amount) === 0) return false;
       return !hiddenDeductionCodes.has(code) && !lineDescriptionIncludes(line, hiddenDeductionDescriptions);
     })
     .map((line) => ({
