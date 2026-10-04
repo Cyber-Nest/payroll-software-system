@@ -80,6 +80,22 @@ function displayEarningLines<T extends DisplayLine>(lines: T[]) {
   });
 }
 
+function displayPayslipEarningLines<T extends DisplayLine>(lines: T[]) {
+  return displayEarningLines(lines).filter((line) => {
+    const code = String(line.code || '').toUpperCase();
+    if (
+      code === 'OT' &&
+      Number(serializeMoney(line.amount)) === 0 &&
+      Number(serializeMoney(line.ytd || 0)) === 0 &&
+      Number(line.currentUnits || 0) === 0 &&
+      Number(line.ytdUnits || 0) === 0
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function displayDeductionLines<T extends DisplayLine>(lines: T[]) {
   return lines
     .filter((line) => {
@@ -120,7 +136,7 @@ async function loadContext(req: AuthRequest) {
   return { employee, company };
 }
 
-function payDto(statement: unknown, employee?: IEmployee) {
+function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
   const s = statement as {
     _id: unknown;
     employeeId: unknown;
@@ -162,16 +178,27 @@ function payDto(statement: unknown, employee?: IEmployee) {
   const fallbackHours = fallbackRate > 0 ? grossValue / fallbackRate : 0;
   const regularHours = s.regularHours ?? fallbackHours;
   const hourlyRate = s.hourlyRate ? serializeMoney(s.hourlyRate) : fallbackRate.toFixed(2);
+  const effectiveHourlyRate = Number(hourlyRate || 0);
   const onlySummaryDeduction =
     s.deductions.length === 1 && (s.deductions[0].code === 'TOTAL' || !s.deductions[0].code);
+  const statutoryDetailTotal = sumMoney(
+    s.deductions
+      .filter((line) => ['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX'].includes(String(line.code || '').toUpperCase()))
+      .map((line) => serializeMoney(line.amount))
+  );
+  const missingStatutoryDetails =
+    Number(serializeMoney(deductionsTotal)) > 0 && Number(serializeMoney(statutoryDetailTotal)) === 0;
   const reconstructed =
-    employee && onlySummaryDeduction && fallbackRate > 0 && regularHours > 0
+    employee &&
+    (onlySummaryDeduction || missingStatutoryDetails) &&
+    effectiveHourlyRate > 0 &&
+    regularHours > 0
       ? calculatePayrollLine({
           employeeId: String(s.employeeId),
           regularHours,
           overtimeHours: s.overtimeHours || 0,
           hourlyRate,
-          province: (profile?.tax?.provinceOfResidence || employee.taxProvince || 'AB') as
+          province: (company?.address?.province || profile?.tax?.provinceOfResidence || employee.taxProvince || 'AB') as
             | 'AB'
             | 'BC'
             | 'MB'
@@ -181,12 +208,13 @@ function payDto(statement: unknown, employee?: IEmployee) {
       : undefined;
   const reconstructedMatches =
     reconstructed &&
-    Math.abs(
-      Number(serializeMoney(reconstructed.deductionsTotal)) -
-        Number(serializeMoney(deductionsTotal))
-    ) < 0.02 &&
-    Math.abs(Number(serializeMoney(reconstructed.netPay)) - Number(serializeMoney(s.netPay))) <
-      0.02;
+    (missingStatutoryDetails ||
+      (Math.abs(
+        Number(serializeMoney(reconstructed.deductionsTotal)) -
+          Number(serializeMoney(deductionsTotal))
+      ) < 0.02 &&
+        Math.abs(Number(serializeMoney(reconstructed.netPay)) - Number(serializeMoney(s.netPay))) <
+          0.02));
   const deductionLines = reconstructedMatches
     ? [
         { code: 'CPP', description: 'CPP', amount: reconstructed.cpp },
@@ -397,7 +425,7 @@ async function payslipData(
     yearToDateNetPay: netPayYtd,
     grossPay: dto.grossPay,
     deductionsTotal: dto.deductionsTotal,
-    grossEarnings: dto.grossEarnings.map((line) => ({
+    grossEarnings: displayPayslipEarningLines(dto.grossEarnings.map((line) => ({
       ...line,
       currentUnits:
         line.code === 'REG'
@@ -435,7 +463,7 @@ async function payslipData(
           : line.code === 'ADJ' && ytdFor('grossEarnings', line.code) === '0.00'
             ? line.amount
             : ytdFor('grossEarnings', line.code)
-    })),
+    }))),
     deductions: dto.deductions.map((line) => ({
       ...line,
       ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code)
@@ -555,10 +583,13 @@ router.get('/pay-statements', requirePermission('self.pay.view'), async (req: Au
     'payPeriodYear',
     employeeCompanyScope(req.employeeContext!.employeeId, req.employeeContext!.companyId)
   );
-  const employee = await Employee.findById(req.employeeContext!.employeeId);
+  const [employee, company] = await Promise.all([
+    Employee.findById(req.employeeContext!.employeeId),
+    Company.findById(req.employeeContext!.companyId)
+  ]);
   res.json({
     years: allYears.sort((a, b) => b - a),
-    statements: statements.map((statement) => payDto(statement, employee || undefined))
+    statements: statements.map((statement) => payDto(statement, employee || undefined, company || undefined))
   });
 });
 
@@ -580,7 +611,7 @@ router.post(
     if (!employee || !company)
       return res.status(404).json({ message: 'Employee or company details not found' });
     const pages = await Promise.all(
-      statements.map((statement) => payslipData(payDto(statement, employee), employee, company))
+      statements.map((statement) => payslipData(payDto(statement, employee, company), employee, company))
     );
     res
       .type('application/pdf')
@@ -598,8 +629,11 @@ router.get(
       ...employeeCompanyScope(req.employeeContext!.employeeId, req.employeeContext!.companyId)
     });
     if (!statement) return res.status(404).json({ message: 'Pay statement not found' });
-    const employee = await Employee.findById(req.employeeContext!.employeeId);
-    res.json(payDto(statement, employee || undefined));
+    const [employee, company] = await Promise.all([
+      Employee.findById(req.employeeContext!.employeeId),
+      Company.findById(req.employeeContext!.companyId)
+    ]);
+    res.json(payDto(statement, employee || undefined, company || undefined));
   }
 );
 
@@ -631,7 +665,7 @@ router.get(
     const company = await Company.findById(statement.companyId);
     if (!employee || !company)
       return res.status(404).json({ message: 'Employee or company details not found' });
-    const dto = payDto(statement, employee);
+    const dto = payDto(statement, employee, company);
     res
       .type('application/pdf')
       .setHeader(

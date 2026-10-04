@@ -165,7 +165,14 @@ function effectiveStatementDeductions(
   runsById: Map<string, InstanceType<typeof PayrollRun>>
 ) {
   const currentTotal = moneyToNumber(deductionTotalAmount(statement.deductions));
-  if (currentTotal !== 0) return statement.deductions;
+  const statutoryDetailTotal = moneyToNumber(
+    sumMoney(
+      statement.deductions
+        .filter((line) => ['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX'].includes(String(line.code || '').toUpperCase()))
+        .map((line) => line.amount || 0)
+    )
+  );
+  if (currentTotal !== 0 && statutoryDetailTotal !== 0) return statement.deductions;
   const runDeductions = payrollRunDeductionsForStatement(statement, runsById);
   return runDeductions && moneyToNumber(deductionTotalAmount(runDeductions)) !== 0
     ? runDeductions
@@ -180,6 +187,15 @@ function lineDescriptionIncludes(line: { description?: string }, values: string[
 function displayEarningLines<T extends DisplayLine>(lines: T[]) {
   return lines.filter((line) => {
     const code = String(line.code || '').toUpperCase();
+    if (
+      code === 'OT' &&
+      moneyToNumber(line.amount) === 0 &&
+      moneyToNumber(line.ytd || 0) === 0 &&
+      Number(line.currentUnits || 0) === 0 &&
+      Number(line.ytdUnits || 0) === 0
+    ) {
+      return false;
+    }
     const optional =
       optionalEarningCodes.has(code) || lineDescriptionIncludes(line, optionalEarningDescriptions);
     return !optional || moneyToNumber(line.amount) !== 0;
