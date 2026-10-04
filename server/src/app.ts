@@ -10,6 +10,7 @@ import superAdminRoutes from './routes/superAdmin';
 import internalRoutes from './routes/internal';
 import helpRoutes from './routes/help';
 import { env } from './config/env';
+import { connectDatabase } from './config/database';
 
 const app = express();
 
@@ -34,6 +35,15 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/api', healthRoutes);
+app.use('/api', async (_req, res, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (error) {
+    console.error('MongoDB connection failed:', error);
+    res.status(503).json({ message: 'Database connection unavailable' });
+  }
+});
 app.use('/api', helpRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/employee', employeeRoutes);
