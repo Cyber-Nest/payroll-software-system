@@ -421,7 +421,7 @@ router.post('/auth/login', async (req, res) => {
 router.get('/dashboard', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const [companies, employerUsers, employeeCounts] = await Promise.all([
-    Company.find().sort({ createdAt: -1 }).limit(100),
+    Company.find().sort({ createdAt: -1 }),
     EmployerUser.find().sort({ createdAt: 1 }),
     Employee.aggregate<{ _id: unknown; count: number }>([
       { $group: { _id: '$companyId', count: { $sum: 1 } } }

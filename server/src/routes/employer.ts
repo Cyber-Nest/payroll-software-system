@@ -345,12 +345,20 @@ router.get(
     const companyId = requireEmployer(req, res);
     if (!companyId) return;
 
-    const [company, employer, employeeCount, latestRun, statements] = await Promise.all([
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const [company, employer, employeeCount, latestRun, statements, filings, actionRuns, recentLogs] = await Promise.all([
       Company.findById(companyId),
       EmployerUser.findById(req.employerContext?.employerUserId),
       Employee.countDocuments({ companyId }),
-      PayrollRun.findOne({ companyId }).sort({ payDate: 1 }),
-      PayStatement.find({ companyId }).sort({ payDate: 1 })
+      PayrollRun.findOne({ companyId, payDate: { $gte: now } }).sort({ payDate: 1 }),
+      PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: 1 }),
+      GovernmentFiling.find({ companyId, status: { $in: ['pending', 'prepared', 'overdue'] } }).sort({ dueDate: 1 }),
+      PayrollRun.find({ companyId, status: { $in: ['draft', 'in_review', 'approved'] } }).sort({ payDate: 1 }).limit(10),
+      AuditLog.find({ companyId }).sort({ createdAt: -1 }).limit(5)
     ]);
     const employerCompanyIds = employer
       ? Array.from(
@@ -361,13 +369,71 @@ router.get(
       legalName: 1
     });
 
-    const monthlyPayroll = sumMoney(statements.map((statement) => statement.netPay));
-    const chart = ['Nov 2024', 'Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025'].map(
-      (label, index) => ({
-        label,
-        amount: [102000, 127000, 145000, 160000, 172000, 178000][index]
-      })
+    const currentMonthStatements = statements.filter((statement) => {
+      const payDate = new Date(statement.payDate);
+      return payDate >= currentMonthStart && payDate < nextMonthStart;
+    });
+    const previousMonthStatements = statements.filter((statement) => {
+      const payDate = new Date(statement.payDate);
+      return payDate >= previousMonthStart && payDate < currentMonthStart;
+    });
+    const monthlyPayroll = sumMoney(currentMonthStatements.map((statement) => statement.netPay));
+    const previousMonthlyPayroll = moneyToNumber(
+      sumMoney(previousMonthStatements.map((statement) => statement.netPay))
     );
+    const currentMonthlyPayroll = moneyToNumber(monthlyPayroll);
+    const payrollDeltaPercent = previousMonthlyPayroll
+      ? Number((((currentMonthlyPayroll - previousMonthlyPayroll) / previousMonthlyPayroll) * 100).toFixed(1))
+      : 0;
+    const chart = Array.from({ length: 6 }, (_, index) => {
+      const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+      const nextMonth = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+      const amount = moneyToNumber(
+        sumMoney(
+          statements
+            .filter((statement) => {
+              const payDate = new Date(statement.payDate);
+              return payDate >= month && payDate < nextMonth;
+            })
+            .map((statement) => statement.netPay)
+        )
+      );
+      return {
+        label: month.toLocaleString('en-CA', { month: 'short', year: 'numeric' }),
+        amount
+      };
+    });
+    const governmentLiabilities = moneyToNumber(sumMoney(filings.map((filing) => filing.amount)));
+    const actionRequired = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status)).length + actionRuns.length;
+    const relativeTime = (date: Date) => {
+      const minutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
+      if (minutes < 60) return `${minutes || 1} minute${minutes === 1 ? '' : 's'} ago`;
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.round(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    };
+    const activityLabel = (eventType: string) =>
+      eventType
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    const recentActivity = recentLogs.map((log) => [
+      String(log.metadata?.action || activityLabel(log.eventType)),
+      relativeTime(log.createdAt)
+    ] as [string, string]);
+    const alerts = [
+      ...filings.slice(0, 3).map((filing) => [
+        `${filing.title} due ${dateLabel(filing.dueDate)}${moneyToNumber(filing.amount) ? ` (${formatMoney(filing.amount)})` : ''}`,
+        filing.status === 'overdue' ? 'Review' : 'View',
+        filing.status === 'overdue' ? 'danger' : 'warning'
+      ] as [string, string, string]),
+      ...actionRuns.slice(0, 3).map((run) => [
+        `Payroll run ${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} is ${run.status}`,
+        'Open',
+        run.status === 'draft' ? 'info' : 'warning'
+      ] as [string, string, string])
+    ].slice(0, 5);
 
     res.json({
       user: { name: employer?.name || 'Admin User', role: normalizeRole(employer?.role) },
@@ -383,11 +449,11 @@ router.get(
       })),
       metrics: {
         totalEmployees: employeeCount,
-        employeeDelta: 2,
-        monthlyPayroll: moneyToNumber(monthlyPayroll) || 125000,
-        payrollDeltaPercent: 8,
-        governmentLiabilities: 42500,
-        actionRequired: 3
+        employeeDelta: employeeCount,
+        monthlyPayroll: currentMonthlyPayroll,
+        payrollDeltaPercent,
+        governmentLiabilities,
+        actionRequired
       },
       nextPayroll: latestRun && {
         periodStart: latestRun.periodStart,
@@ -399,20 +465,8 @@ router.get(
         status: latestRun.status
       },
       chart,
-      recentActivity: [
-        ['Employee Rahul Sharma updated banking details', '2 hours ago'],
-        ['Timesheet approved for April 14, 2025', '4 hours ago'],
-        ['Payroll for Mar 31, 2025 - Apr 13, 2025 completed', '1 day ago'],
-        ['T4 filing preparation started', '2 days ago'],
-        ['New employee Priya Verma added', '3 days ago']
-      ],
-      alerts: [
-        ['3 employees are missing TD1 form', 'Review', 'danger'],
-        ['1 employee has no SIN added', 'Update', 'danger'],
-        ['CRA remittance due in 30 days (May 15, 2025)', 'View', 'warning'],
-        ['2 timesheets pending approval', 'Approve', 'warning'],
-        ['Year-end checklist is now available', 'View', 'info']
-      ]
+      recentActivity,
+      alerts
     });
   }
 );

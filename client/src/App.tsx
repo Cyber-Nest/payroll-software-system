@@ -2520,9 +2520,15 @@ function OldEmployerDashboard({
     'Deductions Report',
     'Employee History Report'
   ];
-  const max = Math.max(...(data?.chart.map((point) => point.amount) || [1]));
+  const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
   const money = (value = 0) => `$ ${value.toLocaleString('en-CA')}`;
   const next = data?.nextPayroll;
+  const todayLabel = new Date().toLocaleDateString('en-CA', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
@@ -2563,37 +2569,37 @@ function OldEmployerDashboard({
                 <option>{data?.company.legalName || 'ABC Solutions Inc.'}</option>
               </select>
             </label>
-            <b>Tuesday, April 15, 2025</b>
+            <b>{todayLabel}</b>
           </div>
           <div className="metric-grid">
             <article>
               <span>Employees</span>
               <p>Total Employees</p>
-              <strong>{data?.metrics.totalEmployees || 25}</strong>
-              <small>â†‘ {data?.metrics.employeeDelta || 2} vs last month</small>
+              <strong>{data?.metrics.totalEmployees || 0}</strong>
+              <small>{data?.metrics.employeeDelta || 0} total records</small>
             </article>
             <article>
               <span>Payroll</span>
               <p>This Month's Payroll</p>
-              <strong>{money(data?.metrics.monthlyPayroll || 125000)}</strong>
-              <small>â†‘ {data?.metrics.payrollDeltaPercent || 8}% vs last month</small>
+              <strong>{money(data?.metrics.monthlyPayroll || 0)}</strong>
+              <small>{data?.metrics.payrollDeltaPercent || 0}% vs last month</small>
             </article>
             <article>
               <span>Calendar</span>
               <p>Next Pay Run</p>
-              <strong>Apr 30, 2025</strong>
-              <small>15 days left</small>
+              <strong>{next ? formatDate(next.payDate, 'en') : '-'}</strong>
+              <small>{next?.status || 'No run found'}</small>
             </article>
             <article>
               <span>Docs</span>
               <p>Government Liabilities (Upcoming)</p>
-              <strong>{money(data?.metrics.governmentLiabilities || 42500)}</strong>
-              <small>Due May 15, 2025</small>
+              <strong>{money(data?.metrics.governmentLiabilities || 0)}</strong>
+              <small>Open filings</small>
             </article>
             <article>
               <span>Alert </span>
               <p>Action Required</p>
-              <strong>{data?.metrics.actionRequired || 3}</strong>
+              <strong>{data?.metrics.actionRequired || 0}</strong>
               <small>View Tasks</small>
             </article>
           </div>
@@ -2615,20 +2621,20 @@ function OldEmployerDashboard({
                 <b>
                   {next
                     ? `${formatDate(next.periodStart, 'en')} - ${formatDate(next.periodEnd, 'en')}`
-                    : 'Apr 16, 2025 - Apr 29, 2025'}
+                    : 'No payroll run found'}
                 </b>
-                <span>Ready to Process</span>
-                <small>Pay Date: {next ? formatDate(next.payDate, 'en') : 'Apr 30, 2025'}</small>
+                <span>{next?.status || 'No run found'}</span>
+                <small>Pay Date: {next ? formatDate(next.payDate, 'en') : '-'}</small>
               </div>
               <div className="payroll-stats">
                 <p>
-                  Employees<b>{next?.employeeCount || 25}</b>
+                  Employees<b>{next?.employeeCount || 0}</b>
                 </p>
                 <p>
-                  Total Hours<b>{next?.totalHours.toLocaleString('en-CA') || '1,980'}</b>
+                  Total Hours<b>{next?.totalHours.toLocaleString('en-CA') || '0'}</b>
                 </p>
                 <p>
-                  Estimated Gross<b>{money(next?.estimatedGross || 125000)}</b>
+                  Estimated Gross<b>{money(next?.estimatedGross || 0)}</b>
                 </p>
               </div>
               <button className="run-payroll">Run Payroll</button>
@@ -5621,9 +5627,15 @@ function EmployerDashboard({
     'Deductions Report',
     'Employee History Report'
   ];
-  const max = Math.max(...(data?.chart.map((point) => point.amount) || [1]));
+  const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
   const money = (value = 0) => `$ ${value.toLocaleString('en-CA')}`;
   const next = data?.nextPayroll;
+  const todayLabel = new Date().toLocaleDateString('en-CA', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
   async function editEmployee(employee: EmployeeProfile) {
     const result = await api<{ employee: EmployeeProfile }>(
       `/employer/employees/${employee.id}`,
@@ -5694,7 +5706,7 @@ function EmployerDashboard({
             ))}
           </select>
         </label>
-        <b>Tuesday, April 15, 2025</b>
+        <b>{todayLabel}</b>
       </div>
       <div className="metric-grid">
         <article>
@@ -5719,7 +5731,7 @@ function EmployerDashboard({
           <span className="ui-icon tax" aria-hidden="true"></span>
           <p>Government Liabilities</p>
           <strong>{money(data?.metrics.governmentLiabilities || 0)}</strong>
-          <small>Due May 15, 2025</small>
+          <small>Open filings</small>
         </article>
         <article>
           <span className="ui-icon alert" aria-hidden="true"></span>
@@ -5732,12 +5744,13 @@ function EmployerDashboard({
         <section className="admin-panel chart-panel">
           <h2>Payroll Summary (Last 6 Months)</h2>
           <div className="bar-chart">
-            {data?.chart.map((point) => (
+            {(data?.chart || []).map((point) => (
               <div key={point.label}>
                 <span style={{ height: `${(point.amount / max) * 170}px` }} />
                 <small>{point.label}</small>
               </div>
             ))}
+            {!(data?.chart || []).length && <p className="report-empty">No payroll history yet.</p>}
           </div>
         </section>
         <section className="admin-panel next-payroll">
@@ -5774,6 +5787,7 @@ function EmployerDashboard({
               <small>{when}</small>
             </p>
           ))}
+          {!data?.recentActivity.length && <p className="report-empty">No recent activity yet.</p>}
         </section>
         <section className="admin-panel">
           <h2>
@@ -5785,6 +5799,7 @@ function EmployerDashboard({
               <button>{action}</button>
             </p>
           ))}
+          {!data?.alerts.length && <p className="report-empty">No open alerts.</p>}
         </section>
       </div>
     </>
