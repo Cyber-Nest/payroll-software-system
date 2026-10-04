@@ -13037,6 +13037,29 @@ export default function App() {
   }, [lang]);
 
   useEffect(() => {
+    document.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      if (input.placeholder) return;
+      if (['checkbox', 'radio', 'hidden', 'file'].includes(input.type)) return;
+      const label = input.closest('label');
+      const labelText = label
+        ? Array.from(label.childNodes)
+            .filter((node) => node.nodeType === Node.TEXT_NODE)
+            .map((node) => node.textContent || '')
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : '';
+      const fallback =
+        input.getAttribute('aria-label') ||
+        labelText ||
+        input.name ||
+        input.id ||
+        (input.type === 'date' ? 'yyyy-mm-dd' : '');
+      if (fallback) input.placeholder = fallback.replace(/\s\*/g, '');
+    });
+  });
+
+  useEffect(() => {
     if (!token) return;
     if (portal === 'super-admin') {
       api<SuperAdminDashboard>('/super-admin/dashboard', token)
