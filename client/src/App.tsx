@@ -2669,7 +2669,7 @@ function OldEmployerDashboard({
   );
 }
 
-const emptyAdminProfile: AdminProfile = {
+const suggestedAdminProfile: AdminProfile = {
   personal: {
     firstName: 'Rahul',
     middleName: '',
@@ -2767,6 +2767,17 @@ const emptyAdminProfile: AdminProfile = {
   }
 };
 
+function blankAdminProfile(profile: AdminProfile): AdminProfile {
+  return Object.fromEntries(
+    Object.entries(profile).map(([section, values]) => [
+      section,
+      Object.fromEntries(Object.keys(values).map((key) => [key, '']))
+    ])
+  ) as AdminProfile;
+}
+
+const emptyAdminProfile: AdminProfile = blankAdminProfile(suggestedAdminProfile);
+
 function cloneAdminProfile(profile: AdminProfile): AdminProfile {
   return {
     personal: { ...profile.personal },
@@ -2849,26 +2860,30 @@ function AdminInput({
   value,
   onChange,
   type,
+  placeholder,
   disabled = false
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  placeholder?: string;
   disabled?: boolean;
 }) {
   const inputType = type || (isDateField(label) ? 'date' : 'text');
   const dateProps =
     inputType === 'date' ? { placeholder: 'yyyy-mm-dd', pattern: '\\d{4}-\\d{2}-\\d{2}' } : {};
+  const inputPlaceholder = placeholder || dateProps.placeholder;
   return (
     <label>
       {label}
       <input
         type={inputType}
         value={value}
+        placeholder={inputPlaceholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        {...dateProps}
+        {...(inputType === 'date' ? { pattern: dateProps.pattern } : {})}
       />
       {inputType === 'date' && <small className="date-format-hint">format: yyyy-mm-dd</small>}
     </label>
@@ -2938,6 +2953,7 @@ function OldAddEmployee({
                   .replace(/([A-Z])/g, ' $1')
                   .replace(/^./, (letter) => letter.toUpperCase())}
                 value={value}
+                placeholder={suggestedAdminProfile[part][key]}
                 onChange={(next) => update(part, key, next)}
               />
             ))}
@@ -3061,6 +3077,7 @@ function AddEmployee({
       key={`${section}.${key}`}
       label={label}
       value={v(section, key)}
+      placeholder={suggestedAdminProfile[section][key]}
       onChange={(next) => update(section, key, next)}
     />
   );
