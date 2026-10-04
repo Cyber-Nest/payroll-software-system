@@ -130,6 +130,48 @@ function deductionTotalAmount(lines: Array<{ code?: string; amount?: MoneyValue 
   return explicitTotal;
 }
 
+function payrollRunIdForStatement(statement: { additionalInfo?: Array<{ key?: string; value?: string }> }) {
+  return statement.additionalInfo?.find((line) => line.key === 'Payroll Run')?.value || '';
+}
+
+function payrollRunDeductionsForStatement(
+  statement: { employeeId: unknown; additionalInfo?: Array<{ key?: string; value?: string }> },
+  runsById: Map<string, InstanceType<typeof PayrollRun>>
+) {
+  const run = runsById.get(payrollRunIdForStatement(statement));
+  const statementEmployeeId = String(
+    (statement.employeeId as { _id?: unknown } | undefined)?._id || statement.employeeId
+  );
+  const line = run?.lines.find((item) => String(item.employeeId) === statementEmployeeId);
+  if (!line) return undefined;
+  return [
+    { code: 'CPP', description: 'CPP', amount: line.cpp },
+    { code: 'CPP2', description: 'Additional CPP', amount: line.cpp2 },
+    { code: 'EI', description: 'EI', amount: line.ei },
+    { code: 'FTAX', description: 'Federal tax', amount: line.federalTax },
+    { code: 'PTAX', description: 'Provincial income tax', amount: line.provincialTax },
+    { code: 'PRE', description: 'Other pre-tax deductions', amount: line.preTaxDeductions },
+    { code: 'POST', description: 'Other post-tax deductions', amount: line.postTaxDeductions },
+    { code: 'TOTAL', description: 'Total deductions', amount: line.deductionsTotal }
+  ];
+}
+
+function effectiveStatementDeductions(
+  statement: {
+    employeeId: unknown;
+    deductions: Array<{ code?: string; description?: string; amount?: MoneyValue | string }>;
+    additionalInfo?: Array<{ key?: string; value?: string }>;
+  },
+  runsById: Map<string, InstanceType<typeof PayrollRun>>
+) {
+  const currentTotal = moneyToNumber(deductionTotalAmount(statement.deductions));
+  if (currentTotal !== 0) return statement.deductions;
+  const runDeductions = payrollRunDeductionsForStatement(statement, runsById);
+  return runDeductions && moneyToNumber(deductionTotalAmount(runDeductions)) !== 0
+    ? runDeductions
+    : statement.deductions;
+}
+
 function lineDescriptionIncludes(line: { description?: string }, values: string[]) {
   const description = normalizedDisplayText(line.description);
   return values.some((value) => description.includes(value));
@@ -1506,18 +1548,11 @@ const hoursEarningsSchema = z.object({
     .min(1)
 });
 
-function employeeProvince(employee?: {
-  taxProvince?: string;
-  adminProfile?: { employment?: Record<string, unknown>; tax?: Record<string, unknown> };
-}, companyProvince?: string): 'AB' | 'BC' | 'MB' | 'SK' | 'ON' {
-  const employmentProvince = employee?.adminProfile?.employment?.provinceOfEmployment;
-  const taxProvince = employee?.adminProfile?.tax?.provinceOfResidence;
-  const configuredProvince =
-    companyProvince || employee?.taxProvince || employmentProvince || taxProvince;
-  if (!configuredProvince) {
+function employerPayrollProvince(companyProvince?: string): 'AB' | 'BC' | 'MB' | 'SK' | 'ON' {
+  if (!companyProvince) {
     throw new Error('Set the company province before calculating payroll deductions');
   }
-  const value = normalizeProvince(configuredProvince);
+  const value = normalizeProvince(companyProvince);
   const provinces: Record<string, 'AB' | 'BC' | 'MB' | 'SK' | 'ON'> = {
     AB: 'AB',
     ALBERTA: 'AB',
@@ -1569,6 +1604,7 @@ async function calculateCompanyPayrollLines(
   const vacationAccrualRate =
     vacationConfig?.vacationAccrualRate ||
     vacationPolicyForProvince(company?.address?.province).vacationAccrualRate;
+  const province = employerPayrollProvince(company?.address?.province);
   const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
   return lines.map((line) => {
     const employee = employeeById.get(line.employeeId);
@@ -1586,7 +1622,7 @@ async function calculateCompanyPayrollLines(
         : 0,
       vacationAccrualRate,
       payFrequency,
-      province: employeeProvince(employee, company?.address?.province)
+      province
     })
     );
   });
@@ -2868,10 +2904,18 @@ router.get(
       .sort({ payDate: -1 })
       .populate('employeeId')
     ]);
+    const payrollRunIds = Array.from(
+      new Set(statements.map(payrollRunIdForStatement).filter((id) => mongoose.isValidObjectId(id)))
+    );
+    const payrollRuns = payrollRunIds.length
+      ? await PayrollRun.find({ _id: { $in: payrollRunIds }, companyId })
+      : [];
+    const payrollRunsById = new Map(payrollRuns.map((run) => [String(run._id), run]));
     res.json({
       companyName: company?.legalName || '',
       employeeCount,
       paystubs: statements.map((statement) => {
+        const deductions = effectiveStatementDeductions(statement, payrollRunsById);
         const employee = statement.employeeId as unknown as {
           legalFirstName?: string;
           legalLastName?: string;
@@ -2885,7 +2929,12 @@ router.get(
               statementEmployeeId && isInPayStatementYtd(item, statement)
         );
         const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => formatMoney(sumMoney(
-          ytdStatements.flatMap((item) => item[kind].filter((line) => line.code === code).map((line) => line.amount))
+          ytdStatements.flatMap((item) => {
+            const lines = kind === 'deductions'
+              ? effectiveStatementDeductions(item, payrollRunsById)
+              : item[kind];
+            return lines.filter((line) => line.code === code).map((line) => line.amount || 0);
+          })
         ));
         return {
           id: String(statement._id),
@@ -2907,9 +2956,9 @@ router.get(
           yearToDateGrossPay: formatMoney(sumMoney(ytdStatements.map((item) =>
             item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
           ))),
-          deductionsTotal: formatMoney(deductionTotalAmount(statement.deductions)),
+          deductionsTotal: formatMoney(deductionTotalAmount(deductions)),
           deductionsTotalYtd: formatMoney(sumMoney(ytdStatements.map((item) =>
-            deductionTotalAmount(item.deductions)
+            deductionTotalAmount(effectiveStatementDeductions(item, payrollRunsById))
           ))),
           regularHours: statement.regularHours || 0,
           overtimeHours: statement.overtimeHours || 0,
@@ -2927,7 +2976,7 @@ router.get(
               }))
           ),
           deductions: displayDeductionLines(
-            statement.deductions
+            deductions
               .filter((line) => line.code !== 'TOTAL')
               .map((line) => ({
                 code: line.code || '',
@@ -3190,13 +3239,26 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     payDate: { $lte: statement.payDate },
     supersededByStatementId: { $exists: false }
   })).filter((item) => isInPayStatementYtd(item, statement));
+  const payrollRunIds = Array.from(
+    new Set(history.map(payrollRunIdForStatement).filter((id) => mongoose.isValidObjectId(id)))
+  );
+  const payrollRuns = payrollRunIds.length
+    ? await PayrollRun.find({ _id: { $in: payrollRunIds }, companyId: statement.companyId })
+    : [];
+  const payrollRunsById = new Map(payrollRuns.map((run) => [String(run._id), run]));
+  const statementDeductions = effectiveStatementDeductions(statement, payrollRunsById);
   const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => formatMoney(sumMoney(
-    history.flatMap((item) => item[kind].filter((line) => line.code === code).map((line) => line.amount))
+    history.flatMap((item) => {
+      const lines = kind === 'deductions'
+        ? effectiveStatementDeductions(item, payrollRunsById)
+        : item[kind];
+      return lines.filter((line) => line.code === code).map((line) => line.amount || 0);
+    })
   ));
   const regularHoursYtd = history.reduce((total, item) => total + (item.regularHours || 0), 0);
   const overtimeHoursYtd = history.reduce((total, item) => total + (item.overtimeHours || 0), 0);
   const deductionsTotalYtd = formatMoney(sumMoney(history.map((item) =>
-    deductionTotalAmount(item.deductions)
+    deductionTotalAmount(effectiveStatementDeductions(item, payrollRunsById))
   )));
   const grossTotalYtd = formatMoney(sumMoney(history.map((item) =>
     item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
@@ -3219,10 +3281,10 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
           : '',
     ytd: line.code === 'TOTAL' ? grossTotalYtd : ytdFor('grossEarnings', line.code || '')
   })));
-  const deductions = displayDeductionLines(statement.deductions.map((line) => ({
+  const deductions = displayDeductionLines(statementDeductions.map((line) => ({
     code: line.code,
     description: line.description || '',
-    amount: formatMoney(line.code === 'TOTAL' ? deductionTotalAmount(statement.deductions) : line.amount || 0),
+    amount: formatMoney(line.code === 'TOTAL' ? deductionTotalAmount(statementDeductions) : line.amount || 0),
     ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code || '')
   })));
   return {
@@ -3236,7 +3298,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     netPay: formatMoney(statement.netPay),
     yearToDateNetPay: formatMoney(sumMoney(history.map((item) => item.netPay))),
     grossPay: formatMoney(statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0),
-    deductionsTotal: formatMoney(deductionTotalAmount(statement.deductions)),
+    deductionsTotal: formatMoney(deductionTotalAmount(statementDeductions)),
     grossEarnings: earnings,
     deductions,
     additionalInfo: [

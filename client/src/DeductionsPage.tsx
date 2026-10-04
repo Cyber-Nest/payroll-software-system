@@ -37,9 +37,9 @@ const periodKey = (item: RecordItem) => `${item.periodStart || ''}|${item.period
 const amountFor = (item: RecordItem, codes: string[]) => money(
   item.lines.filter((line) => codes.includes(line.code)).reduce((total, line) => total + Number(line.amount), 0)
 );
-const incomeTaxAmountFor = (item: RecordItem) => money(
+const incomeTaxAmountFor = (item: RecordItem, code: 'FTAX' | 'PTAX') => money(
   item.lines
-    .filter((line) => ['FTAX', 'PTAX'].includes(line.code))
+    .filter((line) => line.code === code)
     .reduce((total, line) => total + Number(line.amount), 0)
 );
 
@@ -223,7 +223,7 @@ export default function DeductionsPage({ token, onEditEmployee }: { token: strin
         <button onClick={() => { setTypeFilter(''); setPeriodFilter(''); setSearch(''); setPage(1); }}>Clear Filters</button>
       </div>
       <div className="deductions-layout">
-        <div className="deductions-table-wrap"><table><thead><tr><th>#</th><th>Employee</th><th>Total Deductions</th><th>CPP</th><th>EI</th><th>Income Tax (Fed)</th><th>Income Tax (Prov)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visible.map((item, index) => <tr key={item.id} className={selected?.id === item.id ? 'selected' : ''}><td>{(actualPage - 1) * pageSize + index + 1}</td><td><span className="avatar-sm">{item.employeeName.charAt(0)}</span><span><b>{item.employeeName}</b><small>{item.employeeNumber}</small></span></td><td>{money(item.total)}</td><td>{amountFor(item, ['CPP', 'CPP2'])}</td><td>{amountFor(item, ['EI'])}</td><td>{incomeTaxAmountFor(item)}</td><td>{money(0)}</td><td><span className="status paid">Recorded</span></td><td><button onClick={() => { setSelectedId(item.id); setDetailTab('Current Deductions'); }}>View</button></td></tr>)}{!visible.length && <tr><td colSpan={9}>No deduction records found.</td></tr>}</tbody></table></div>
+        <div className="deductions-table-wrap"><table><thead><tr><th>#</th><th>Employee</th><th>Total Deductions</th><th>CPP</th><th>EI</th><th>Income Tax (Fed)</th><th>Income Tax (Prov)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visible.map((item, index) => <tr key={item.id} className={selected?.id === item.id ? 'selected' : ''}><td>{(actualPage - 1) * pageSize + index + 1}</td><td><span className="avatar-sm">{item.employeeName.charAt(0)}</span><span><b>{item.employeeName}</b><small>{item.employeeNumber}</small></span></td><td>{money(item.total)}</td><td>{amountFor(item, ['CPP', 'CPP2'])}</td><td>{amountFor(item, ['EI'])}</td><td>{incomeTaxAmountFor(item, 'FTAX')}</td><td>{incomeTaxAmountFor(item, 'PTAX')}</td><td><span className="status paid">Recorded</span></td><td><button onClick={() => { setSelectedId(item.id); setDetailTab('Current Deductions'); }}>View</button></td></tr>)}{!visible.length && <tr><td colSpan={9}>No deduction records found.</td></tr>}</tbody></table></div>
         {selected && <DeductionPreview item={selected} history={history} tab={detailTab} onTabChange={setDetailTab} onClose={() => setSelectedId('__closed__')} onEditEmployee={onEditEmployee} />}
       </div>
       <footer className="deductions-pagination"><span>Showing {filtered.length ? (actualPage - 1) * pageSize + 1 : 0} - {Math.min(actualPage * pageSize, filtered.length)} of {filtered.length} records</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button><span>{actualPage} / {pages}</span><button disabled={page >= pages} onClick={() => setPage(page + 1)}>›</button><select aria-label="Records per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option></select></div></footer>

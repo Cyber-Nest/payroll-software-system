@@ -151,6 +151,114 @@ describe('payroll workflow integration', () => {
     expect(essBody.statements).toEqual(expect.arrayContaining([expect.objectContaining({ netPay: '1672.40', grossPay: '2080.00' })]));
   });
 
+  it('uses the employer province and fallback employee rate for statutory deductions', async () => {
+    const token = employerToken('Company Owner');
+    jest.spyOn(Employee, 'find').mockImplementation((() => {
+      const employees = [{
+        _id: employeeId,
+        companyId,
+        employeeNumber: 'E001',
+        legalFirstName: 'Test',
+        legalLastName: 'Employee',
+        taxProvince: 'SK',
+        adminProfile: {
+          employment: { provinceOfEmployment: 'SK' },
+          tax: { provinceOfResidence: 'SK' },
+          compensation: { hourlyRate: '25.00' }
+        }
+      }];
+      return {
+        select: jest.fn().mockResolvedValue(employees),
+        then: (resolve: (value: typeof employees) => unknown) => resolve(employees)
+      };
+    }) as never);
+
+    const created = await request('/employer/payroll-runs', token, {
+      method: 'POST',
+      body: JSON.stringify({ periodStart: '2026-03-01', periodEnd: '2026-03-15', payDate: '2026-03-20' })
+    });
+    const runId = ((await created.json()) as { run: { id: string } }).run.id;
+    const calculated = await request(`/employer/payroll-runs/${runId}/hours-earnings`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ lines: [{ employeeId: String(employeeId), regularHours: 80, overtimeHours: 0, hourlyRate: '0' }] })
+    });
+    expect(calculated.status).toBe(200);
+    const body = await calculated.json() as {
+      run: {
+        totalDeductions: string;
+        lines: Array<{
+          statePayProvince: string;
+          hourlyRate: string;
+          cpp: string;
+          ei: string;
+          federalTax: string;
+          provincialTax: string;
+          deductionsTotal: string;
+        }>;
+      };
+    };
+    const line = body.run.lines[0];
+
+    expect(line.statePayProvince).toBe('AB');
+    expect(line.hourlyRate).toBe('25.00');
+    expect(Number(line.cpp)).toBeGreaterThan(0);
+    expect(Number(line.ei)).toBeGreaterThan(0);
+    expect(Number(line.federalTax)).toBeGreaterThan(0);
+    expect(Number(line.provincialTax)).toBeGreaterThan(0);
+    expect(Number(line.deductionsTotal)).toBeGreaterThan(0);
+    expect(body.run.totalDeductions).toBe(line.deductionsTotal);
+  });
+
+  it('falls back to payroll run deductions when an existing paystub statement has zero deductions', async () => {
+    const token = employerToken('Company Owner');
+    const created = await request('/employer/payroll-runs', token, {
+      method: 'POST',
+      body: JSON.stringify({ periodStart: '2026-04-01', periodEnd: '2026-04-15', payDate: '2026-04-20' })
+    });
+    const runId = ((await created.json()) as { run: { id: string } }).run.id;
+    await request(`/employer/payroll-runs/${runId}/hours-earnings`, token, {
+      method: 'PUT',
+      body: JSON.stringify({ lines: [{ employeeId: String(employeeId), regularHours: 80, overtimeHours: 0, hourlyRate: '25.00' }] })
+    });
+    await request(`/employer/payroll-runs/${runId}/submit-for-review`, token, { method: 'POST' });
+    await request(`/employer/payroll-runs/${runId}/approve`, token, { method: 'POST' });
+    await request(`/employer/payroll-runs/${runId}/finalize`, token, { method: 'POST' });
+
+    statements[0].deductions = [{ code: 'TOTAL', description: 'Total deductions', amount: decimalToMoney('0') }];
+    jest.spyOn(Employee, 'countDocuments').mockResolvedValue(1 as never);
+    jest.spyOn(PayrollRun, 'find').mockResolvedValue(runs as never);
+    jest.spyOn(PayStatement, 'find').mockImplementation((() => ({
+      sort: jest.fn().mockReturnValue({
+        populate: jest.fn().mockResolvedValue(statements.map((statement) => ({
+          ...statement,
+          employeeId: {
+            _id: statement.employeeId,
+            legalFirstName: 'Test',
+            legalLastName: 'Employee',
+            employeeNumber: 'E001',
+            occupation: 'Tester'
+          }
+        })))
+      })
+    })) as never);
+
+    const paystubs = await request('/employer/paystubs', token);
+    expect(paystubs.status).toBe(200);
+    const body = await paystubs.json() as {
+      paystubs: Array<{
+        deductionsTotal: string;
+        deductions: Array<{ code: string; amount: string }>;
+      }>;
+    };
+    const paystub = body.paystubs[0];
+
+    expect(Number(paystub.deductionsTotal)).toBeGreaterThan(0);
+    expect(Number(paystub.deductions.find((line) => line.code === 'CPP')?.amount || 0)).toBeGreaterThan(0);
+    expect(Number(paystub.deductions.find((line) => line.code === 'EI')?.amount || 0)).toBeGreaterThan(0);
+    expect(Number(paystub.deductions.find((line) => line.code === 'FTAX')?.amount || 0)).toBeGreaterThan(0);
+    expect(Number(paystub.deductions.find((line) => line.code === 'PTAX')?.amount || 0)).toBeGreaterThan(0);
+  });
+
   it('enforces approve/reverse permissions and locked mutation rules', async () => {
     const ownerToken = employerToken('Company Owner');
     const created = await request('/employer/payroll-runs', ownerToken, {
