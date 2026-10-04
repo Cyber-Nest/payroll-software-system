@@ -400,6 +400,17 @@ async function payslipData(
     dto.periodStart && dto.periodEnd
       ? `${new Date(dto.periodStart).toISOString().slice(0, 10)} to ${new Date(dto.periodEnd).toISOString().slice(0, 10)}`
       : String(dto.payPeriodNumber);
+  const companyProvince = company.address?.province || '';
+  const canonicalInfoKeys = new Set([
+    'Pay Period',
+    'Period Number',
+    'Payroll Number',
+    'Employee Number',
+    'Deposit Account',
+    'Sequence Number',
+    'Province of Employment',
+    'Payslip Revision'
+  ]);
   const derivedInfo = [
     { key: 'Pay Period', value: payPeriod },
     { key: 'Period Number', value: String(dto.payPeriodNumber) },
@@ -409,11 +420,14 @@ async function payslipData(
     { key: 'Sequence Number', value: dto.id.slice(-10).toUpperCase() },
     {
       key: 'Province of Employment',
-      value: employee.taxProvince || profileValue(employment, 'provinceOfEmployment')
+      value: companyProvince
     },
     { key: 'Payslip Revision', value: String(dto.revision) }
   ];
-  const additionalInfo = [...derivedInfo, ...dto.additionalInfo].filter(
+  const additionalInfo = [
+    ...derivedInfo,
+    ...dto.additionalInfo.filter((line) => !canonicalInfoKeys.has(line.key))
+  ].filter(
     (line, index, lines) => line.value && lines.findIndex((item) => item.key === line.key) === index
   );
   const hasDeductionDetails = dto.deductions.some(
@@ -454,7 +468,13 @@ async function payslipData(
               { code: 'EI', description: 'EI', amount: serializeMoney(line.ei) },
               { code: 'FTAX', description: 'Federal tax', amount: serializeMoney(line.federalTax) },
               { code: 'PTAX', description: 'Provincial tax', amount: serializeMoney(line.provincialTax) }
-            ]),
+            ].map((line) => {
+              const calculatedYtd = ytdFor('deductions', line.code);
+              return {
+                ...line,
+                ytd: Number(calculatedYtd) > 0 ? calculatedYtd : line.amount
+              };
+            })),
             {
               code: 'TOTAL',
               description: 'Total deductions',

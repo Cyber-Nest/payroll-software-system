@@ -3356,7 +3356,7 @@ router.get('/deductions', authenticate, requirePermission('payroll.view'), async
   });
 });
 
-async function employerPayslipData(statement: InstanceType<typeof PayStatement>, employee: IEmployee, company: { legalName: string; address?: { street?: string; line2?: string; city?: string; province?: string; postalCode?: string }; payrollConfiguration?: Record<string, unknown> }): Promise<PayslipPdfData> {
+async function employerPayslipData(statement: InstanceType<typeof PayStatement>, employee: IEmployee, company: { legalName: string; customerId?: string; address?: { street?: string; line2?: string; city?: string; province?: string; postalCode?: string }; payrollConfiguration?: Record<string, unknown> }): Promise<PayslipPdfData> {
   const history = (await PayStatement.find({
     employeeId: statement.employeeId,
     companyId: statement.companyId,
@@ -3477,6 +3477,17 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
             { code: 'TOTAL', description: 'Total deductions', amount: deductionsTotal, ytd: deductionsTotalYtd }
           ]
         );
+  const accountNumber = String(employee.adminProfile?.banking?.accountNumber || '');
+  const canonicalInfoKeys = new Set([
+    'Pay Period',
+    'Period Number',
+    'Payroll Number',
+    'Employee Number',
+    'Deposit Account',
+    'Sequence Number',
+    'Province of Employment',
+    'Payslip Revision'
+  ]);
   return {
     companyName: company.legalName,
     companyAddress: [company.address?.street, company.address?.line2, [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', ')].filter(Boolean) as string[],
@@ -3494,8 +3505,16 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     additionalInfo: [
       ...(statement.periodStart && statement.periodEnd ? [{ key: 'Pay Period', value: `${statement.periodStart.toISOString().slice(0, 10)} to ${statement.periodEnd.toISOString().slice(0, 10)}` }] : []),
       { key: 'Period Number', value: String(statement.payPeriodNumber) },
-      ...statement.additionalInfo.filter((line) => line.key !== 'Payroll Run' && line.key !== 'Pay Period' && line.key !== 'Period Number')
-    ]
+      { key: 'Payroll Number', value: company.customerId || '' },
+      { key: 'Employee Number', value: employee.employeeNumber },
+      ...(accountNumber ? [{ key: 'Deposit Account', value: 'XX [hidden]' }] : []),
+      { key: 'Sequence Number', value: String(statement._id).slice(-10).toUpperCase() },
+      { key: 'Province of Employment', value: company.address?.province || '' },
+      { key: 'Payslip Revision', value: String(statement.revision || 1) },
+      ...statement.additionalInfo.filter((line) =>
+        line.key !== 'Payroll Run' && !canonicalInfoKeys.has(line.key)
+      )
+    ].filter((line) => line.value)
   };
 }
 
