@@ -2155,6 +2155,7 @@ button {
   background: #fff;
   border: 1px solid #dbe3ee;
   border-radius: 8px;
+  min-width: 0;
   padding: 20px;
 }
 
@@ -5610,6 +5611,8 @@ th {
 
 .payroll-employee-table {
   margin-top: 22px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
   width: 100%;
@@ -5617,6 +5620,49 @@ th {
 
 .payroll-employee-table table {
   min-width: 1480px;
+}
+
+.payroll-wizard-table {
+  border-bottom: 1px solid #dbe7f3;
+  scrollbar-gutter: stable;
+}
+
+.payroll-wizard-table table {
+  table-layout: fixed;
+}
+
+.payroll-selection-table table {
+  min-width: 1420px;
+}
+
+.payroll-wizard-table th,
+.payroll-wizard-table td {
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.payroll-wizard-table td {
+  padding: 12px 12px;
+}
+
+.payroll-wizard-table td:nth-child(1),
+.payroll-wizard-table th:nth-child(1) {
+  width: 92px;
+}
+
+.payroll-wizard-table td:nth-child(2),
+.payroll-wizard-table th:nth-child(2) {
+  width: 120px;
+}
+
+.payroll-selection-table td:nth-child(6),
+.payroll-selection-table th:nth-child(6) {
+  width: 145px;
+}
+
+.payroll-selection-table td:last-child,
+.payroll-selection-table th:last-child {
+  width: 250px;
 }
 
 .payroll-employee-table thead th {

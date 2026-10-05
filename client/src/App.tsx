@@ -5045,77 +5045,79 @@ function NewPayrollRun({
   const defaultStatePayBaseHours =
     matchingStatePayHolidays.length * (statePaySettings.defaultHoursPerDay || 8);
   const table = (
-    <table>
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Position</th>
-          <th>Department</th>
-          <th>Pay Group</th>
-          <th>Regular Hours</th>
-          <th>OT Hours</th>
-          {statePayEligible && <th>Holiday Entitlement Hours</th>}
-          {statePayEligible && <th>Holiday Hours Worked</th>}
-          <th>Rate</th>
-          {statePayEligible && <th>State Pay</th>}
-          <th>Vacation Pay</th>
-          <th>Gross Pay</th>
-          <th>Deductions</th>
-          <th>Net Pay</th>
-        </tr>
-      </thead>
-      <tbody>
-        {selectedEmployees.map((employee) => {
-          const line = calculatedLines.find((item) => item.employeeId === employee.id);
-          const details = employeePayrollDetails(employee);
-          return (
-            <tr key={employee.employeeNumber}>
-              <td>
-                <b>{employeeName(employee)}</b>
-                <small>{details.employeeNumber}</small>
-              </td>
-              <td>{details.jobTitle}</td>
-              <td>{details.department}</td>
-              <td>{details.payGroup}</td>
-              <td>{line?.regularHours ?? hours[employee.employeeNumber] ?? regularHoursLimit}</td>
-              <td>{line?.overtimeHours ?? 0}</td>
-              {statePayEligible && (
-                <td>{statePayBaseHours[employee.employeeNumber] ?? String(defaultStatePayBaseHours)}</td>
-              )}
-              {statePayEligible && (
-                <td>{statePayHours[employee.employeeNumber] ?? '0'}</td>
-              )}
-              <td>{moneyText(employeeHourlyRate(employee))}</td>
-              {statePayEligible && (
+    <div className="payroll-employee-table payroll-wizard-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Position</th>
+            <th>Department</th>
+            <th>Pay Group</th>
+            <th>Regular Hours</th>
+            <th>OT Hours</th>
+            {statePayEligible && <th>Holiday Entitlement Hours</th>}
+            {statePayEligible && <th>Holiday Hours Worked</th>}
+            <th>Rate</th>
+            {statePayEligible && <th>State Pay</th>}
+            <th>Vacation Pay</th>
+            <th>Gross Pay</th>
+            <th>Deductions</th>
+            <th>Net Pay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {selectedEmployees.map((employee) => {
+            const line = calculatedLines.find((item) => item.employeeId === employee.id);
+            const details = employeePayrollDetails(employee);
+            return (
+              <tr key={employee.employeeNumber}>
                 <td>
-                  {line ? moneyText(line.statePay) : '-'}
-                  {line?.statePayExplanation && (
-                    <small className="state-pay-table-note">{line.statePayExplanation}</small>
+                  <b>{employeeName(employee)}</b>
+                  <small>{details.employeeNumber}</small>
+                </td>
+                <td>{details.jobTitle}</td>
+                <td>{details.department}</td>
+                <td>{details.payGroup}</td>
+                <td>{line?.regularHours ?? hours[employee.employeeNumber] ?? regularHoursLimit}</td>
+                <td>{line?.overtimeHours ?? 0}</td>
+                {statePayEligible && (
+                  <td>{statePayBaseHours[employee.employeeNumber] ?? String(defaultStatePayBaseHours)}</td>
+                )}
+                {statePayEligible && (
+                  <td>{statePayHours[employee.employeeNumber] ?? '0'}</td>
+                )}
+                <td>{moneyText(employeeHourlyRate(employee))}</td>
+                {statePayEligible && (
+                  <td>
+                    {line ? moneyText(line.statePay) : '-'}
+                    {line?.statePayExplanation && (
+                      <small className="state-pay-table-note">{line.statePayExplanation}</small>
+                    )}
+                  </td>
+                )}
+                <td>{line ? moneyText(line.vacationPay) : '-'}</td>
+                <td>{line ? moneyText(line.grossPay) : '-'}</td>
+                <td>{line ? moneyText(line.deductionsTotal) : '-'}</td>
+                <td>
+                  {line ? (
+                    <>
+                      {moneyText(line.netPay)}
+                      {Number(line.carryForwardAdjustment || 0) !== 0 && (
+                        <small className="carry-forward-note">
+                          Includes {moneyText(line.carryForwardAdjustment)} prior adjustment
+                        </small>
+                      )}
+                    </>
+                  ) : (
+                    '-'
                   )}
                 </td>
-              )}
-              <td>{line ? moneyText(line.vacationPay) : '-'}</td>
-              <td>{line ? moneyText(line.grossPay) : '-'}</td>
-              <td>{line ? moneyText(line.deductionsTotal) : '-'}</td>
-              <td>
-                {line ? (
-                  <>
-                    {moneyText(line.netPay)}
-                    {Number(line.carryForwardAdjustment || 0) !== 0 && (
-                      <small className="carry-forward-note">
-                        Includes {moneyText(line.carryForwardAdjustment)} prior adjustment
-                      </small>
-                    )}
-                  </>
-                ) : (
-                  '-'
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
   async function next() {
     setBusy(true);
@@ -5249,7 +5251,7 @@ function NewPayrollRun({
                 .join(', ')}. Entitlement and worked-hours premiums are calculated using the employee's province.
             </p>
           )}
-          <div className="payroll-employee-table">
+          <div className="payroll-employee-table payroll-wizard-table payroll-selection-table">
             <table>
               <thead>
                 <tr>
