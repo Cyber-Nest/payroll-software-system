@@ -2243,6 +2243,32 @@ router.post(
 );
 
 router.put(
+  '/payroll-runs/:id',
+  authenticate,
+  requirePermission('payroll.prepare'),
+  async (req: AuthRequest, res) => {
+    const run = await loadPayrollRun(req, res);
+    if (!run) return;
+    if (run.status !== 'draft')
+      return res.status(409).json({ message: `Cannot edit a ${run.status} payroll run` });
+    const parsed = createPayrollRunSchema.safeParse({
+      ...req.body,
+      runType: req.body.runType || run.runType || 'regular'
+    });
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ message: 'Invalid payroll run payload', issues: parsed.error.issues });
+    run.periodStart = parsed.data.periodStart;
+    run.periodEnd = parsed.data.periodEnd;
+    run.payDate = parsed.data.payDate;
+    await run.save();
+    await auditPayroll(req, run, 'draft_updated');
+    res.json({ run: serializePayrollRun(run) });
+  }
+);
+
+router.put(
   '/payroll-runs/:id/hours-earnings',
   authenticate,
   requirePermission('payroll.prepare'),

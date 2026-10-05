@@ -4170,11 +4170,50 @@ function PayrollPage({
     return (vacationableEarnings * (Number(accrualRate || 0) / 100)).toFixed(2);
   }
   function openPayrollDialog(run: PayrollRun, mode: 'view' | 'edit') {
+    const defaultRegularHours = { weekly: 44, biweekly: 88, monthly: 176 }[
+      run.payFrequency || 'biweekly'
+    ];
+    const sourceLines =
+      run.lines.length || run.status !== 'draft'
+        ? run.lines
+        : employees.map((employee) => ({
+            employeeId: employee.id,
+            regularHours: defaultRegularHours,
+            overtimeHours: 0,
+            statePayHours: 0,
+            statePayBaseHours: 0,
+            statePayRegularDay: true,
+            statePayAlternativeDayOff: false,
+            statePayProvince: employee.taxProvince || employee.addresses?.[0]?.province || '',
+            statePayExplanation: '',
+            hourlyRate: employeeHourlyRate(employee),
+            bonus: '0.00',
+            commission: '0.00',
+            vacationPay: '0.00',
+            statePay: '0.00',
+            otherEarnings: '0.00',
+            reimbursement: '0.00',
+            preTaxDeductions: '0.00',
+            postTaxDeductions: '0.00',
+            cpp: '0.00',
+            cpp2: '0.00',
+            ei: '0.00',
+            federalTax: '0.00',
+            provincialTax: '0.00',
+            carryForwardAdjustment: '0.00',
+            carryForwardAdjustmentIds: [],
+            note: '',
+            grossPay: '0.00',
+            deductionsTotal: '0.00',
+            netPay: '0.00',
+            employeeName: employeeName(employee),
+            employeeNumber: employee.employeeNumber
+          }));
     setEditingRun(run);
     setPayrollDialogMode(mode);
     setRevisionReason('');
     setEditLines(
-      run.lines.map((line) => {
+      sourceLines.map((line) => {
         const employee = employees.find((item) => item.id === line.employeeId);
         return {
           ...line,
@@ -4188,6 +4227,45 @@ function PayrollPage({
   function beginRevision(run: PayrollRun) {
     openPayrollDialog(run, 'edit');
   }
+  const editableDraftPayload = () => ({
+    lines: editLines.map(
+      ({
+        employeeId,
+        regularHours,
+        overtimeHours,
+        statePayHours,
+        statePayBaseHours,
+        statePayRegularDay,
+        statePayAlternativeDayOff,
+        hourlyRate,
+        bonus,
+        commission,
+        vacationPay,
+        otherEarnings,
+        reimbursement,
+        preTaxDeductions,
+        postTaxDeductions,
+        note
+      }) => ({
+        employeeId,
+        regularHours,
+        overtimeHours,
+        statePayHours,
+        statePayBaseHours,
+        statePayRegularDay,
+        statePayAlternativeDayOff,
+        hourlyRate,
+        bonus,
+        commission,
+        vacationPay,
+        otherEarnings,
+        reimbursement,
+        preTaxDeductions,
+        postTaxDeductions,
+        note
+      })
+    )
+  });
   function updateRevisionLine(
     employeeId: string,
     field: keyof PayrollRun['lines'][number],
@@ -4268,6 +4346,65 @@ function PayrollPage({
       setSavingRevision(false);
     }
   }
+  async function saveDraftPayroll(submit = false) {
+    if (!editingRun) return;
+    if (!editLines.length) {
+      showNotice('Add at least one employee line before saving this draft payroll.');
+      return;
+    }
+    setSavingRevision(true);
+    try {
+      const updatedRun = await api<{ run: PayrollRun }>(
+        `/employer/payroll-runs/${editingRun.id}`,
+        token,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            periodStart: editingRun.periodStart,
+            periodEnd: editingRun.periodEnd,
+            payDate: editingRun.payDate,
+            runType: editingRun.runType || 'regular'
+          })
+        }
+      );
+      const calculated = await api<{ run: PayrollRun }>(
+        `/employer/payroll-runs/${editingRun.id}/hours-earnings`,
+        token,
+        {
+          method: 'PUT',
+          body: JSON.stringify(editableDraftPayload())
+        }
+      );
+      if (submit) {
+        await api<{ run: PayrollRun }>(
+          `/employer/payroll-runs/${editingRun.id}/submit-for-review`,
+          token,
+          { method: 'POST' }
+        );
+        setEditingRun(undefined);
+        showNotice(`Draft payroll submitted for ${formatDate(updatedRun.run.payDate, 'en')}.`);
+      } else {
+        setEditingRun(calculated.run);
+        setEditLines(
+          calculated.run.lines.map((line) => {
+            const employee = employees.find((item) => item.id === line.employeeId);
+            return {
+              ...line,
+              vacationPay: provincialVacationPay(line, calculated.run.vacationAccrualRate),
+              employeeName: line.employeeName || (employee ? employeeName(employee) : undefined),
+              employeeNumber: line.employeeNumber || employee?.employeeNumber
+            };
+          })
+        );
+        showNotice('Draft payroll saved.');
+      }
+      onRefresh();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : 'Draft payroll save failed.');
+    } finally {
+      setSavingRevision(false);
+    }
+  }
   async function transition(
     run: PayrollRun,
     action: 'submit-for-review' | 'approve' | 'finalize' | 'lock' | 'reverse'
@@ -4314,7 +4451,14 @@ function PayrollPage({
   }
   function actionButton(run: PayrollRun) {
     if (run.status === 'draft')
-      return <button onClick={() => transition(run, 'submit-for-review')}>Submit</button>;
+      return (
+        <div className="payroll-workflow-actions">
+          <button className="payroll-edit-action" onClick={() => openPayrollDialog(run, 'edit')}>
+            Edit
+          </button>
+          <button onClick={() => transition(run, 'submit-for-review')}>Submit</button>
+        </div>
+      );
     if (run.status === 'in_review')
       return (
         <div className="payroll-workflow-actions">
@@ -4495,11 +4639,17 @@ function PayrollPage({
             <header>
               <div>
                 <h2>
-                  {payrollDialogMode === 'edit' ? 'Edit Finalized Payroll' : 'Payroll Details'}
+                  {payrollDialogMode === 'edit'
+                    ? editingRun.status === 'draft'
+                      ? 'Edit Draft Payroll'
+                      : 'Edit Finalized Payroll'
+                    : 'Payroll Details'}
                 </h2>
                 <p>
                   {payrollDialogMode === 'edit'
-                    ? 'Revision updates payslips and notifies affected employees.'
+                    ? editingRun.status === 'draft'
+                      ? 'Save draft changes or submit the payroll for review when it is complete.'
+                      : 'Revision updates payslips and notifies affected employees.'
                     : `${statusLabel(editingRun.status)} payroll for ${formatDate(editingRun.payDate, 'en')}`}
                 </p>
               </div>
@@ -4541,7 +4691,7 @@ function PayrollPage({
                   }
                 />
               </section>
-              {payrollDialogMode === 'edit' && (
+              {payrollDialogMode === 'edit' && editingRun.status !== 'draft' && (
                 <label className="payroll-revision-reason">
                   Reason for editing payroll <span>Required</span>
                   <textarea
@@ -4688,7 +4838,25 @@ function PayrollPage({
                   Edit Payroll
                 </button>
               )}
-              {payrollDialogMode === 'edit' && (
+              {payrollDialogMode === 'edit' && editingRun.status === 'draft' && (
+                <>
+                  <button
+                    className="payroll-edit-action"
+                    disabled={savingRevision}
+                    onClick={() => saveDraftPayroll(false)}
+                  >
+                    {savingRevision ? 'Saving...' : 'Save Draft'}
+                  </button>
+                  <button
+                    className="run-payroll"
+                    disabled={savingRevision}
+                    onClick={() => saveDraftPayroll(true)}
+                  >
+                    {savingRevision ? 'Saving...' : 'Save & Complete'}
+                  </button>
+                </>
+              )}
+              {payrollDialogMode === 'edit' && editingRun.status !== 'draft' && (
                 <button className="run-payroll" disabled={savingRevision} onClick={saveRevision}>
                   {savingRevision ? 'Saving...' : 'Save & Regenerate Payslips'}
                 </button>
