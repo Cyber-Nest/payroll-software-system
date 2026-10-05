@@ -5,6 +5,7 @@ import { Company, ICompany } from '../models/Company';
 import { CompanyBulletin } from '../models/CompanyBulletin';
 import { Employee, IEmployee } from '../models/Employee';
 import { PayStatement } from '../models/PayStatement';
+import { PayrollRun } from '../models/PayrollRun';
 import { TaxFormDocument } from '../models/TaxFormDocument';
 import { User } from '../models/User';
 import { authenticate, AuthRequest, requirePermission, signToken } from '../middleware/auth';
@@ -31,6 +32,20 @@ type DisplayLine = {
   currentUnits?: string;
   ytdUnits?: string;
   rate?: string;
+};
+type PayrollRunDeductionSource = {
+  _id: unknown;
+  lines: Array<{
+    employeeId: unknown;
+    cpp?: MoneyValue;
+    cpp2?: MoneyValue;
+    ei?: MoneyValue;
+    federalTax?: MoneyValue;
+    provincialTax?: MoneyValue;
+    preTaxDeductions?: MoneyValue;
+    postTaxDeductions?: MoneyValue;
+    deductionsTotal?: MoneyValue;
+  }>;
 };
 
 const hiddenDeductionCodes = new Set(['CPP2']);
@@ -78,6 +93,49 @@ function deductionTotalAmount(lines: Array<{ code?: string; amount: unknown }>):
     return lineTotal;
   }
   return serializeMoney(explicitTotal);
+}
+
+function payrollRunIdForStatement(statement: { additionalInfo?: Array<{ key?: string; value?: string }> }) {
+  return statement.additionalInfo?.find((line) => line.key === 'Payroll Run')?.value || '';
+}
+
+function payrollRunDeductionsForStatement(
+  statement: { employeeId: unknown; additionalInfo?: Array<{ key?: string; value?: string }> },
+  runsById?: Map<string, PayrollRunDeductionSource>
+) {
+  const run = runsById?.get(payrollRunIdForStatement(statement));
+  if (!run) return undefined;
+  const statementEmployeeId = String(statement.employeeId);
+  const line = run.lines.find((item) => String(item.employeeId) === statementEmployeeId);
+  if (!line) return undefined;
+  const detailTotal = sumMoney([line.cpp || 0, line.cpp2 || 0, line.ei || 0, line.federalTax || 0, line.provincialTax || 0]);
+  if (Number(serializeMoney(detailTotal)) === 0) return undefined;
+  return [
+    { code: 'CPP', description: 'CPP', amount: line.cpp },
+    { code: 'CPP2', description: 'Additional CPP', amount: line.cpp2 },
+    { code: 'EI', description: 'EI', amount: line.ei },
+    { code: 'FTAX', description: 'Federal tax', amount: line.federalTax },
+    { code: 'PTAX', description: 'Provincial income tax', amount: line.provincialTax },
+    { code: 'PRE', description: 'Other pre-tax deductions', amount: line.preTaxDeductions },
+    { code: 'POST', description: 'Other post-tax deductions', amount: line.postTaxDeductions },
+    { code: 'TOTAL', description: 'Total deductions', amount: line.deductionsTotal }
+  ];
+}
+
+async function payrollRunsByIdForStatements(
+  statements: Array<{ additionalInfo?: Array<{ key?: string; value?: string }> }>,
+  companyId: unknown
+) {
+  const payrollRunIds = Array.from(
+    new Set(statements.map(payrollRunIdForStatement).filter((id) => /^[0-9a-fA-F]{24}$/.test(id)))
+  );
+  if (!payrollRunIds.length) return new Map<string, InstanceType<typeof PayrollRun>>();
+  try {
+    const payrollRuns = await PayrollRun.find({ _id: { $in: payrollRunIds }, companyId: companyId as never });
+    return new Map(payrollRuns.map((run) => [String(run._id), run]));
+  } catch {
+    return new Map<string, PayrollRunDeductionSource>();
+  }
 }
 
 function lineDescriptionIncludes(line: { description?: string }, values: string[]) {
@@ -150,7 +208,12 @@ async function loadContext(req: AuthRequest) {
   return { employee, company };
 }
 
-function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
+function payDto(
+  statement: unknown,
+  employee?: IEmployee,
+  company?: ICompany,
+  runsById?: Map<string, PayrollRunDeductionSource>
+) {
   const s = statement as {
     _id: unknown;
     employeeId: unknown;
@@ -187,7 +250,9 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
     s.grossEarnings.find((line) => line.code === 'TOTAL')?.amount ||
     sumMoney(s.grossEarnings.map((line) => line.amount as MoneyValue));
   const statePay = s.grossEarnings.find((line) => line.code === 'STATE')?.amount || 0;
-  const storedDeductionsTotal = deductionTotalAmount(s.deductions);
+  const payrollRunDeductions = payrollRunDeductionsForStatement(s, runsById);
+  const sourceDeductions = payrollRunDeductions || s.deductions;
+  const storedDeductionsTotal = deductionTotalAmount(sourceDeductions);
   const grossValue = Number(serializeMoney(grossTotal));
   const inferredDeductionsTotal = grossValue - Number(serializeMoney(s.netPay));
   const deductionsTotal =
@@ -209,9 +274,10 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
   const hourlyRate = s.hourlyRate ? serializeMoney(s.hourlyRate) : fallbackRate.toFixed(2);
   const effectiveHourlyRate = Number(hourlyRate || 0);
   const onlySummaryDeduction =
-    s.deductions.length === 1 && (s.deductions[0].code === 'TOTAL' || !s.deductions[0].code);
+    sourceDeductions.length === 1 &&
+    (sourceDeductions[0].code === 'TOTAL' || !sourceDeductions[0].code);
   const statutoryDetailTotal = sumMoney(
-    s.deductions
+    sourceDeductions
       .filter((line) => ['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX'].includes(String(line.code || '').toUpperCase()))
       .map((line) => serializeMoney(line.amount))
   );
@@ -257,12 +323,13 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
   const storedHasPositiveDeductionDetails = s.deductions.some(
     (line) => line.code !== 'TOTAL' && Number(serializeMoney(line.amount)) > 0
   );
-  const deductionLines =
-    calculatedDeductionLines &&
-    (reconstructedMatches ||
-      (!storedHasPositiveDeductionDetails && Number(serializeMoney(deductionsTotal)) > 0))
+  const deductionLines = payrollRunDeductions
+    ? payrollRunDeductions
+    : calculatedDeductionLines &&
+      (reconstructedMatches ||
+        (!storedHasPositiveDeductionDetails && Number(serializeMoney(deductionsTotal)) > 0))
       ? calculatedDeductionLines
-      : s.deductions;
+      : sourceDeductions;
   const priorAdjustmentInfo = s.additionalInfo.find(
     (line) => line.key === 'Prior Payroll Adjustment'
   );
@@ -406,7 +473,8 @@ async function payslipData(
     payDate: { $lte: dto.payDate },
     supersededByStatementId: { $exists: false }
   })).filter((statement) => isInPayStatementYtd(statement, dto));
-  const historyDtos = history.map((statement) => payDto(statement, employee, company));
+  const historyRunsById = await payrollRunsByIdForStatements(history, dto.companyId);
+  const historyDtos = history.map((statement) => payDto(statement, employee, company, historyRunsById));
   const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) =>
     serializeMoney(
       sumMoney(
@@ -768,9 +836,15 @@ router.get('/pay-statements', requirePermission('self.pay.view'), async (req: Au
     Employee.findById(req.employeeContext!.employeeId),
     Company.findById(req.employeeContext!.companyId)
   ]);
+  const payrollRunsById = await payrollRunsByIdForStatements(
+    statements,
+    req.employeeContext!.companyId
+  );
   res.json({
     years: allYears.sort((a, b) => b - a),
-    statements: statements.map((statement) => payDto(statement, employee || undefined, company || undefined))
+    statements: statements.map((statement) =>
+      payDto(statement, employee || undefined, company || undefined, payrollRunsById)
+    )
   });
 });
 
@@ -791,8 +865,14 @@ router.post(
     const company = await Company.findById(req.employeeContext!.companyId);
     if (!employee || !company)
       return res.status(404).json({ message: 'Employee or company details not found' });
+    const payrollRunsById = await payrollRunsByIdForStatements(
+      statements,
+      req.employeeContext!.companyId
+    );
     const pages = await Promise.all(
-      statements.map((statement) => payslipData(payDto(statement, employee, company), employee, company))
+      statements.map((statement) =>
+        payslipData(payDto(statement, employee, company, payrollRunsById), employee, company)
+      )
     );
     res
       .type('application/pdf')
@@ -815,7 +895,11 @@ router.get(
       Employee.findById(req.employeeContext!.employeeId),
       Company.findById(req.employeeContext!.companyId)
     ]);
-    res.json(payDto(statement, employee || undefined, company || undefined));
+    const payrollRunsById = await payrollRunsByIdForStatements(
+      [statement],
+      req.employeeContext!.companyId
+    );
+    res.json(payDto(statement, employee || undefined, company || undefined, payrollRunsById));
   }
 );
 
@@ -847,7 +931,8 @@ router.get(
     const company = await Company.findById(statement.companyId);
     if (!employee || !company)
       return res.status(404).json({ message: 'Employee or company details not found' });
-    const dto = payDto(statement, employee, company);
+    const payrollRunsById = await payrollRunsByIdForStatements([statement], statement.companyId);
+    const dto = payDto(statement, employee, company, payrollRunsById);
     res
       .type('application/pdf')
       .setHeader('Cache-Control', 'no-store')
