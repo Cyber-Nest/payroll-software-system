@@ -328,6 +328,38 @@ function addressLines(address?: {
   ].filter(Boolean) as string[];
 }
 
+function displayPeriodNumber(
+  storedPeriodNumber: number,
+  periodEnd: Date | string | undefined,
+  payFrequency: string | undefined
+): string {
+  if (!periodEnd || storedPeriodNumber < 100) return String(storedPeriodNumber);
+  const end = new Date(periodEnd);
+  if (Number.isNaN(end.getTime())) return String(storedPeriodNumber);
+  const yearStart = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+  const dayOfYear =
+    Math.floor((Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()) - yearStart.getTime()) / 86400000) +
+    1;
+  const frequency = String(payFrequency || '').toLowerCase().replace(/\s+/g, '');
+  if (frequency === 'weekly') return String(Math.ceil(dayOfYear / 7));
+  if (frequency === 'monthly') return String(end.getUTCMonth() + 1);
+  return String(Math.ceil(dayOfYear / 14));
+}
+
+function payrollAccountNumber(company: ICompany): string {
+  const cra = company.craPayroll || {};
+  const payrollAccount =
+    typeof cra.payrollAccount === 'string' ? cra.payrollAccount.trim().toUpperCase() : '';
+  if (payrollAccount) return payrollAccount;
+  const suffix = typeof cra.accountSuffix === 'string' && cra.accountSuffix.trim()
+    ? cra.accountSuffix.trim()
+    : '0001';
+  const businessNumber = String(company.businessNumber || '').trim().toUpperCase();
+  if (/^\d{9}RP\d{4}$/.test(businessNumber)) return businessNumber;
+  if (/^\d{9}$/.test(businessNumber)) return `${businessNumber}RP${suffix}`;
+  return company.customerId;
+}
+
 async function payslipData(
   dto: ReturnType<typeof payDto>,
   employee: IEmployee,
@@ -400,6 +432,8 @@ async function payslipData(
     dto.periodStart && dto.periodEnd
       ? `${new Date(dto.periodStart).toISOString().slice(0, 10)} to ${new Date(dto.periodEnd).toISOString().slice(0, 10)}`
       : String(dto.payPeriodNumber);
+  const payFrequency = profileValue(employee.adminProfile?.compensation, 'payFrequency') || employee.payGroup || String(company.payrollConfiguration?.payFrequency || '');
+  const periodNumber = displayPeriodNumber(dto.payPeriodNumber, dto.periodEnd, payFrequency);
   const companyProvince = company.address?.province || '';
   const canonicalInfoKeys = new Set([
     'Pay Period',
@@ -409,15 +443,16 @@ async function payslipData(
     'Deposit Account',
     'Sequence Number',
     'Province of Employment',
-    'Payslip Revision'
+    'Payslip Revision',
+    'Payroll Run'
   ]);
   const derivedInfo = [
     { key: 'Pay Period', value: payPeriod },
-    { key: 'Period Number', value: String(dto.payPeriodNumber) },
-    { key: 'Payroll Number', value: company.customerId },
+    { key: 'Period Number', value: periodNumber },
+    { key: 'Payroll Number', value: payrollAccountNumber(company) },
     { key: 'Employee Number', value: employee.employeeNumber },
     ...(maskedAccount ? [{ key: 'Deposit Account', value: maskedAccount }] : []),
-    { key: 'Sequence Number', value: dto.id.slice(-10).toUpperCase() },
+    { key: 'Sequence Number', value: `${employee.employeeNumber}-${dto.payPeriodYear}-${periodNumber}` },
     {
       key: 'Province of Employment',
       value: companyProvince

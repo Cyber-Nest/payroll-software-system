@@ -4747,6 +4747,23 @@ function employeeHourlyRate(employee: EmployeeProfile) {
   return employee.adminProfile?.compensation?.hourlyRate || '25.00';
 }
 
+function employeePayrollDetails(employee: EmployeeProfile) {
+  const employment = employee.adminProfile?.employment || {};
+  const compensation = employee.adminProfile?.compensation || {};
+  const tax = employee.adminProfile?.tax || {};
+  const address = employee.addresses?.[0];
+  return {
+    employeeNumber: employee.employeeNumber || employment.employeeNumber || '-',
+    jobTitle: employee.occupation || employment.jobTitle || '-',
+    department: employment.department || '-',
+    employmentType: employment.employmentType || '-',
+    status: employment.employmentStatus || '-',
+    province: tax.provinceOfEmployment || employee.taxProvince || employment.provinceOfEmployment || address?.province || '-',
+    payGroup: compensation.payFrequency || employee.payGroup || '-',
+    startDate: employee.startDate || employment.hireDate || employment.originalHireDate || ''
+  };
+}
+
 type PayrollFrequency = 'weekly' | 'biweekly' | 'monthly';
 
 function localIsoDate(date: Date) {
@@ -4864,6 +4881,9 @@ function NewPayrollRun({
       <thead>
         <tr>
           <th>Employee</th>
+          <th>Position</th>
+          <th>Department</th>
+          <th>Pay Group</th>
           <th>Regular Hours</th>
           <th>OT Hours</th>
           {statePayEligible && <th>Holiday Entitlement Hours</th>}
@@ -4879,9 +4899,16 @@ function NewPayrollRun({
       <tbody>
         {selectedEmployees.map((employee) => {
           const line = calculatedLines.find((item) => item.employeeId === employee.id);
+          const details = employeePayrollDetails(employee);
           return (
             <tr key={employee.employeeNumber}>
-              <td>{employeeName(employee)}</td>
+              <td>
+                <b>{employeeName(employee)}</b>
+                <small>{details.employeeNumber}</small>
+              </td>
+              <td>{details.jobTitle}</td>
+              <td>{details.department}</td>
+              <td>{details.payGroup}</td>
               <td>{line?.regularHours ?? hours[employee.employeeNumber] ?? regularHoursLimit}</td>
               <td>{line?.overtimeHours ?? 0}</td>
               {statePayEligible && (
@@ -5055,102 +5082,127 @@ function NewPayrollRun({
             </p>
           )}
           <table>
+            <thead>
+              <tr>
+                <th scope="col">Include</th>
+                <th scope="col">Employee</th>
+                <th scope="col">Employee #</th>
+                <th scope="col">Position</th>
+                <th scope="col">Department</th>
+                <th scope="col">Type / Status</th>
+                <th scope="col">Province</th>
+                <th scope="col">Pay Group</th>
+                <th scope="col">Start Date</th>
+                <th scope="col">Hourly Rate</th>
+                <th scope="col">Regular Hours</th>
+                {statePayEligible && <th scope="col">Holiday Entitlement Hours</th>}
+                {statePayEligible && <th scope="col">Holiday Worked Hours & Options</th>}
+              </tr>
+            </thead>
             <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.employeeNumber}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(employee.employeeNumber)}
-                      onChange={(event) =>
-                        setSelectedIds((current) =>
-                          event.target.checked
-                            ? [...current, employee.employeeNumber]
-                            : current.filter((id) => id !== employee.employeeNumber)
-                        )
-                      }
-                    />
-                  </td>
-                  <td>{employeeName(employee)}</td>
-                  <td>{employee.occupation || '-'}</td>
-                  <td>{employee.adminProfile?.employment?.department || '-'}</td>
-                  <td>{moneyText(employeeHourlyRate(employee))}</td>
-                  <td>
-                    <input
-                      value={hours[employee.employeeNumber] ?? ''}
-                      placeholder={String(regularHoursLimit)}
-                      onChange={(event) =>
-                        setHours((current) => ({
-                          ...current,
-                          [employee.employeeNumber]: event.target.value
-                        }))
-                      }
-                    />
-                  </td>
-                  {statePayEligible && (
+              {employees.map((employee) => {
+                const details = employeePayrollDetails(employee);
+                return (
+                  <tr key={employee.employeeNumber}>
                     <td>
                       <input
-                        aria-label={`Holiday entitlement hours for ${employeeName(employee)}`}
-                        type="number"
-                        min="0"
-                        placeholder={String(defaultStatePayBaseHours)}
-                        value={
-                          statePayBaseHours[employee.employeeNumber] ?? ''
-                        }
+                        type="checkbox"
+                        checked={selectedIds.includes(employee.employeeNumber)}
                         onChange={(event) =>
-                          setStatePayBaseHours((current) => ({
+                          setSelectedIds((current) =>
+                            event.target.checked
+                              ? [...current, employee.employeeNumber]
+                              : current.filter((id) => id !== employee.employeeNumber)
+                          )
+                        }
+                      />
+                    </td>
+                    <td>{employeeName(employee)}</td>
+                    <td>{details.employeeNumber}</td>
+                    <td>{details.jobTitle}</td>
+                    <td>{details.department}</td>
+                    <td>{[details.employmentType, details.status].filter((value) => value !== '-').join(' / ') || '-'}</td>
+                    <td>{details.province}</td>
+                    <td>{details.payGroup}</td>
+                    <td>{details.startDate ? formatDate(details.startDate, 'en') : '-'}</td>
+                    <td>{moneyText(employeeHourlyRate(employee))}</td>
+                    <td>
+                      <input
+                        value={hours[employee.employeeNumber] ?? ''}
+                        placeholder={String(regularHoursLimit)}
+                        onChange={(event) =>
+                          setHours((current) => ({
                             ...current,
                             [employee.employeeNumber]: event.target.value
                           }))
                         }
                       />
                     </td>
-                  )}
-                  {statePayEligible && (
-                    <td>
-                      <input
-                        aria-label={`Holiday hours worked for ${employeeName(employee)}`}
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={statePayHours[employee.employeeNumber] ?? ''}
-                        onChange={(event) =>
-                          setStatePayHours((current) => ({
-                            ...current,
-                            [employee.employeeNumber]: event.target.value
-                          }))
-                        }
-                      />
-                      <label>
+                    {statePayEligible && (
+                      <td>
                         <input
-                          type="checkbox"
-                          checked={statePayRegularDay[employee.employeeNumber] ?? true}
+                          aria-label={`Holiday entitlement hours for ${employeeName(employee)}`}
+                          type="number"
+                          min="0"
+                          placeholder={String(defaultStatePayBaseHours)}
+                          value={
+                            statePayBaseHours[employee.employeeNumber] ?? ''
+                          }
                           onChange={(event) =>
-                            setStatePayRegularDay((current) => ({
+                            setStatePayBaseHours((current) => ({
                               ...current,
-                              [employee.employeeNumber]: event.target.checked
+                              [employee.employeeNumber]: event.target.value
                             }))
                           }
                         />
-                        Regular scheduled day
-                      </label>
-                      <label>
+                      </td>
+                    )}
+                    {statePayEligible && (
+                      <td>
                         <input
-                          type="checkbox"
-                          checked={statePayAlternativeDayOff[employee.employeeNumber] ?? false}
+                          aria-label={`Holiday hours worked for ${employeeName(employee)}`}
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={statePayHours[employee.employeeNumber] ?? ''}
                           onChange={(event) =>
-                            setStatePayAlternativeDayOff((current) => ({
+                            setStatePayHours((current) => ({
                               ...current,
-                              [employee.employeeNumber]: event.target.checked
+                              [employee.employeeNumber]: event.target.value
                             }))
                           }
                         />
-                        Substitute paid day off
-                      </label>
-                    </td>
-                  )}
-                </tr>
-              ))}
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={statePayRegularDay[employee.employeeNumber] ?? true}
+                            onChange={(event) =>
+                              setStatePayRegularDay((current) => ({
+                                ...current,
+                                [employee.employeeNumber]: event.target.checked
+                              }))
+                            }
+                          />
+                          Regular scheduled day
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={statePayAlternativeDayOff[employee.employeeNumber] ?? false}
+                            onChange={(event) =>
+                              setStatePayAlternativeDayOff((current) => ({
+                                ...current,
+                                [employee.employeeNumber]: event.target.checked
+                              }))
+                            }
+                          />
+                          Substitute paid day off
+                        </label>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -3356,7 +3356,43 @@ router.get('/deductions', authenticate, requirePermission('payroll.view'), async
   });
 });
 
-async function employerPayslipData(statement: InstanceType<typeof PayStatement>, employee: IEmployee, company: { legalName: string; customerId?: string; address?: { street?: string; line2?: string; city?: string; province?: string; postalCode?: string }; payrollConfiguration?: Record<string, unknown> }): Promise<PayslipPdfData> {
+function displayPeriodNumber(
+  storedPeriodNumber: number,
+  periodEnd: Date | string | undefined,
+  payFrequency: string | undefined
+): string {
+  if (!periodEnd || storedPeriodNumber < 100) return String(storedPeriodNumber);
+  const end = new Date(periodEnd);
+  if (Number.isNaN(end.getTime())) return String(storedPeriodNumber);
+  const yearStart = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+  const dayOfYear =
+    Math.floor((Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()) - yearStart.getTime()) / 86400000) +
+    1;
+  const frequency = String(payFrequency || '').toLowerCase().replace(/\s+/g, '');
+  if (frequency === 'weekly') return String(Math.ceil(dayOfYear / 7));
+  if (frequency === 'monthly') return String(end.getUTCMonth() + 1);
+  return String(Math.ceil(dayOfYear / 14));
+}
+
+function payrollAccountNumber(company: {
+  customerId?: string;
+  businessNumber?: string;
+  craPayroll?: Record<string, unknown>;
+}): string {
+  const cra = company.craPayroll || {};
+  const payrollAccount =
+    typeof cra.payrollAccount === 'string' ? cra.payrollAccount.trim().toUpperCase() : '';
+  if (payrollAccount) return payrollAccount;
+  const suffix = typeof cra.accountSuffix === 'string' && cra.accountSuffix.trim()
+    ? cra.accountSuffix.trim()
+    : '0001';
+  const businessNumber = String(company.businessNumber || '').trim().toUpperCase();
+  if (/^\d{9}RP\d{4}$/.test(businessNumber)) return businessNumber;
+  if (/^\d{9}$/.test(businessNumber)) return `${businessNumber}RP${suffix}`;
+  return company.customerId || '';
+}
+
+async function employerPayslipData(statement: InstanceType<typeof PayStatement>, employee: IEmployee, company: { legalName: string; customerId?: string; businessNumber?: string; craPayroll?: Record<string, unknown>; address?: { street?: string; line2?: string; city?: string; province?: string; postalCode?: string }; payrollConfiguration?: Record<string, unknown> }): Promise<PayslipPdfData> {
   const history = (await PayStatement.find({
     employeeId: statement.employeeId,
     companyId: statement.companyId,
@@ -3486,8 +3522,14 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     'Deposit Account',
     'Sequence Number',
     'Province of Employment',
-    'Payslip Revision'
+    'Payslip Revision',
+    'Payroll Run'
   ]);
+  const periodNumber = displayPeriodNumber(
+    statement.payPeriodNumber,
+    statement.periodEnd,
+    String(company.payrollConfiguration?.payFrequency || employee.payGroup || fallbackPayFrequency)
+  );
   return {
     companyName: company.legalName,
     companyAddress: [company.address?.street, company.address?.line2, [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', ')].filter(Boolean) as string[],
@@ -3504,11 +3546,11 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     deductions: payslipDeductions,
     additionalInfo: [
       ...(statement.periodStart && statement.periodEnd ? [{ key: 'Pay Period', value: `${statement.periodStart.toISOString().slice(0, 10)} to ${statement.periodEnd.toISOString().slice(0, 10)}` }] : []),
-      { key: 'Period Number', value: String(statement.payPeriodNumber) },
-      { key: 'Payroll Number', value: company.customerId || '' },
+      { key: 'Period Number', value: periodNumber },
+      { key: 'Payroll Number', value: payrollAccountNumber(company) },
       { key: 'Employee Number', value: employee.employeeNumber },
       ...(accountNumber ? [{ key: 'Deposit Account', value: 'XX [hidden]' }] : []),
-      { key: 'Sequence Number', value: String(statement._id).slice(-10).toUpperCase() },
+      { key: 'Sequence Number', value: `${employee.employeeNumber}-${statement.payPeriodYear}-${periodNumber}` },
       { key: 'Province of Employment', value: company.address?.province || '' },
       { key: 'Payslip Revision', value: String(statement.revision || 1) },
       ...statement.additionalInfo.filter((line) =>

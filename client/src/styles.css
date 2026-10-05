@@ -5608,6 +5608,20 @@ th {
   align-items: start;
 }
 
+.wizard-card table th {
+  color: #082b65;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  padding: 10px 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.wizard-card table thead tr {
+  border-bottom: 1px solid #dbe7f3;
+}
+
 .wizard-card table input[type='text'],
 .wizard-card table input[type='number'],
 .wizard-card table input:not([type]) {
