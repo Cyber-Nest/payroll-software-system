@@ -244,16 +244,25 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
       ) < 0.02 &&
         Math.abs(Number(serializeMoney(reconstructed.netPay)) - Number(serializeMoney(s.netPay))) <
           0.02));
-  const deductionLines = reconstructedMatches
+  const calculatedDeductionLines = reconstructed
     ? [
         { code: 'CPP', description: 'CPP', amount: reconstructed.cpp },
         { code: 'CPP2', description: 'Additional CPP', amount: reconstructed.cpp2 },
         { code: 'EI', description: 'EI', amount: reconstructed.ei },
         { code: 'FTAX', description: 'Federal tax', amount: reconstructed.federalTax },
         { code: 'PTAX', description: 'Provincial income tax', amount: reconstructed.provincialTax },
-        { code: 'TOTAL', description: 'Total deductions', amount: reconstructed.deductionsTotal }
+        { code: 'TOTAL', description: 'Total deductions', amount: deductionsTotal }
       ]
-    : s.deductions;
+    : undefined;
+  const storedHasPositiveDeductionDetails = s.deductions.some(
+    (line) => line.code !== 'TOTAL' && Number(serializeMoney(line.amount)) > 0
+  );
+  const deductionLines =
+    calculatedDeductionLines &&
+    (reconstructedMatches ||
+      (!storedHasPositiveDeductionDetails && Number(serializeMoney(deductionsTotal)) > 0))
+      ? calculatedDeductionLines
+      : s.deductions;
   const priorAdjustmentInfo = s.additionalInfo.find(
     (line) => line.key === 'Prior Payroll Adjustment'
   );
