@@ -120,6 +120,19 @@ function payrollDeductionLabel(code?: string, description?: string): string {
     return 'Provincial tax';
   return description || '';
 }
+function canonicalDeductionCode(code?: string, description?: string): string {
+  const normalizedCode = String(code || '').toUpperCase();
+  const label = payrollDeductionLabel(normalizedCode, description).toLowerCase();
+  if (normalizedCode === 'CPP' || label === 'cpp') return 'CPP';
+  if (normalizedCode === 'CPP2' || label.includes('additional cpp')) return 'CPP2';
+  if (normalizedCode === 'EI' || label === 'ei') return 'EI';
+  if (normalizedCode === 'FTAX' || label === 'federal tax') return 'FTAX';
+  if (normalizedCode === 'PTAX' || label === 'provincial tax') return 'PTAX';
+  if (normalizedCode === 'PRE') return 'PRE';
+  if (normalizedCode === 'POST') return 'POST';
+  if (normalizedCode === 'TOTAL' || label === 'total deductions') return 'TOTAL';
+  return normalizedCode;
+}
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
 
@@ -3088,19 +3101,28 @@ router.get(
             String((item.employeeId as unknown as { _id?: mongoose.Types.ObjectId })?._id || item.employeeId) ===
               statementEmployeeId && isInPayStatementYtd(item, statement)
         );
-        const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => formatMoney(sumMoney(
-          ytdStatements.flatMap((item) => {
-            const lines = kind === 'deductions'
-              ? effectiveStatementDeductions(
-                  item,
-                  payrollRunsById,
-                  company?.address?.province,
-                  fallbackPayFrequency
+        const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => {
+          const targetCode = String(code || '').toUpperCase();
+          return formatMoney(sumMoney(
+            ytdStatements.flatMap((item) => {
+              const lines = kind === 'deductions'
+                ? effectiveStatementDeductions(
+                    item,
+                    payrollRunsById,
+                    company?.address?.province,
+                    fallbackPayFrequency
+                  )
+                : item[kind];
+              return lines
+                .filter((line) =>
+                  kind === 'deductions'
+                    ? canonicalDeductionCode(line.code, line.description) === targetCode
+                    : String(line.code || '').toUpperCase() === targetCode
                 )
-              : item[kind];
-            return lines.filter((line) => line.code === code).map((line) => line.amount || 0);
-          })
-        ));
+                .map((line) => line.amount || 0);
+            })
+          ));
+        };
         return {
           id: String(statement._id),
           employeeName: `${employee?.legalFirstName || ''} ${employee?.legalLastName || ''}`.trim(),
@@ -3464,19 +3486,28 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     company.address?.province,
     fallbackPayFrequency
   );
-  const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => formatMoney(sumMoney(
-    history.flatMap((item) => {
-      const lines = kind === 'deductions'
-        ? effectiveStatementDeductions(
-            item,
-            payrollRunsById,
-            company.address?.province,
-            fallbackPayFrequency
+  const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => {
+    const targetCode = String(code || '').toUpperCase();
+    return formatMoney(sumMoney(
+      history.flatMap((item) => {
+        const lines = kind === 'deductions'
+          ? effectiveStatementDeductions(
+              item,
+              payrollRunsById,
+              company.address?.province,
+              fallbackPayFrequency
+            )
+          : item[kind];
+        return lines
+          .filter((line) =>
+            kind === 'deductions'
+              ? canonicalDeductionCode(line.code, line.description) === targetCode
+              : String(line.code || '').toUpperCase() === targetCode
           )
-        : item[kind];
-      return lines.filter((line) => line.code === code).map((line) => line.amount || 0);
-    })
-  ));
+          .map((line) => line.amount || 0);
+      })
+    ));
+  };
   const regularHoursYtd = history.reduce((total, item) => total + (item.regularHours || 0), 0);
   const overtimeHoursYtd = history.reduce((total, item) => total + (item.overtimeHours || 0), 0);
   const statePayUnits = Number(statement.statePayBaseHours || 0) + Number(statement.statePayHours || 0);

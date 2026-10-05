@@ -48,6 +48,19 @@ function payrollDeductionLabel(code?: string, description?: string): string {
     return 'Provincial tax';
   return description || '';
 }
+function canonicalDeductionCode(code?: string, description?: string): string {
+  const normalizedCode = String(code || '').toUpperCase();
+  const label = payrollDeductionLabel(normalizedCode, description).toLowerCase();
+  if (normalizedCode === 'CPP' || label === 'cpp') return 'CPP';
+  if (normalizedCode === 'CPP2' || label.includes('additional cpp')) return 'CPP2';
+  if (normalizedCode === 'EI' || label === 'ei') return 'EI';
+  if (normalizedCode === 'FTAX' || label === 'federal tax') return 'FTAX';
+  if (normalizedCode === 'PTAX' || label === 'provincial tax') return 'PTAX';
+  if (normalizedCode === 'PRE') return 'PRE';
+  if (normalizedCode === 'POST') return 'POST';
+  if (normalizedCode === 'TOTAL' || label === 'total deductions') return 'TOTAL';
+  return normalizedCode;
+}
 const optionalEarningCodes = new Set(['BONUS', 'BON', 'COMM', 'COMMISSION', 'OTHER', 'OTH']);
 const optionalEarningDescriptions = ['bonus', 'commission', 'other earning', 'other earnings'];
 
@@ -388,9 +401,16 @@ async function payslipData(
   const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) =>
     serializeMoney(
       sumMoney(
-        historyDtos.flatMap((statement) =>
-          statement[kind].filter((line) => line.code === code).map((line) => line.amount)
-        )
+        historyDtos.flatMap((statement) => {
+          const targetCode = String(code || '').toUpperCase();
+          return statement[kind]
+            .filter((line) =>
+              kind === 'deductions'
+                ? canonicalDeductionCode(line.code, line.description) === targetCode
+                : String(line.code || '').toUpperCase() === targetCode
+            )
+            .map((line) => line.amount);
+        })
       )
     );
   const grossTotalYtd = serializeMoney(
