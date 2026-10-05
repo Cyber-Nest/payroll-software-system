@@ -26,12 +26,18 @@ const appTimeZone = () =>
   'UTC';
 const date = (value?: string) =>
   value
-    ? new Date(value).toLocaleDateString('en-CA', {
+    ? (() => {
+        const civilDate = String(value).match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/);
+        const parsed = civilDate
+          ? new Date(Date.UTC(Number(civilDate[1]), Number(civilDate[2]) - 1, Number(civilDate[3])))
+          : new Date(value);
+        return parsed.toLocaleDateString('en-CA', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
-        timeZone: appTimeZone()
-      })
+          timeZone: civilDate ? 'UTC' : appTimeZone()
+        });
+      })()
     : '-';
 const money = (value: string) => `$${Number(value || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const statusLabel = (status: FilingStatus) => status.charAt(0).toUpperCase() + status.slice(1);

@@ -1116,11 +1116,15 @@ function timezoneDateInputValue(value: Date = new Date(), timeZone = activeTimeZ
 }
 
 function formatDate(value: string, lang: Lang, timeZone = activeTimeZone) {
-  return new Date(value).toLocaleDateString(localeByLang[lang], {
+  const civilDate = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/);
+  const date = civilDate
+    ? new Date(Date.UTC(Number(civilDate[1]), Number(civilDate[2]) - 1, Number(civilDate[3])))
+    : new Date(value);
+  return date.toLocaleDateString(localeByLang[lang], {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-    timeZone
+    timeZone: civilDate ? 'UTC' : timeZone
   });
 }
 
