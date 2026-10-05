@@ -3497,7 +3497,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
   const grossTotalYtd = formatMoney(sumMoney(history.map((item) =>
     item.grossPay || item.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0
   )));
-  const earnings = displayEarningLines(statement.grossEarnings.map((line) => ({
+  const earningRows = statement.grossEarnings.map((line) => ({
     code: line.code,
     description: line.description || '',
     amount: formatMoney(line.amount || 0),
@@ -3532,7 +3532,30 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
             ? formatMoney(statement.hourlyRate || 0)
             : ''),
     ytd: line.code === 'TOTAL' ? grossTotalYtd : ytdFor('grossEarnings', line.code || '')
-  })));
+  }));
+  if (!earningRows.some((line) => line.code === 'OT') && (moneyToNumber(ytdFor('grossEarnings', 'OT')) > 0 || overtimeHoursYtd > 0)) {
+    earningRows.splice(Math.max(1, earningRows.findIndex((line) => line.code === 'TOTAL')), 0, {
+      code: 'OT',
+      description: 'Overtime earnings',
+      amount: '0.00',
+      currentUnits: '0',
+      ytdUnits: String(overtimeHoursYtd),
+      rate: formatMoney(moneyToNumber(statement.hourlyRate || 0) * 1.5),
+      ytd: ytdFor('grossEarnings', 'OT')
+    });
+  }
+  if (!earningRows.some((line) => line.code === 'STATE') && (moneyToNumber(ytdFor('grossEarnings', 'STATE')) > 0 || statePayUnitsYtd > 0)) {
+    earningRows.splice(Math.max(1, earningRows.findIndex((line) => line.code === 'TOTAL')), 0, {
+      code: 'STATE',
+      description: 'Statutory holiday pay',
+      amount: '0.00',
+      currentUnits: '0',
+      ytdUnits: String(statePayUnitsYtd),
+      rate: formatMoney(statement.hourlyRate || 0),
+      ytd: ytdFor('grossEarnings', 'STATE')
+    });
+  }
+  const earnings = displayEarningLines(earningRows);
   const deductions = displayDeductionLines(statementDeductions.map((line) => ({
     code: line.code,
     description: line.description || '',

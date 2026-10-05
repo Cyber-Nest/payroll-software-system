@@ -535,6 +535,67 @@ async function payslipData(
           ]
         )
       : dto.deductions;
+  const earningRows = dto.grossEarnings.map((line) => ({
+    ...line,
+    currentUnits:
+      line.currentUnits ||
+      (line.code === 'REG'
+        ? String(dto.regularHours)
+        : line.code === 'OT'
+          ? String(dto.overtimeHours)
+          : line.code === 'STATE'
+            ? String(statePayUnits)
+            : ''),
+    ytdUnits:
+      line.code === 'REG'
+        ? String(regularHoursYtd)
+        : line.code === 'OT'
+          ? String(overtimeHoursYtd)
+          : line.code === 'STATE'
+            ? String(statePayHoursYtd)
+            : '',
+    rate:
+      line.rate ||
+      (line.code === 'REG'
+        ? dto.regularHours > 0
+          ? dto.hourlyRate
+          : ''
+        : line.code === 'OT'
+          ? dto.overtimeHours > 0
+            ? (Number(line.amount) / dto.overtimeHours).toFixed(2)
+            : ''
+          : line.code === 'STATE'
+            ? dto.hourlyRate || (statePayUnits > 0 ? (Number(line.amount) / statePayUnits).toFixed(2) : '')
+            : ''),
+    ytd:
+      line.code === 'TOTAL'
+        ? grossTotalYtd
+        : line.code === 'ADJ' && ytdFor('grossEarnings', line.code) === '0.00'
+          ? line.amount
+          : ytdFor('grossEarnings', line.code)
+  }));
+  if (!earningRows.some((line) => line.code === 'OT') && (Number(ytdFor('grossEarnings', 'OT')) > 0 || overtimeHoursYtd > 0)) {
+    earningRows.splice(Math.max(1, earningRows.findIndex((line) => line.code === 'TOTAL')), 0, {
+      code: 'OT',
+      description: 'Overtime earnings',
+      amount: '0.00',
+      currentUnits: '0',
+      ytdUnits: String(overtimeHoursYtd),
+      rate: dto.hourlyRate ? (Number(dto.hourlyRate) * 1.5).toFixed(2) : '',
+      ytd: ytdFor('grossEarnings', 'OT')
+    });
+  }
+  if (!earningRows.some((line) => line.code === 'STATE') && (Number(ytdFor('grossEarnings', 'STATE')) > 0 || statePayHoursYtd > 0)) {
+    earningRows.splice(Math.max(1, earningRows.findIndex((line) => line.code === 'TOTAL')), 0, {
+      code: 'STATE',
+      description: 'Statutory holiday pay',
+      amount: '0.00',
+      currentUnits: '0',
+      ytdUnits: String(statePayHoursYtd),
+      rate: dto.hourlyRate,
+      ytd: ytdFor('grossEarnings', 'STATE')
+    });
+  }
   return {
     companyName: company.legalName,
     companyAddress: addressLines(company.address),
@@ -551,45 +612,7 @@ async function payslipData(
     yearToDateNetPay: netPayYtd,
     grossPay: dto.grossPay,
     deductionsTotal: dto.deductionsTotal,
-    grossEarnings: displayPayslipEarningLines(dto.grossEarnings.map((line) => ({
-      ...line,
-      currentUnits:
-        line.currentUnits ||
-        (line.code === 'REG'
-          ? String(dto.regularHours)
-          : line.code === 'OT'
-            ? String(dto.overtimeHours)
-            : line.code === 'STATE'
-              ? String(statePayUnits)
-              : ''),
-      ytdUnits:
-        line.code === 'REG'
-          ? String(regularHoursYtd)
-          : line.code === 'OT'
-            ? String(overtimeHoursYtd)
-            : line.code === 'STATE'
-              ? String(statePayHoursYtd)
-              : '',
-      rate:
-        line.rate ||
-        (line.code === 'REG'
-          ? dto.regularHours > 0
-            ? dto.hourlyRate
-            : ''
-          : line.code === 'OT'
-            ? dto.overtimeHours > 0
-              ? (Number(line.amount) / dto.overtimeHours).toFixed(2)
-              : ''
-            : line.code === 'STATE'
-              ? dto.hourlyRate || (statePayUnits > 0 ? (Number(line.amount) / statePayUnits).toFixed(2) : '')
-              : ''),
-      ytd:
-        line.code === 'TOTAL'
-          ? grossTotalYtd
-          : line.code === 'ADJ' && ytdFor('grossEarnings', line.code) === '0.00'
-            ? line.amount
-            : ytdFor('grossEarnings', line.code)
-    }))),
+    grossEarnings: displayPayslipEarningLines(earningRows),
     deductions: rebuiltDeductions.map((line) => ({
       ...line,
       ytd: line.code === 'TOTAL' ? deductionsTotalYtd : ytdFor('deductions', line.code)
