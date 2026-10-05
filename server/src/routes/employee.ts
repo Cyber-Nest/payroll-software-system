@@ -402,12 +402,15 @@ async function payslipData(
     serializeMoney(
       sumMoney(
         historyDtos.flatMap((statement) => {
-          const targetCode = String(code || '').toUpperCase();
+          const targetCodes =
+            kind === 'deductions' && String(code || '').toUpperCase() === 'CPP'
+              ? ['CPP', 'CPP2']
+              : [String(code || '').toUpperCase()];
           return statement[kind]
             .filter((line) =>
               kind === 'deductions'
-                ? canonicalDeductionCode(line.code, line.description) === targetCode
-                : String(line.code || '').toUpperCase() === targetCode
+                ? targetCodes.includes(canonicalDeductionCode(line.code, line.description))
+                : targetCodes.includes(String(line.code || '').toUpperCase())
             )
             .map((line) => line.amount);
         })

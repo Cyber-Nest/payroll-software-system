@@ -3102,7 +3102,10 @@ router.get(
               statementEmployeeId && isInPayStatementYtd(item, statement)
         );
         const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => {
-          const targetCode = String(code || '').toUpperCase();
+          const targetCodes =
+            kind === 'deductions' && String(code || '').toUpperCase() === 'CPP'
+              ? ['CPP', 'CPP2']
+              : [String(code || '').toUpperCase()];
           return formatMoney(sumMoney(
             ytdStatements.flatMap((item) => {
               const lines = kind === 'deductions'
@@ -3116,8 +3119,8 @@ router.get(
               return lines
                 .filter((line) =>
                   kind === 'deductions'
-                    ? canonicalDeductionCode(line.code, line.description) === targetCode
-                    : String(line.code || '').toUpperCase() === targetCode
+                    ? targetCodes.includes(canonicalDeductionCode(line.code, line.description))
+                    : targetCodes.includes(String(line.code || '').toUpperCase())
                 )
                 .map((line) => line.amount || 0);
             })
@@ -3487,7 +3490,10 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     fallbackPayFrequency
   );
   const ytdFor = (kind: 'grossEarnings' | 'deductions', code: string) => {
-    const targetCode = String(code || '').toUpperCase();
+    const targetCodes =
+      kind === 'deductions' && String(code || '').toUpperCase() === 'CPP'
+        ? ['CPP', 'CPP2']
+        : [String(code || '').toUpperCase()];
     return formatMoney(sumMoney(
       history.flatMap((item) => {
         const lines = kind === 'deductions'
@@ -3501,8 +3507,8 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
         return lines
           .filter((line) =>
             kind === 'deductions'
-              ? canonicalDeductionCode(line.code, line.description) === targetCode
-              : String(line.code || '').toUpperCase() === targetCode
+              ? targetCodes.includes(canonicalDeductionCode(line.code, line.description))
+              : targetCodes.includes(String(line.code || '').toUpperCase())
           )
           .map((line) => line.amount || 0);
       })
