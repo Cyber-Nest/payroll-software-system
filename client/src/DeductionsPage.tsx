@@ -32,7 +32,19 @@ const statutoryTypes: StatutoryType[] = [
   { code: 'EI', displayCode: 'EI', name: 'EI (Employee)', calculationMethod: 'CRA Rules', category: 'Employment Insurance', description: 'EI premium calculated from insurable earnings and the annual YTD employee premium limit.' }
 ];
 const money = (value: string | number) => `$${Number(value || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const date = (value?: string) => value ? new Date(value).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'Not recorded';
+const appTimeZone = () =>
+  localStorage.getItem('payhours-timezone') ||
+  Intl.DateTimeFormat().resolvedOptions().timeZone ||
+  'UTC';
+const date = (value?: string) =>
+  value
+    ? new Date(value).toLocaleDateString('en-CA', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: appTimeZone()
+      })
+    : 'Not recorded';
 const periodKey = (item: RecordItem) => `${item.periodStart || ''}|${item.periodEnd || ''}`;
 const amountFor = (item: RecordItem, codes: string[]) => money(
   item.lines.filter((line) => codes.includes(line.code)).reduce((total, line) => total + Number(line.amount), 0)

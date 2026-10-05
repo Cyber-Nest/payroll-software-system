@@ -9,6 +9,12 @@ type LoginMode = 'email' | 'customer';
 type Portal = 'super-admin' | 'employer' | 'employee';
 type Lang = 'en' | 'fr' | 'hi' | 'gu' | 'pa' | 'es';
 type T = (key: string) => string;
+type LocationTimezone = {
+  status: 'unknown' | 'granted' | 'denied' | 'unavailable';
+  timeZone: string;
+  latitude?: number;
+  longitude?: number;
+};
 type CompanyChoice = {
   employeeId: string;
   companyId: string;
@@ -571,6 +577,9 @@ type PayrollAccountsData = {
 };
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const currentYear = new Date().getFullYear();
+const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const storedTimezone = localStorage.getItem('payhours-timezone') || browserTimeZone;
+let activeTimeZone = storedTimezone;
 const fallbackHelpContent: HelpContent = {
   brandName: 'Payhours',
   heroTitle: 'How can we help?',
@@ -1068,11 +1077,50 @@ async function api<T>(path: string, token?: string, options: RequestInit = {}): 
   return response.json() as Promise<T>;
 }
 
-function formatDate(value: string, lang: Lang) {
+function timezoneFromCoordinates(latitude: number, longitude: number): string {
+  if (latitude >= 41 && latitude <= 84 && longitude >= -141 && longitude <= -52) {
+    if (longitude <= -127) return 'America/Vancouver';
+    if (longitude <= -110) return 'America/Edmonton';
+    if (longitude <= -95) return 'America/Winnipeg';
+    if (longitude <= -80) return 'America/Toronto';
+    if (longitude <= -63) return 'America/Halifax';
+    return 'America/St_Johns';
+  }
+  if (latitude >= 18 && latitude <= 72 && longitude >= -172 && longitude <= -66) {
+    if (longitude <= -150) return 'America/Anchorage';
+    if (longitude <= -115) return 'America/Los_Angeles';
+    if (longitude <= -100) return 'America/Denver';
+    if (longitude <= -87) return 'America/Chicago';
+    return 'America/New_York';
+  }
+  if (latitude >= 6 && latitude <= 38 && longitude >= 68 && longitude <= 98) return 'Asia/Kolkata';
+  if (latitude >= 49 && latitude <= 61 && longitude >= -8 && longitude <= 2) return 'Europe/London';
+  if (latitude >= 35 && latitude <= 71 && longitude >= -10 && longitude <= 32) return 'Europe/Paris';
+  if (latitude >= -44 && latitude <= -10 && longitude >= 112 && longitude <= 154) {
+    if (longitude <= 129) return 'Australia/Perth';
+    if (longitude <= 141) return 'Australia/Adelaide';
+    return 'Australia/Sydney';
+  }
+  return browserTimeZone;
+}
+
+function timezoneDateInputValue(value: Date = new Date(), timeZone = activeTimeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(value);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function formatDate(value: string, lang: Lang, timeZone = activeTimeZone) {
   return new Date(value).toLocaleDateString(localeByLang[lang], {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    timeZone
   });
 }
 
@@ -13399,6 +13447,10 @@ export default function App() {
     (localStorage.getItem('payhours-lang') as Lang) || 'en'
   );
   const [token, setToken] = useState(localStorage.getItem('payhours-token') || '');
+  const [locationTimezone, setLocationTimezone] = useState<LocationTimezone>({
+    status: localStorage.getItem('payhours-location-status') as LocationTimezone['status'] || 'unknown',
+    timeZone: storedTimezone
+  });
   const [portal, setPortal] = useState<Portal>(
     (localStorage.getItem('payhours-portal') as Portal) || 'employer'
   );
@@ -13421,6 +13473,35 @@ export default function App() {
     document.documentElement.lang = next;
   }
 
+  function applyLocationTimezone(next: LocationTimezone) {
+    activeTimeZone = next.timeZone;
+    setLocationTimezone(next);
+    localStorage.setItem('payhours-timezone', next.timeZone);
+    localStorage.setItem('payhours-location-status', next.status);
+    if (next.latitude !== undefined) localStorage.setItem('payhours-location-lat', String(next.latitude));
+    if (next.longitude !== undefined) localStorage.setItem('payhours-location-lng', String(next.longitude));
+  }
+
+  function requestLocationTimezone() {
+    if (!navigator.geolocation) {
+      applyLocationTimezone({ status: 'unavailable', timeZone: browserTimeZone });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        applyLocationTimezone({
+          status: 'granted',
+          timeZone: timezoneFromCoordinates(latitude, longitude),
+          latitude,
+          longitude
+        });
+      },
+      () => applyLocationTimezone({ status: 'denied', timeZone: browserTimeZone }),
+      { enableHighAccuracy: false, maximumAge: 86400000, timeout: 10000 }
+    );
+  }
+
   function handleAuthFailure(error: unknown) {
     if ((error as { status?: number }).status === 401) {
       localStorage.removeItem('payhours-token');
@@ -13434,6 +13515,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
+
+  useEffect(() => {
+    activeTimeZone = locationTimezone.timeZone;
+    document.documentElement.dataset.timezone = locationTimezone.timeZone;
+  }, [locationTimezone.timeZone]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (locationTimezone.status === 'unknown') requestLocationTimezone();
+  }, [token]);
 
   useEffect(() => {
     document.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
@@ -13566,6 +13657,7 @@ export default function App() {
     setPortal(nextPortal);
     if (nextEmployerCompanies) setEmployerCompanies(nextEmployerCompanies);
     setLoadError('');
+    requestLocationTimezone();
   }
 
   async function switchEmployerCompany(companyId: string) {
@@ -13660,6 +13752,7 @@ export default function App() {
     bulletins,
     forms,
     lang,
+    locationTimezone.timeZone,
     loadError,
     page,
     payStatements,

@@ -20,7 +20,19 @@ type Filing = {
 };
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const date = (value?: string) => value ? new Date(value).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '-';
+const appTimeZone = () =>
+  localStorage.getItem('payhours-timezone') ||
+  Intl.DateTimeFormat().resolvedOptions().timeZone ||
+  'UTC';
+const date = (value?: string) =>
+  value
+    ? new Date(value).toLocaleDateString('en-CA', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: appTimeZone()
+      })
+    : '-';
 const money = (value: string) => `$${Number(value || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const statusLabel = (status: FilingStatus) => status.charAt(0).toUpperCase() + status.slice(1);
 const tabTypes: Record<string, FilingType[]> = {
