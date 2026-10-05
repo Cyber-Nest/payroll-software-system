@@ -64,6 +64,26 @@ export type PayrollHoursInput = {
   note?: string;
 };
 
+const provinceNames = {
+  AB: 'Alberta',
+  BC: 'British Columbia',
+  MB: 'Manitoba',
+  SK: 'Saskatchewan',
+  ON: 'Ontario'
+};
+
+export function stateHolidayPayRule2026(provinceInput?: string): string {
+  const province = normalizeProvince(provinceInput || 'AB') as 'AB' | 'BC' | 'MB' | 'SK' | 'ON';
+  const rules: Record<'AB' | 'BC' | 'MB' | 'SK' | 'ON', string> = {
+    AB: '2026 Alberta rule: eligible general holiday pay is average daily wage. If the employee works the holiday, pay average daily wage plus 1.5x regular wage for hours worked, or regular wages plus a paid day off.',
+    BC: '2026 British Columbia rule: statutory holiday pay is an average day pay based on eligible wages in the 30 calendar days before the holiday divided by days worked. Hours worked on the holiday are paid at premium rates.',
+    MB: '2026 Manitoba rule: general holiday pay is 5% of gross wages, excluding overtime, in the 4 weeks immediately before the holiday. Hours worked on the holiday are paid at premium rates unless a substitute paid day applies.',
+    SK: '2026 Saskatchewan rule: public holiday pay is generally 5% of wages, vacation pay and public holiday pay earned in the 4 weeks before the holiday. Holiday hours worked are paid at premium rates.',
+    ON: '2026 Ontario rule: public holiday pay is based on regular wages plus vacation pay in the 4 work weeks before the holiday divided by 20. Holiday work may also require premium pay or a substitute day.'
+  };
+  return rules[province] || rules.AB;
+}
+
 export function calculatePayrollLine(
   input: Required<
     Pick<PayrollHoursInput, 'employeeId' | 'regularHours' | 'overtimeHours' | 'hourlyRate'>
@@ -129,8 +149,7 @@ export function calculatePayrollLine(
       statePayFormula = `${statePayBaseHours} entitlement hours x regular rate + ${statePayHours} worked hours x 1.5`;
     }
   }
-  const provinceNames = { AB: 'Alberta', BC: 'British Columbia', MB: 'Manitoba', SK: 'Saskatchewan', ON: 'Ontario' };
-  const statePayExplanation = `${provinceNames[province]}: ${statePayFormula}. Total ${formatMoney(statePay)}.`;
+  const statePayExplanation = `${stateHolidayPayRule2026(province)} Applied ${provinceNames[province]} calculation: ${statePayFormula}. Total ${formatMoney(statePay)}.`;
   const bonus = moneyToDecimal(input.bonus || 0);
   const commission = moneyToDecimal(input.commission || 0);
   const otherEarnings = moneyToDecimal(input.otherEarnings || 0);

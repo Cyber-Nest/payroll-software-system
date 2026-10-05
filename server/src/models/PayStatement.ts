@@ -1,7 +1,14 @@
 import mongoose, { Schema } from 'mongoose';
 
 const moneyLineSchema = new Schema(
-  { code: String, description: String, amount: Schema.Types.Decimal128 },
+  {
+    code: String,
+    description: String,
+    amount: Schema.Types.Decimal128,
+    currentUnits: String,
+    ytdUnits: String,
+    rate: String
+  },
   { _id: false }
 );
 
@@ -14,7 +21,14 @@ export interface IPayStatement {
   type?: string;
   netPay: mongoose.Types.Decimal128;
   yearToDateNetPay: mongoose.Types.Decimal128;
-  grossEarnings: Array<{ code: string; description: string; amount: mongoose.Types.Decimal128 }>;
+  grossEarnings: Array<{
+    code: string;
+    description: string;
+    amount: mongoose.Types.Decimal128;
+    currentUnits?: string;
+    ytdUnits?: string;
+    rate?: string;
+  }>;
   deductions: Array<{ code: string; description: string; amount: mongoose.Types.Decimal128 }>;
   additionalInfo: Array<{ key: string; value: string }>;
   periodStart?: Date;

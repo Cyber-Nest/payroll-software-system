@@ -86,6 +86,23 @@ function truncateText(value: unknown, max = 70): string {
   return text.length > max ? `${text.slice(0, Math.max(0, max - 3))}...` : text;
 }
 
+function wrapText(value: unknown, max = 76): string[] {
+  const words = String(value ?? '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > max && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [''];
+}
+
 class PdfPage {
   private readonly ops: string[] = [];
 
@@ -356,9 +373,15 @@ function drawPayslip(data: PayslipPdfData): PdfPage {
   page.rect(464, 146, 314, 104);
   page.text('Additional Statement Information', 472, 229, 12);
   page.line(464, 216, 778, 216);
-  additionalInfo
-    .slice(0, 9)
-    .forEach((line, index) => page.text(truncateText(`${line.key}: ${line.value}`, 76), 472, 203 - index * 6.5, 6));
+  let infoY = 203;
+  for (const line of additionalInfo.slice(0, 9)) {
+    for (const text of wrapText(`${line.key}: ${line.value}`, 76).slice(0, 3)) {
+      if (infoY < 153) break;
+      page.text(text, 472, infoY, 6);
+      infoY -= 6.5;
+    }
+    if (infoY < 153) break;
+  }
   return page;
 }
 

@@ -51,6 +51,7 @@ import {
   calculatePayrollLine,
   payrollFrequencyRules,
   serializePayrollRun,
+  stateHolidayPayRule2026,
   summarizePayrollLines
 } from '../services/payrollWorkflow.service';
 import { calculateStatutoryDeductions } from '../services/taxEngine.service';
@@ -2420,7 +2421,7 @@ router.post(
         `${run.periodEnd.getMonth() + 1}${String(run.periodEnd.getDate()).padStart(2, '0')}`
       );
       const [company, employees] = await Promise.all([
-        Company.findById(run.companyId).select('legalName'),
+        Company.findById(run.companyId).select('legalName address.province'),
         Employee.find({ _id: { $in: run.lines.map((line) => line.employeeId) } })
       ]);
       const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
@@ -2444,19 +2445,27 @@ router.post(
             {
               code: 'REG',
               description: 'Regular earnings',
-              amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.regularHours)
+              amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.regularHours),
+              currentUnits: String(line.regularHours || 0),
+              rate: formatMoney(line.hourlyRate)
             },
             {
               code: 'OT',
               description: 'Overtime earnings',
-              amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.overtimeHours * 1.5)
+              amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.overtimeHours * 1.5),
+              currentUnits: String(line.overtimeHours || 0),
+              rate: line.overtimeHours ? formatMoney(moneyToNumber(line.hourlyRate) * 1.5) : ''
             },
             ...(moneyToNumber(line.statePay || 0) > 0
               ? [
                   {
                     code: 'STATE',
                     description: 'Statutory holiday pay',
-                    amount: line.statePay
+                    amount: line.statePay,
+                    currentUnits: String(
+                      Number(line.statePayBaseHours || 0) + Number(line.statePayHours || 0)
+                    ),
+                    rate: formatMoney(line.hourlyRate)
                   }
                 ]
               : []),
@@ -2497,6 +2506,8 @@ router.post(
             },
             ...(moneyToNumber(line.statePay || 0) > 0 && line.statePayExplanation
               ? [{ key: 'State Holiday Pay Rule', value: line.statePayExplanation }]
+              : moneyToNumber(line.statePay || 0) > 0
+                ? [{ key: 'State Holiday Pay Rule', value: stateHolidayPayRule2026(line.statePayProvince || company?.address?.province) }]
               : []),
             { key: 'Reimbursement', value: formatMoney(line.reimbursement || 0) },
             ...(moneyToNumber(line.carryForwardAdjustment || 0) !== 0
@@ -2634,7 +2645,7 @@ router.put(
       statementId: undefined as mongoose.Types.ObjectId | undefined
     }));
     const [company, employees] = await Promise.all([
-      Company.findById(run.companyId).select('legalName'),
+      Company.findById(run.companyId).select('legalName address.province'),
       Employee.find({
         _id: { $in: revisedLines.map((line) => line.employeeId) }
       })
@@ -2780,19 +2791,27 @@ router.put(
           {
             code: 'REG',
             description: 'Regular earnings',
-            amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.regularHours)
+            amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.regularHours),
+            currentUnits: String(line.regularHours || 0),
+            rate: formatMoney(line.hourlyRate)
           },
           {
             code: 'OT',
             description: 'Overtime earnings',
-            amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.overtimeHours * 1.5)
+            amount: decimalToMoney(moneyToNumber(line.hourlyRate) * line.overtimeHours * 1.5),
+            currentUnits: String(line.overtimeHours || 0),
+            rate: line.overtimeHours ? formatMoney(moneyToNumber(line.hourlyRate) * 1.5) : ''
           },
           ...(moneyToNumber(line.statePay || 0) > 0
             ? [
                 {
                   code: 'STATE',
                   description: 'Statutory holiday pay',
-                  amount: line.statePay
+                  amount: line.statePay,
+                  currentUnits: String(
+                    Number(line.statePayBaseHours || 0) + Number(line.statePayHours || 0)
+                  ),
+                  rate: formatMoney(line.hourlyRate)
                 }
               ]
             : []),
@@ -2824,6 +2843,8 @@ router.put(
           },
           ...(moneyToNumber(line.statePay || 0) > 0 && line.statePayExplanation
             ? [{ key: 'State Holiday Pay Rule', value: line.statePayExplanation }]
+            : moneyToNumber(line.statePay || 0) > 0
+              ? [{ key: 'State Holiday Pay Rule', value: stateHolidayPayRule2026(line.statePayProvince || company?.address?.province) }]
             : []),
           { key: 'Revision', value: String(revision) },
           { key: 'Revision Reason', value: parsed.data.reason },
@@ -3458,6 +3479,11 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
   ));
   const regularHoursYtd = history.reduce((total, item) => total + (item.regularHours || 0), 0);
   const overtimeHoursYtd = history.reduce((total, item) => total + (item.overtimeHours || 0), 0);
+  const statePayUnits = Number(statement.statePayBaseHours || 0) + Number(statement.statePayHours || 0);
+  const statePayUnitsYtd = history.reduce(
+    (total, item) => total + Number(item.statePayBaseHours || 0) + Number(item.statePayHours || 0),
+    0
+  );
   const deductionsTotalYtd = formatMoney(sumMoney(history.map((item) =>
     deductionTotalAmount(
       effectiveStatementDeductions(
@@ -3475,10 +3501,26 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     code: line.code,
     description: line.description || '',
     amount: formatMoney(line.amount || 0),
-    currentUnits: line.code === 'REG' ? String(statement.regularHours || 0) : line.code === 'OT' ? String(statement.overtimeHours || 0) : '',
-    ytdUnits: line.code === 'REG' ? String(regularHoursYtd) : line.code === 'OT' ? String(overtimeHoursYtd) : '',
-    rate:
+    currentUnits:
+      line.currentUnits ||
+      (line.code === 'REG'
+        ? String(statement.regularHours || 0)
+        : line.code === 'OT'
+          ? String(statement.overtimeHours || 0)
+          : line.code === 'STATE'
+            ? String(statePayUnits)
+            : ''),
+    ytdUnits:
       line.code === 'REG'
+        ? String(regularHoursYtd)
+        : line.code === 'OT'
+          ? String(overtimeHoursYtd)
+          : line.code === 'STATE'
+            ? String(statePayUnitsYtd)
+            : '',
+    rate:
+      line.rate ||
+      (line.code === 'REG'
         ? (statement.regularHours || 0) > 0
           ? formatMoney(statement.hourlyRate || 0)
           : ''
@@ -3486,7 +3528,9 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
           ? (statement.overtimeHours || 0) > 0
             ? formatMoney(moneyToNumber(line.amount || 0) / (statement.overtimeHours || 1))
             : ''
-          : '',
+          : line.code === 'STATE'
+            ? formatMoney(statement.hourlyRate || 0)
+            : ''),
     ytd: line.code === 'TOTAL' ? grossTotalYtd : ytdFor('grossEarnings', line.code || '')
   })));
   const deductions = displayDeductionLines(statementDeductions.map((line) => ({
@@ -3556,6 +3600,12 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
     statement.periodEnd,
     String(company.payrollConfiguration?.payFrequency || employee.payGroup || fallbackPayFrequency)
   );
+  const hasStatePay = moneyToNumber(statement.grossEarnings.find((line) => line.code === 'STATE')?.amount || 0) > 0;
+  const existingStateRule = statement.additionalInfo.find((line) => line.key === 'State Holiday Pay Rule')?.value;
+  const stateRuleInfo =
+    hasStatePay && !existingStateRule
+      ? [{ key: 'State Holiday Pay Rule', value: stateHolidayPayRule2026(statement.statePayProvince || company.address?.province) }]
+      : [];
   return {
     companyName: company.legalName,
     companyAddress: [company.address?.street, company.address?.line2, [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', ')].filter(Boolean) as string[],
@@ -3579,6 +3629,7 @@ async function employerPayslipData(statement: InstanceType<typeof PayStatement>,
       { key: 'Sequence Number', value: `${employee.employeeNumber}-${statement.payPeriodYear}-${periodNumber}` },
       { key: 'Province of Employment', value: company.address?.province || '' },
       { key: 'Payslip Revision', value: String(statement.revision || 1) },
+      ...stateRuleInfo,
       ...statement.additionalInfo.filter((line) =>
         line.key !== 'Payroll Run' && !canonicalInfoKeys.has(line.key)
       )

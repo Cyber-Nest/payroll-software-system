@@ -13,7 +13,7 @@ import { MoneyValue, sumMoney } from '../utils/money';
 import { employeeCompanyScope } from '../utils/scope';
 import { payslipPdf, payslipsPdf, PayslipPdfData, t4Pdf } from '../utils/pdf';
 import { isInPayStatementYtd } from '../utils/payStatementYtd';
-import { calculatePayrollLine } from '../services/payrollWorkflow.service';
+import { calculatePayrollLine, stateHolidayPayRule2026 } from '../services/payrollWorkflow.service';
 import { defaultHelpContent } from '../data/helpContent';
 import { Help } from '../models/Help';
 import { PlatformNotification } from '../models/PlatformNotification';
@@ -148,7 +148,14 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
     type?: string;
     netPay: unknown;
     yearToDateNetPay: unknown;
-    grossEarnings: Array<{ code: string; description: string; amount: unknown }>;
+    grossEarnings: Array<{
+      code: string;
+      description: string;
+      amount: unknown;
+      currentUnits?: string;
+      ytdUnits?: string;
+      rate?: string;
+    }>;
     deductions: Array<{ code: string; description: string; amount: unknown }>;
     additionalInfo: Array<{ key: string; value: string }>;
     periodStart?: Date;
@@ -166,6 +173,7 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
   const grossTotal =
     s.grossEarnings.find((line) => line.code === 'TOTAL')?.amount ||
     sumMoney(s.grossEarnings.map((line) => line.amount as MoneyValue));
+  const statePay = s.grossEarnings.find((line) => line.code === 'STATE')?.amount || 0;
   const storedDeductionsTotal = deductionTotalAmount(s.deductions);
   const grossValue = Number(serializeMoney(grossTotal));
   const inferredDeductionsTotal = grossValue - Number(serializeMoney(s.netPay));
@@ -271,6 +279,7 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
     payPeriodYear: s.payPeriodYear,
     type: s.type || '',
     grossPay: serializeMoney(displayedGrossTotal),
+    statePay: serializeMoney(statePay),
     netPay: serializeMoney(s.netPay),
     yearToDateNetPay: serializeMoney(s.yearToDateNetPay),
     deductionsTotal: serializeMoney(deductionsTotal),
@@ -278,7 +287,10 @@ function payDto(statement: unknown, employee?: IEmployee, company?: ICompany) {
       code: line.code || (index === lines.length - 1 ? 'TOTAL' : 'EARN'),
       description:
         line.description || (index === lines.length - 1 ? 'Total earnings' : 'Payroll earnings'),
-      amount: serializeMoney(line.amount)
+      amount: serializeMoney(line.amount),
+      currentUnits: line.currentUnits,
+      ytdUnits: line.ytdUnits,
+      rate: line.rate
     })),
     deductions: displayDeductionLines(deductionLines).map((line, index, lines) => ({
       code: line.code || (index === lines.length - 1 ? 'TOTAL' : 'DED'),
@@ -418,9 +430,11 @@ async function payslipData(
     0
   );
   const statePayHoursYtd = history.reduce(
-    (total, statement) => total + (statement.statePayHours || 0),
+    (total, statement) =>
+      total + Number(statement.statePayBaseHours || 0) + Number(statement.statePayHours || 0),
     0
   );
+  const statePayUnits = Number(dto.statePayBaseHours || 0) + Number(dto.statePayHours || 0);
   const employeeName =
     `${employee.legalFirstName || ''} ${employee.middleName || ''} ${employee.legalLastName || ''}`.trim();
   const employeeAddress = employee.addresses?.[0];
@@ -457,7 +471,10 @@ async function payslipData(
       key: 'Province of Employment',
       value: companyProvince
     },
-    { key: 'Payslip Revision', value: String(dto.revision) }
+    { key: 'Payslip Revision', value: String(dto.revision) },
+    ...(Number(dto.statePay || 0) > 0 && !dto.additionalInfo.some((line) => line.key === 'State Holiday Pay Rule')
+      ? [{ key: 'State Holiday Pay Rule', value: stateHolidayPayRule2026(companyProvince) }]
+      : [])
   ];
   const additionalInfo = [
     ...derivedInfo,
@@ -537,13 +554,14 @@ async function payslipData(
     grossEarnings: displayPayslipEarningLines(dto.grossEarnings.map((line) => ({
       ...line,
       currentUnits:
-        line.code === 'REG'
+        line.currentUnits ||
+        (line.code === 'REG'
           ? String(dto.regularHours)
           : line.code === 'OT'
             ? String(dto.overtimeHours)
             : line.code === 'STATE'
-              ? String(dto.statePayHours)
-              : '',
+              ? String(statePayUnits)
+              : ''),
       ytdUnits:
         line.code === 'REG'
           ? String(regularHoursYtd)
@@ -553,7 +571,8 @@ async function payslipData(
               ? String(statePayHoursYtd)
               : '',
       rate:
-        line.code === 'REG'
+        line.rate ||
+        (line.code === 'REG'
           ? dto.regularHours > 0
             ? dto.hourlyRate
             : ''
@@ -562,10 +581,8 @@ async function payslipData(
               ? (Number(line.amount) / dto.overtimeHours).toFixed(2)
               : ''
             : line.code === 'STATE'
-              ? dto.statePayHours > 0
-                ? (Number(line.amount) / dto.statePayHours).toFixed(2)
-                : ''
-              : '',
+              ? dto.hourlyRate || (statePayUnits > 0 ? (Number(line.amount) / statePayUnits).toFixed(2) : '')
+              : ''),
       ytd:
         line.code === 'TOTAL'
           ? grossTotalYtd
