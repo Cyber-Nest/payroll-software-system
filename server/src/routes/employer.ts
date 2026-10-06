@@ -80,6 +80,25 @@ function safeFormatMoney(value: MoneyValue | null | undefined): string {
   return formatMoney(safeMoneyToNumber(value));
 }
 
+function payrollLineGovernmentLiability(line: {
+  cpp?: MoneyValue;
+  cpp2?: MoneyValue;
+  ei?: MoneyValue;
+  federalTax?: MoneyValue;
+  provincialTax?: MoneyValue;
+}): MoneyValue {
+  const cpp = sumMoney([line.cpp || 0, line.cpp2 || 0]);
+  const ei = moneyToDecimal(line.ei || 0);
+  return sumMoney([
+    cpp,
+    ei,
+    line.federalTax || 0,
+    line.provincialTax || 0,
+    cpp,
+    ei.times(1.4)
+  ]);
+}
+
 type DisplayLine = {
   code?: string;
   description?: string;
@@ -516,6 +535,7 @@ router.get(
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+    await syncGovernmentFilings(companyId);
     const [company, employer, employeeCount, latestRun, statements, filings, actionRuns, recentLogs] = await Promise.all([
       Company.findById(companyId),
       EmployerUser.findById(req.employerContext?.employerUserId),
@@ -569,7 +589,8 @@ router.get(
         amount
       };
     });
-    const governmentLiabilities = moneyToNumber(sumMoney(filings.map((filing) => filing.amount)));
+    const remittanceFilings = filings.filter((filing) => filing.type === 'CRA_REMITTANCE');
+    const governmentLiabilities = moneyToNumber(sumMoney(remittanceFilings.map((filing) => filing.amount)));
     const actionRequired = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status)).length + actionRuns.length;
     const relativeTime = (date: Date) => {
       const minutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
@@ -3223,7 +3244,7 @@ async function syncGovernmentFilings(companyId: string): Promise<void> {
     const month = run.payDate.getUTCMonth();
     const key = `${year}-${String(month + 1).padStart(2, '0')}`;
     const bucket = monthly.get(key) || { year, month, amount: [] };
-    bucket.amount.push(...run.lines.flatMap((line) => [line.cpp, line.cpp2, line.ei, line.federalTax, line.provincialTax]));
+    bucket.amount.push(...run.lines.map(payrollLineGovernmentLiability));
     monthly.set(key, bucket);
   }
   const operations: Parameters<typeof GovernmentFiling.bulkWrite>[0] = [];

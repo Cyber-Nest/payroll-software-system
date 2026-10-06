@@ -32,8 +32,7 @@ export class EmailService {
 
   async send(message: EmailMessage): Promise<void> {
     if (!smtpConfigured()) {
-      console.log('[EmailService stub]', JSON.stringify(message, null, 2));
-      return;
+      throw new Error('SMTP email is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASS.');
     }
 
     await this.getTransporter().sendMail({
