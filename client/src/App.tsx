@@ -2603,6 +2603,7 @@ function OldEmployerDashboard({
     'Payroll Reports',
     'Employee Reports',
     'Tax & Compliance',
+    'Government Liabilities Report',
     'Benefits & Deductions',
     'Custom Reports',
     'Scheduled Reports'
@@ -6305,6 +6306,7 @@ function EmployerDashboard({
     'Payroll Reports',
     'Employee Reports',
     'Tax & Compliance',
+    'Government Liabilities Report',
     'Benefits & Deductions',
     'Custom Reports',
     'Scheduled Reports'
