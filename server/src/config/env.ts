@@ -1,6 +1,15 @@
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
-dotenv.config();
+const envPath =
+  [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(__dirname, '../.env')
+  ].find((candidate) => fs.existsSync(candidate)) || path.resolve(process.cwd(), '.env');
+
+dotenv.config({ path: envPath });
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 

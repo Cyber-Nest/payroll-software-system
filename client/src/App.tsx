@@ -445,6 +445,12 @@ type EmployerDeductionsReport = {
   summary: { payPeriod: string; grossPay: number; cpp: number; ei: number; federalTax: number; provincialTax: number; otherDeductions: number; totalDeductions: number };
   rows: Array<{ index: number; employeeName: string; employeeNumber: string; department: string; payGroup: string; employmentType: string; grossPay: number; cpp: number; ei: number; federalTax: number; provincialTax: number; otherDeductions: number; totalDeductions: number }>;
 };
+type EmployerGovernmentLiabilitiesReport = {
+  metrics: { payPeriods: number; totalLiabilities: string; paidAmount: string; unpaidAmount: string };
+  filters: { payPeriods: string[]; statuses: string[] };
+  summary: { employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number };
+  rows: Array<{ index: number; payPeriod: string; employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; status: string }>;
+};
 type EmployerHistoryReport = {
   metrics: { totalEmployees: number; fullTime: number; partTime: number; currentlyActive: number; onLeave: number; totalPositionChanges: number; averageTenure: number; asOf: string };
   filters: { employees: string[]; departments: string[]; employmentTypes: string[]; payGroups: string[]; statuses: string[] };
@@ -2608,6 +2614,7 @@ function OldEmployerDashboard({
     'Earnings Report',
     'Employee Details Report',
     'Deductions Report',
+    'Government Liabilities Report',
     'Employee History Report'
   ];
   const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
@@ -6309,6 +6316,7 @@ function EmployerDashboard({
     'Earnings Report',
     'Employee Details Report',
     'Deductions Report',
+    'Government Liabilities Report',
     'Employee History Report'
   ];
   const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
@@ -6574,6 +6582,7 @@ function EmployerDashboard({
         onOpenEarnings={() => setAdminPage('Earnings Report')}
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
+        onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
     ) : ['All Reports', 'Tax & Compliance', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'].includes(adminPage) ? (
@@ -6585,6 +6594,7 @@ function EmployerDashboard({
         onOpenEarnings={() => setAdminPage('Earnings Report')}
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
+        onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
     ) : adminPage === 'Payroll Reports' ? (
@@ -6597,6 +6607,8 @@ function EmployerDashboard({
       <EmployerEmployeeDetailsReportPage token={token} onBack={() => setAdminPage('Employee Reports')} />
     ) : adminPage === 'Deductions Report' ? (
       <EmployerDeductionsReportPage token={token} onBack={() => setAdminPage('Employee Reports')} />
+    ) : adminPage === 'Government Liabilities Report' ? (
+      <EmployerGovernmentLiabilitiesReportPage token={token} onBack={() => setAdminPage('Reports')} />
     ) : adminPage === 'Employee History Report' ? (
       <EmployerHistoryReportPage token={token} onBack={() => setAdminPage('Employee Reports')} />
     ) : adminPage === 'Employee Reports' ? (
@@ -6693,6 +6705,7 @@ function EmployerReportsPage({
   onOpenEarnings,
   onOpenEmployees,
   onOpenDeductions,
+  onOpenGovernmentLiabilities,
   onOpenHistory
 }: {
   token: string;
@@ -6702,6 +6715,7 @@ function EmployerReportsPage({
   onOpenEarnings: () => void;
   onOpenEmployees: () => void;
   onOpenDeductions: () => void;
+  onOpenGovernmentLiabilities: () => void;
   onOpenHistory: () => void;
 }) {
   const [data, setData] = useState<EmployerReportsData>();
@@ -6780,6 +6794,7 @@ function EmployerReportsPage({
                   if (report.name === 'Employee Hours Report') onOpenHours();
                   if (report.name === 'Employee Earnings Report') onOpenEarnings();
                   if (report.name === 'Employee Deduction Report') onOpenDeductions();
+                  if (report.name === 'Government Liabilities Report') onOpenGovernmentLiabilities();
                   if (report.name === 'Employee Profile Audit') onOpenHistory();
                 }}
               >
@@ -7609,6 +7624,58 @@ function EmployerDeductionsReportPage({ token, onBack }: { token: string; onBack
             <footer><span>Showing 1 - {Math.min(25, visibleRows.length)} of {visibleRows.length} employees</span><div><button>&lt;</button><button className="active">1</button><button>&gt;</button></div><select defaultValue="25"><option>25 / page</option></select></footer>
           </section>
           <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Deductions Report"><option>Deductions Report</option></select></label><label>Pay Period<select value={data.summary.payPeriod} onChange={() => undefined}><option>{data.summary.payPeriod}</option></select></label><b>Include in Report</b>{['CPP', 'EI', 'Income Tax (Federal)', 'Income Tax (Provincial)', 'Other Deductions', 'Total Deductions'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<label>Sort By<select defaultValue="Employee Name (A - Z)"><option>Employee Name (A - Z)</option></select></label><button type="button">Generate Report</button></aside>
+        </div>
+      </>}
+    </section>
+  );
+}
+
+function EmployerGovernmentLiabilitiesReportPage({ token, onBack }: { token: string; onBack: () => void }) {
+  const [data, setData] = useState<EmployerGovernmentLiabilitiesReport>();
+  const [error, setError] = useState('');
+  const [status, setStatus] = useState('All Statuses');
+  useEffect(() => {
+    api<EmployerGovernmentLiabilitiesReport>('/employer/reports/government-liabilities', token)
+      .then((result) => { setData(result); setError(''); })
+      .catch(() => { setData(undefined); setError('Unable to load government liabilities report data from the database.'); });
+  }, [token]);
+  const moneyValue = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const visibleRows = (data?.rows || []).filter((row) => matchesFilter(row.status, status, 'All Statuses'));
+  const totals = visibleRows.reduce((sum, row) => ({
+    employeeCpp: sum.employeeCpp + row.employeeCpp,
+    employeeEi: sum.employeeEi + row.employeeEi,
+    incomeTax: sum.incomeTax + row.incomeTax,
+    employerCpp: sum.employerCpp + row.employerCpp,
+    employerEi: sum.employerEi + row.employerEi,
+    totalLiability: sum.totalLiability + row.totalLiability
+  }), { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0 });
+  return (
+    <section className="payroll-report-page">
+      <div className="report-breadcrumb">Reports <span>&gt;</span> Tax & Compliance <span>&gt;</span> Government Liabilities Report</div>
+      <header className="reports-head payroll-report-head"><div><h1>Government Liabilities Report</h1><p>View employee and employer CPP, EI and income tax liabilities by pay period.</p></div><button type="button" className="reports-back" onClick={onBack}>Back</button></header>
+      {error && <p className="report-empty">{error}</p>}
+      {!data && !error && <p className="report-empty">Loading government liabilities report...</p>}
+      {data && <>
+        <div className="report-metrics payroll-report-metrics">
+          <article><span>cal</span><p>Pay Periods</p><strong>{visibleRows.length}</strong><small>Matching status</small></article>
+          <article><span>$</span><p>Total Liabilities</p><strong>{moneyValue(totals.totalLiability)}</strong><small>Employee and employer</small></article>
+          <article><span>paid</span><p>Paid</p><strong>{data.metrics.paidAmount}</strong><small>Filed CRA remittances</small></article>
+          <article><span>due</span><p>Unpaid</p><strong>{data.metrics.unpaidAmount}</strong><small>Pending or prepared</small></article>
+        </div>
+        <div className="payroll-report-filters hours-report-filters">
+          <label>Pay Period<select value={data.filters.payPeriods[0] || ''} onChange={() => undefined}>{data.filters.payPeriods.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{data.filters.statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <button type="button" onClick={() => setStatus('All Statuses')}>Clear Filters</button>
+        </div>
+        <div className="payroll-report-layout">
+          <section className="payroll-report-main"><header><div><h2>Government Liabilities Report</h2><p>Pay period liability amounts split between employee deductions and employer contributions.</p></div><ReportExportButtons title="Government Liabilities Report" /></header>
+            <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Pay Period</th><th>Employee CPP</th><th>Employee EI</th><th>Income Tax</th><th>Employer CPP</th><th>Employer EI</th><th>Total Liability</th><th>Status</th></tr></thead><tbody>
+              {visibleRows.map((row, index) => <tr key={row.payPeriod}><td>{index + 1}</td><td>{row.payPeriod}</td><td>{moneyValue(row.employeeCpp)}</td><td>{moneyValue(row.employeeEi)}</td><td>{moneyValue(row.incomeTax)}</td><td>{moneyValue(row.employerCpp)}</td><td>{moneyValue(row.employerEi)}</td><td><b>{moneyValue(row.totalLiability)}</b></td><td>{row.status}</td></tr>)}
+              {!visibleRows.length && <tr><td colSpan={9}>No government liability records found in the database.</td></tr>}
+            </tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Pay Periods</td><td>{moneyValue(totals.employeeCpp)}</td><td>{moneyValue(totals.employeeEi)}</td><td>{moneyValue(totals.incomeTax)}</td><td>{moneyValue(totals.employerCpp)}</td><td>{moneyValue(totals.employerEi)}</td><td>{moneyValue(totals.totalLiability)}</td><td></td></tr></tfoot></table></div>
+            <footer><span>Showing {visibleRows.length ? 1 : 0} - {visibleRows.length} of {visibleRows.length} pay periods</span><div><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button></div><select defaultValue="25"><option>25 / page</option></select></footer>
+          </section>
+          <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Government Liabilities Report"><option>Government Liabilities Report</option></select></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{data.filters.statuses.map((item) => <option key={item}>{item}</option>)}</select></label><b>Include in Report</b>{['Pay Period', 'Employee CPP', 'Employee EI', 'Income Tax', 'Employer CPP', 'Employer EI', 'Paid/Unpaid Status'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<button type="button">Generate Report</button></aside>
         </div>
       </>}
     </section>

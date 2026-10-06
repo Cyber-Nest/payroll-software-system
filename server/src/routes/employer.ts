@@ -705,6 +705,7 @@ router.get(
         description: 'Reports for CRA remittances and year-end requirements.',
         tone: 'yellow',
         reports: [
+          ['Government Liabilities Report', 'Employee CPP, EI, income tax and employer CPP/EI by pay period.'],
           ['CRA Source Deductions Report', 'Total CPP, EI and income tax by period.'],
           ['T4 Summary Report', 'Year to date summary for T4 filing.'],
           ['T4 Detailed Report', 'Detailed T4 data by employee.'],
@@ -952,6 +953,69 @@ router.get(
     });
   }
 );
+
+router.get('/reports/government-liabilities', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const [runs, filings] = await Promise.all([
+    PayrollRun.find({ companyId }).sort({ payDate: -1 }),
+    GovernmentFiling.find({ companyId, type: 'CRA_REMITTANCE' }).sort({ dueDate: -1 })
+  ]);
+  const filingByPeriod = new Map(filings.map((filing) => [filing.period, filing]));
+  const rows = runs.map((run, index) => {
+    const totals = (run.lines || []).reduce((sum, line) => {
+      const employeeCpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
+      const employeeEi = moneyToNumber(line.ei);
+      const incomeTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
+      return {
+        employeeCpp: sum.employeeCpp + employeeCpp,
+        employeeEi: sum.employeeEi + employeeEi,
+        incomeTax: sum.incomeTax + incomeTax,
+        employerCpp: sum.employerCpp + employeeCpp,
+        employerEi: sum.employerEi + Number((employeeEi * 1.4).toFixed(2))
+      };
+    }, { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0 });
+    const payPeriod = `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} (#${runs.length - index})`;
+    const filing = filingByPeriod.get(payPeriod) || filings.find((item) => item.period === payPeriod || item.period.includes(dateLabel(run.periodEnd)));
+    const status = filing?.status === 'filed' ? 'Paid' : 'Unpaid';
+    const totalLiability = totals.employeeCpp + totals.employeeEi + totals.incomeTax + totals.employerCpp + totals.employerEi;
+    return {
+      index: index + 1,
+      payPeriod,
+      employeeCpp: Number(totals.employeeCpp.toFixed(2)),
+      employeeEi: Number(totals.employeeEi.toFixed(2)),
+      incomeTax: Number(totals.incomeTax.toFixed(2)),
+      employerCpp: Number(totals.employerCpp.toFixed(2)),
+      employerEi: Number(totals.employerEi.toFixed(2)),
+      totalLiability: Number(totalLiability.toFixed(2)),
+      status
+    };
+  });
+  const summary = rows.reduce((sum, row) => ({
+    employeeCpp: sum.employeeCpp + row.employeeCpp,
+    employeeEi: sum.employeeEi + row.employeeEi,
+    incomeTax: sum.incomeTax + row.incomeTax,
+    employerCpp: sum.employerCpp + row.employerCpp,
+    employerEi: sum.employerEi + row.employerEi,
+    totalLiability: sum.totalLiability + row.totalLiability
+  }), { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0 });
+  const paidAmount = rows.filter((row) => row.status === 'Paid').reduce((sum, row) => sum + row.totalLiability, 0);
+  const unpaidAmount = rows.filter((row) => row.status === 'Unpaid').reduce((sum, row) => sum + row.totalLiability, 0);
+  res.json({
+    metrics: {
+      payPeriods: rows.length,
+      totalLiabilities: formatMoney(summary.totalLiability),
+      paidAmount: formatMoney(paidAmount),
+      unpaidAmount: formatMoney(unpaidAmount)
+    },
+    filters: {
+      payPeriods: rows.map((row) => row.payPeriod),
+      statuses: ['All Statuses', 'Paid', 'Unpaid']
+    },
+    summary,
+    rows
+  });
+});
 
 router.get(
   '/reports/hours',
