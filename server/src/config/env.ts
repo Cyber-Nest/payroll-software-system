@@ -19,8 +19,7 @@ export const env = {
   smtpSecure: process.env.SMTP_SECURE === 'true',
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
-  resendApiKey: process.env.RESEND_API_KEY || '',
-  emailFrom: process.env.EMAIL_FROM || 'Payhours <onboarding@resend.dev>',
+  emailFrom: process.env.EMAIL_FROM || 'Payhours <info@cyber-nest.ca>',
   dnsServers: (process.env.DNS_SERVERS || '').split(',').map((server) => server.trim()).filter(Boolean)
 };
 
