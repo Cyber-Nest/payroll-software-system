@@ -31,10 +31,13 @@ type EmployeeProfile = {
   legalFirstName: string;
   middleName?: string;
   legalLastName: string;
+  preferredFirstName?: string;
+  birthDate?: string;
   sin: string;
   employeeNumber: string;
   company?: { legalName: string; customerId: string };
   addresses: Array<{ street: string; city: string; province: string; postalCode: string }>;
+  phones?: Array<{ type?: string; number: string }>;
   occupation?: string;
   startDate?: string;
   seniorityDate?: string;
@@ -580,6 +583,24 @@ const currentYear = new Date().getFullYear();
 const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const storedTimezone = localStorage.getItem('payhours-timezone') || browserTimeZone;
 let activeTimeZone = storedTimezone;
+
+function readStoredJson<T>(key: string): T | undefined {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStoredJson(key: string, value: unknown) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function removeStoredJson(key: string) {
+  localStorage.removeItem(key);
+}
+
 const fallbackHelpContent: HelpContent = {
   brandName: 'Payhours',
   heroTitle: 'How can we help?',
@@ -2859,64 +2880,96 @@ function cloneAdminProfile(profile: AdminProfile): AdminProfile {
   };
 }
 
+function dateInputValue(value: unknown) {
+  return typeof value === 'string' ? value.slice(0, 10) : '';
+}
+
+function profileText(
+  profile: AdminProfile | undefined,
+  section: keyof AdminProfile,
+  key: string,
+  fallback = ''
+) {
+  const value = profile?.[section]?.[key];
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
 function profileForEmployee(employee?: EmployeeProfile): AdminProfile {
   if (!employee) return cloneAdminProfile(emptyAdminProfile);
   const address = employee.addresses?.[0];
+  const profile = employee.adminProfile;
+  const personal = profile?.personal;
+  const employment = profile?.employment;
+  const compensation = profile?.compensation;
+  const tax = profile?.tax;
   return {
     personal: {
       ...emptyAdminProfile.personal,
-      ...(employee.adminProfile?.personal || {}),
-      firstName: employee.legalFirstName || '',
-      middleName: employee.middleName || '',
-      lastName: employee.legalLastName || '',
-      preferredName: employee.legalFirstName || '',
-      sin: employee.sin || '',
-      emailAddress: employee.personalEmail || '',
-      address: address?.street || employee.adminProfile?.personal?.address || '',
-      city: address?.city || employee.adminProfile?.personal?.city || '',
-      province: address?.province || employee.adminProfile?.personal?.province || '',
-      postalCode: address?.postalCode || employee.adminProfile?.personal?.postalCode || ''
+      ...(personal || {}),
+      firstName: profileText(profile, 'personal', 'firstName', employee.legalFirstName || ''),
+      middleName: profileText(profile, 'personal', 'middleName', employee.middleName || ''),
+      lastName: profileText(profile, 'personal', 'lastName', employee.legalLastName || ''),
+      preferredName: profileText(
+        profile,
+        'personal',
+        'preferredName',
+        employee.preferredFirstName || employee.legalFirstName || ''
+      ),
+      birthDate: profileText(profile, 'personal', 'birthDate', dateInputValue(employee.birthDate)),
+      sin: profileText(profile, 'personal', 'sin', employee.sin || ''),
+      emailAddress: profileText(profile, 'personal', 'emailAddress', employee.personalEmail || ''),
+      phoneNumber: profileText(
+        profile,
+        'personal',
+        'phoneNumber',
+        employee.phones?.[0]?.number || ''
+      ),
+      address: profileText(profile, 'personal', 'address', address?.street || ''),
+      city: profileText(profile, 'personal', 'city', address?.city || ''),
+      province: profileText(profile, 'personal', 'province', address?.province || ''),
+      postalCode: profileText(profile, 'personal', 'postalCode', address?.postalCode || '')
     },
     employment: {
       ...emptyAdminProfile.employment,
-      ...(employee.adminProfile?.employment || {}),
-      employeeNumber: employee.employeeNumber || '',
-      jobTitle: employee.occupation || '',
-      hireDate: employee.startDate
-        ? employee.startDate.slice(0, 10)
-        : employee.adminProfile?.employment?.hireDate || '',
-      originalHireDate: employee.seniorityDate
-        ? employee.seniorityDate.slice(0, 10)
-        : employee.adminProfile?.employment?.originalHireDate || '',
+      ...(employment || {}),
+      employeeNumber: profileText(profile, 'employment', 'employeeNumber', employee.employeeNumber || ''),
+      jobTitle: profileText(profile, 'employment', 'jobTitle', employee.occupation || ''),
+      hireDate: profileText(profile, 'employment', 'hireDate', dateInputValue(employee.startDate)),
+      originalHireDate: profileText(
+        profile,
+        'employment',
+        'originalHireDate',
+        dateInputValue(employee.seniorityDate)
+      ),
       provinceOfEmployment:
+        profileText(profile, 'employment', 'provinceOfEmployment') ||
         employee.taxProvince ||
-        employee.adminProfile?.employment?.provinceOfEmployment ||
         emptyAdminProfile.employment.provinceOfEmployment
     },
     compensation: {
       ...emptyAdminProfile.compensation,
-      ...(employee.adminProfile?.compensation || {}),
+      ...(compensation || {}),
       payType:
+        profileText(profile, 'compensation', 'payType') ||
         employee.primaryEarningCode ||
-        employee.adminProfile?.compensation?.payType ||
         emptyAdminProfile.compensation.payType,
       payFrequency:
+        profileText(profile, 'compensation', 'payFrequency') ||
         employee.payGroup ||
-        employee.adminProfile?.compensation?.payFrequency ||
         emptyAdminProfile.compensation.payFrequency
     },
     tax: {
       ...emptyAdminProfile.tax,
-      ...(employee.adminProfile?.tax || {}),
+      ...(tax || {}),
       provinceOfResidence:
+        profileText(profile, 'tax', 'provinceOfResidence') ||
         employee.taxProvince ||
-        employee.adminProfile?.tax?.provinceOfResidence ||
         emptyAdminProfile.tax.provinceOfResidence,
-      sin: employee.sin || employee.adminProfile?.tax?.sin || ''
+      sin: profileText(profile, 'tax', 'sin', employee.sin || '')
     },
-    vacation: { ...emptyAdminProfile.vacation, ...(employee.adminProfile?.vacation || {}) },
-    benefits: { ...emptyAdminProfile.benefits, ...(employee.adminProfile?.benefits || {}) },
-    banking: { ...emptyAdminProfile.banking, ...(employee.adminProfile?.banking || {}) }
+    vacation: { ...emptyAdminProfile.vacation, ...(profile?.vacation || {}) },
+    benefits: { ...emptyAdminProfile.benefits, ...(profile?.benefits || {}) },
+    banking: { ...emptyAdminProfile.banking, ...(profile?.banking || {}) }
   };
 }
 
@@ -3115,7 +3168,8 @@ function AddEmployee({
   onSaved,
   onCancel,
   employee,
-  onDelete
+  onDelete,
+  draftKey
 }: {
   token: string;
   onSaved: (result?: {
@@ -3127,9 +3181,16 @@ function AddEmployee({
   onCancel: () => void;
   employee?: EmployeeProfile;
   onDelete?: (employee: EmployeeProfile) => void;
+  draftKey?: string;
 }) {
-  const [step, setStep] = useState(1);
-  const [profile, setProfile] = useState<AdminProfile>(() => profileForEmployee(employee));
+  const savedDraft = useMemo(
+    () => draftKey ? readStoredJson<{ step?: number; profile?: AdminProfile }>(draftKey) : undefined,
+    [draftKey]
+  );
+  const [step, setStep] = useState(() => savedDraft?.step || 1);
+  const [profile, setProfile] = useState<AdminProfile>(
+    () => savedDraft?.profile || profileForEmployee(employee)
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -3199,6 +3260,13 @@ function AddEmployee({
       ['banking', 'accountNumber', 'Account Number'],
       ['banking', 'accountType', 'Account Type']
     ]
+  };
+  useEffect(() => {
+    if (!draftKey) return;
+    writeStoredJson(draftKey, { step, profile });
+  }, [draftKey, step, profile]);
+  const clearDraft = () => {
+    if (draftKey) removeStoredJson(draftKey);
   };
   const update = (section: keyof AdminProfile, key: string, value: string) =>
     setProfile((current) => ({ ...current, [section]: { ...current[section], [key]: value } }));
@@ -3291,6 +3359,7 @@ function AddEmployee({
             ? `Employee created. Welcome email was not sent: ${response.emailError}`
             : 'Employee created successfully.'
       );
+      clearDraft();
       onSaved(response);
     } catch (caught) {
       setError(
@@ -4034,7 +4103,7 @@ function AddEmployee({
             Delete Employee
           </button>
         )}
-        <button onClick={onCancel}>Cancel</button>
+        <button onClick={() => { clearDraft(); onCancel(); }}>Cancel</button>
         <button
           className="run-payroll"
           disabled={busy}
@@ -4177,18 +4246,33 @@ function PayrollPage({
   runs,
   employees,
   onRefresh,
-  onNewRun
+  onNewRun,
+  storageKey
 }: {
   token: string;
   runs: PayrollRun[];
   employees: EmployeeProfile[];
   onRefresh: () => void;
   onNewRun: () => void;
+  storageKey?: string;
 }) {
-  const [tab, setTab] = useState('Payroll Runs');
+  const storedPayrollState = useMemo(
+    () =>
+      storageKey
+        ? readStoredJson<{
+            tab?: string;
+            dialogRunId?: string;
+            dialogMode?: 'view' | 'edit';
+          }>(storageKey)
+        : undefined,
+    [storageKey]
+  );
+  const [tab, setTab] = useState(storedPayrollState?.tab || 'Payroll Runs');
   const [notice, setNotice] = useState('');
   const [editingRun, setEditingRun] = useState<PayrollRun>();
-  const [payrollDialogMode, setPayrollDialogMode] = useState<'view' | 'edit'>('view');
+  const [payrollDialogMode, setPayrollDialogMode] = useState<'view' | 'edit'>(
+    storedPayrollState?.dialogMode || 'view'
+  );
   const [editLines, setEditLines] = useState<PayrollRun['lines']>([]);
   const [revisionReason, setRevisionReason] = useState('');
   const [savingRevision, setSavingRevision] = useState(false);
@@ -4207,6 +4291,20 @@ function PayrollPage({
     { employees: 0, gross: 0, deductions: 0, net: 0 }
   );
   const showNotice = (message: string) => setNotice(message);
+  useEffect(() => {
+    if (!storageKey) return;
+    writeStoredJson(storageKey, {
+      tab,
+      dialogRunId: editingRun?.id,
+      dialogMode: editingRun ? payrollDialogMode : undefined
+    });
+  }, [storageKey, tab, editingRun?.id, payrollDialogMode]);
+  useEffect(() => {
+    if (!storedPayrollState?.dialogRunId || editingRun || !runs.length) return;
+    const run = runs.find((item) => item.id === storedPayrollState.dialogRunId);
+    if (!run) return;
+    openPayrollDialog(run, storedPayrollState.dialogMode || 'view');
+  }, [storedPayrollState?.dialogRunId, storedPayrollState?.dialogMode, editingRun, runs]);
   function provincialVacationPay(
     line: PayrollRun['lines'][number],
     accrualRate: string | undefined
@@ -5054,25 +5152,47 @@ function NewPayrollRun({
   token,
   employees,
   runs,
+  draftKey,
   onDone,
   onCancel
 }: {
   token: string;
   employees: EmployeeProfile[];
   runs: PayrollRun[];
+  draftKey?: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const [step, setStep] = useState(1);
-  const [periodStart, setPeriodStart] = useState('');
-  const [periodEnd, setPeriodEnd] = useState('');
-  const [payDate, setPayDate] = useState('');
-  const [payFrequency, setPayFrequency] = useState<PayrollFrequency>('biweekly');
+  const savedDraft = useMemo(
+    () =>
+      draftKey
+        ? readStoredJson<{
+            step?: number;
+            periodStart?: string;
+            periodEnd?: string;
+            payDate?: string;
+            payFrequency?: PayrollFrequency;
+            selectedIds?: string[];
+            hours?: Record<string, string>;
+            runId?: string;
+          }>(draftKey)
+        : undefined,
+    [draftKey]
+  );
+  const [step, setStep] = useState(savedDraft?.step || 1);
+  const [periodStart, setPeriodStart] = useState(savedDraft?.periodStart || '');
+  const [periodEnd, setPeriodEnd] = useState(savedDraft?.periodEnd || '');
+  const [payDate, setPayDate] = useState(savedDraft?.payDate || '');
+  const [payFrequency, setPayFrequency] = useState<PayrollFrequency>(
+    savedDraft?.payFrequency || 'biweekly'
+  );
   const [run, setRun] = useState<PayrollRun | undefined>();
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    employees.slice(0, 6).map((employee) => employee.employeeNumber)
+    savedDraft?.selectedIds?.length
+      ? savedDraft.selectedIds
+      : employees.slice(0, 6).map((employee) => employee.employeeNumber)
   );
-  const [hours, setHours] = useState<Record<string, string>>({});
+  const [hours, setHours] = useState<Record<string, string>>(savedDraft?.hours || {});
   const [statePayHours, setStatePayHours] = useState<Record<string, string>>({});
   const [statePayBaseHours, setStatePayBaseHours] = useState<Record<string, string>>({});
   const [statePayRegularDay, setStatePayRegularDay] = useState<Record<string, boolean>>({});
@@ -5095,6 +5215,31 @@ function NewPayrollRun({
   );
   const calculatedLines = run?.lines || [];
   const regularHoursLimit = { weekly: 44, biweekly: 88, monthly: 176 }[payFrequency];
+  useEffect(() => {
+    if (!draftKey) return;
+    writeStoredJson(draftKey, {
+      step,
+      periodStart,
+      periodEnd,
+      payDate,
+      payFrequency,
+      selectedIds,
+      hours,
+      runId: run?.id
+    });
+  }, [draftKey, step, periodStart, periodEnd, payDate, payFrequency, selectedIds, hours, run?.id]);
+  useEffect(() => {
+    if (run || !savedDraft?.runId) return;
+    const savedRun = runs.find((item) => item.id === savedDraft.runId);
+    if (savedRun) setRun(savedRun);
+    if (!savedRun && runs.length && step > 1) setStep(1);
+  }, [run, runs, savedDraft?.runId]);
+  useEffect(() => {
+    if (step > 1 && !run && !savedDraft?.runId) setStep(1);
+  }, [step, run, savedDraft?.runId]);
+  const clearDraft = () => {
+    if (draftKey) removeStoredJson(draftKey);
+  };
   function applySuggestedDates(start: string, frequency: PayrollFrequency) {
     const dates = suggestedPayrollDates(start, frequency);
     if (!dates) return;
@@ -5269,6 +5414,7 @@ function NewPayrollRun({
         setRun(result.run);
       }
       if (step === 5) {
+        clearDraft();
         onDone();
         return;
       }
@@ -5538,7 +5684,10 @@ function NewPayrollRun({
         </div>
       )}
       <div className="wizard-actions">
-        <button disabled={busy} onClick={step === 1 ? onCancel : () => setStep(step - 1)}>
+        <button
+          disabled={busy}
+          onClick={step === 1 ? () => { clearDraft(); onCancel(); } : () => setStep(step - 1)}
+        >
           Back
         </button>
         <span />
@@ -6066,9 +6215,18 @@ function EmployerDashboard({
   companies: EmployerCompanyChoice[];
   onSwitchCompany: (companyId: string) => void;
 }) {
-  const [adminPage, setAdminPage] = useState('Dashboard');
+  const companyId = data?.company.id || 'default';
+  const employerUiKey = `payhours-employer-ui:${companyId}`;
+  const storedUiState = useMemo(
+    () => readStoredJson<{ adminPage?: string; editingEmployeeId?: string }>(employerUiKey),
+    [employerUiKey]
+  );
+  const [adminPage, setAdminPage] = useState(storedUiState?.adminPage || 'Dashboard');
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeProfile | undefined>();
+  const [restoredEditingEmployeeId, setRestoredEditingEmployeeId] = useState(
+    storedUiState?.editingEmployeeId || ''
+  );
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [refresh, setRefresh] = useState(0);
   const [employerNotificationCount, setEmployerNotificationCount] = useState(0);
@@ -6098,6 +6256,28 @@ function EmployerDashboard({
       .then((result) => setPayrollRuns(result.runs))
       .catch(() => setPayrollRuns([]));
   }, [token, refresh]);
+  useEffect(() => {
+    const state = readStoredJson<{ adminPage?: string; editingEmployeeId?: string }>(employerUiKey);
+    setAdminPage(state?.adminPage || 'Dashboard');
+    setRestoredEditingEmployeeId(state?.editingEmployeeId || '');
+    setEditingEmployee(undefined);
+  }, [employerUiKey]);
+  useEffect(() => {
+    writeStoredJson(employerUiKey, {
+      adminPage,
+      editingEmployeeId:
+        adminPage === 'Edit Employee'
+          ? editingEmployee?.id || restoredEditingEmployeeId || undefined
+          : undefined
+    });
+  }, [employerUiKey, adminPage, editingEmployee?.id, restoredEditingEmployeeId]);
+  useEffect(() => {
+    if (adminPage !== 'Edit Employee' || editingEmployee || !restoredEditingEmployeeId) return;
+    const localEmployee = employees.find((employee) => employee.id === restoredEditingEmployeeId);
+    if (localEmployee) {
+      void editEmployee(localEmployee);
+    }
+  }, [adminPage, editingEmployee, restoredEditingEmployeeId, employees]);
   const nav = [
     'Dashboard',
     'Employees',
@@ -6146,6 +6326,7 @@ function EmployerDashboard({
       token
     );
     setEditingEmployee(result.employee);
+    setRestoredEditingEmployeeId(result.employee.id);
     setAdminPage('Edit Employee');
   }
   async function deleteEmployee(employee: EmployeeProfile) {
@@ -6314,6 +6495,7 @@ function EmployerDashboard({
         employees={employees}
         onAdd={() => {
           setEditingEmployee(undefined);
+          setRestoredEditingEmployeeId('');
           setAdminPage('Add Employee');
         }}
         onEdit={editEmployee}
@@ -6325,6 +6507,7 @@ function EmployerDashboard({
     ) : adminPage === 'Add Employee' ? (
       <AddEmployee
         token={token}
+        draftKey={`${employerUiKey}:employee:new`}
         onCancel={() => setAdminPage('Employees')}
         onSaved={(result) => {
           if (result?.temporaryPassword && result.employee) {
@@ -6344,6 +6527,7 @@ function EmployerDashboard({
       <AddEmployee
         token={token}
         employee={editingEmployee}
+        draftKey={`${employerUiKey}:employee:${editingEmployee.id}`}
         onDelete={deleteEmployee}
         onCancel={() => setAdminPage('Employees')}
         onSaved={() => {
@@ -6358,12 +6542,14 @@ function EmployerDashboard({
         employees={employees}
         onRefresh={() => setRefresh((value) => value + 1)}
         onNewRun={() => setAdminPage('New Payroll Run')}
+        storageKey={`${employerUiKey}:payroll`}
       />
     ) : adminPage === 'New Payroll Run' ? (
       <NewPayrollRun
         token={token}
         employees={employees}
         runs={payrollRuns}
+        draftKey={`${employerUiKey}:payroll:new`}
         onCancel={() => setAdminPage('Payroll')}
         onDone={() => {
           setRefresh((value) => value + 1);
@@ -7614,6 +7800,18 @@ const defaultEmployerForm = {
   vacationPayRate: '4.00',
   remittanceFrequency: 'Monthly'
 } as typeof employerFormPlaceholders;
+
+function titlePayFrequency(value: unknown) {
+  const frequency = String(value || '').toLowerCase();
+  if (frequency === 'weekly') return 'Weekly';
+  if (frequency === 'monthly') return 'Monthly';
+  return 'Biweekly';
+}
+
+function employerVacationRate(configuration: Record<string, unknown>, province: string) {
+  const vacation = configuration.vacation as { vacationAccrualRate?: string | number } | undefined;
+  return String(vacation?.vacationAccrualRate || provinceVacationRates[province] || '4.00');
+}
 
 function Pill({ children, tone = 'blue' }: { children: React.ReactNode; tone?: string }) {
   return <span className={`access-pill ${tone}`}>{children}</span>;
@@ -12639,7 +12837,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         addressLine2: detail.address.line2 || '',
         city: detail.address.city || '',
         province: provinceName,
-        vacationPayRate: provinceVacationRates[provinceName] || '4.00',
+        vacationPayRate: employerVacationRate(detail.payrollConfiguration, provinceName),
         postalCode: detail.address.postalCode || '',
         country: detail.address.country || 'Canada',
         firstName: detail.primaryContact?.firstName || '',
@@ -12655,7 +12853,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             detail.craPayroll.remitterType ||
             'Monthly'
         ),
-        payFrequency: String(detail.payrollConfiguration.payFrequency || 'Biweekly'),
+        payFrequency: titlePayFrequency(detail.payrollConfiguration.payFrequency),
         statePayEnabled: Boolean(
           (detail.payrollConfiguration.statePay as { enabled?: boolean } | undefined)?.enabled
         ),

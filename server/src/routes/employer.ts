@@ -1816,6 +1816,10 @@ function text(value: unknown, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function sinDigits(value: unknown) {
+  return text(value).replace(/\D/g, '');
+}
+
 function dateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -3939,17 +3943,29 @@ router.put(
     if (existingUserWithEmail)
       return res.status(409).json({ message: 'Another user already uses that email address' });
 
-    Object.assign(
-      employee,
-      employeeFieldsFromProfile(
-        profile,
-        companyId,
-        employee.userId,
-        employeeNumber,
-        email,
-        (await Company.findById(companyId)) || undefined
-      )
+    const company = await Company.findById(companyId);
+    const fields = employeeFieldsFromProfile(
+      profile,
+      companyId,
+      employee.userId,
+      employeeNumber,
+      email,
+      company || undefined
     );
+    const submittedSinDigits = sinDigits(profile.personal.sin) || sinDigits(profile.tax.sin);
+    if (submittedSinDigits.length !== 9 && employee.sinEncrypted) {
+      fields.sinEncrypted = employee.sinEncrypted;
+      fields.adminProfile.personal = {
+        ...fields.adminProfile.personal,
+        sin: text(employee.adminProfile?.personal?.sin, text(profile.personal.sin))
+      };
+      fields.adminProfile.tax = {
+        ...fields.adminProfile.tax,
+        sin: text(employee.adminProfile?.tax?.sin, text(profile.tax.sin))
+      };
+    }
+
+    Object.assign(employee, fields);
     await employee.save();
     await User.findByIdAndUpdate(employee.userId, { email, isActive: true });
     await AuditLog.create({
@@ -3960,7 +3976,6 @@ router.put(
       metadata: { action: 'updated' }
     });
 
-    const company = await Company.findById(companyId);
     res.json({ employee: serializeEmployee(employee, company || undefined) });
   }
 );
