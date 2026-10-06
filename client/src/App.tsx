@@ -4279,6 +4279,15 @@ function PayrollPage({
   function beginRevision(run: PayrollRun) {
     openPayrollDialog(run, 'edit');
   }
+  function updateEditingPeriodStart(value: string) {
+    if (!editingRun) return;
+    const dates = suggestedPayrollDates(value, editingRun.payFrequency || 'biweekly');
+    setEditingRun({
+      ...editingRun,
+      periodStart: value,
+      ...(dates ? { periodEnd: dates.periodEnd, payDate: dates.payDate } : {})
+    });
+  }
   const editableDraftPayload = () => ({
     lines: editLines.map(
       ({
@@ -4719,8 +4728,7 @@ function PayrollPage({
                   value={editingRun.periodStart.slice(0, 10)}
                   disabled={payrollDialogMode === 'view'}
                   onChange={(value) =>
-                    payrollDialogMode === 'edit' &&
-                    setEditingRun({ ...editingRun, periodStart: value })
+                    payrollDialogMode === 'edit' && updateEditingPeriodStart(value)
                   }
                 />
                 <AdminInput
@@ -5017,14 +5025,41 @@ function suggestedPayrollDates(periodStart: string, frequency: PayrollFrequency)
   return { periodEnd: localIsoDate(end), payDate: localIsoDate(payment) };
 }
 
+function addPayrollFrequency(date: Date, frequency: PayrollFrequency) {
+  const next = new Date(date);
+  if (frequency === 'weekly') next.setDate(next.getDate() + 7);
+  if (frequency === 'biweekly') next.setDate(next.getDate() + 14);
+  if (frequency === 'monthly') next.setMonth(next.getMonth() + 1);
+  return next;
+}
+
+function nextPayrollDatesFromLastRun(lastRun: PayrollRun, frequency: PayrollFrequency) {
+  const periodEnd = new Date(`${lastRun.periodEnd.slice(0, 10)}T00:00:00`);
+  const payDate = new Date(`${lastRun.payDate.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(periodEnd.getTime()) || Number.isNaN(payDate.getTime())) return undefined;
+
+  const periodStart = new Date(periodEnd);
+  periodStart.setDate(periodStart.getDate() + 1);
+  const suggested = suggestedPayrollDates(localIsoDate(periodStart), frequency);
+  if (!suggested) return undefined;
+
+  return {
+    periodStart: localIsoDate(periodStart),
+    periodEnd: suggested.periodEnd,
+    payDate: localIsoDate(addPayrollFrequency(payDate, frequency))
+  };
+}
+
 function NewPayrollRun({
   token,
   employees,
+  runs,
   onDone,
   onCancel
 }: {
   token: string;
   employees: EmployeeProfile[];
+  runs: PayrollRun[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -5051,6 +5086,8 @@ function NewPayrollRun({
     holidays: [],
     defaultHoursPerDay: 8
   });
+  const [paySettingsLoaded, setPaySettingsLoaded] = useState(false);
+  const [seededFromLastRun, setSeededFromLastRun] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const selectedEmployees = employees.filter((employee) =>
@@ -5069,6 +5106,19 @@ function NewPayrollRun({
     applySuggestedDates(value, payFrequency);
   }
   useEffect(() => {
+    if (!paySettingsLoaded || seededFromLastRun || periodStart || periodEnd || payDate) return;
+    const lastRun = runs
+      .filter((item) => item.status !== 'reversed')
+      .sort((left, right) => right.payDate.localeCompare(left.payDate))[0];
+    if (!lastRun) return;
+    const dates = nextPayrollDatesFromLastRun(lastRun, payFrequency);
+    if (!dates) return;
+    setPeriodStart(dates.periodStart);
+    setPeriodEnd(dates.periodEnd);
+    setPayDate(dates.payDate);
+    setSeededFromLastRun(true);
+  }, [runs, payFrequency, paySettingsLoaded, seededFromLastRun, periodStart, periodEnd, payDate]);
+  useEffect(() => {
     api<{
       payFrequency: PayrollFrequency;
       statePay: {
@@ -5084,9 +5134,10 @@ function NewPayrollRun({
         setPayFrequency(result.payFrequency);
         if (periodStart) applySuggestedDates(periodStart, result.payFrequency);
       })
-      .catch(() =>
-        setStatePaySettings({ enabled: false, holidays: [], defaultHoursPerDay: 8 })
-      );
+      .catch(() => {
+        setStatePaySettings({ enabled: false, holidays: [], defaultHoursPerDay: 8 });
+      })
+      .finally(() => setPaySettingsLoaded(true));
   }, [token]);
   const matchingStatePayHolidays = statePaySettings.enabled
     ? statePaySettings.holidays.filter(
@@ -6312,6 +6363,7 @@ function EmployerDashboard({
       <NewPayrollRun
         token={token}
         employees={employees}
+        runs={payrollRuns}
         onCancel={() => setAdminPage('Payroll')}
         onDone={() => {
           setRefresh((value) => value + 1);
