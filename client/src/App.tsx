@@ -21,7 +21,7 @@ type CompanyChoice = {
   companyName: string;
   customerId: string;
 };
-type EmployerCompanyChoice = { id: string; legalName: string; customerId: string };
+type EmployerCompanyChoice = { id: string; legalName: string; customerId: string; address?: string };
 type AdminProfile = Record<
   'personal' | 'employment' | 'compensation' | 'tax' | 'vacation' | 'benefits' | 'banking',
   Record<string, string>
@@ -1273,6 +1273,14 @@ function reportDetailsHtml(details: Array<[string, string]>) {
     .join('')}</section>`;
 }
 
+function reportBrandHeader(title: string, trigger: Element) {
+  const shell = trigger.closest('.admin-shell') as HTMLElement | null;
+  const employerName = shell?.dataset.reportEmployerName || '';
+  const employerAddress = shell?.dataset.reportEmployerAddress || '';
+  const employerHtml = [employerName, employerAddress].filter(Boolean).map((line) => `<p>${htmlEscape(line)}</p>`).join('');
+  return `<header class="report-print-header"><div class="report-brand"><strong>Payhours</strong><span>Payroll Software</span></div><div class="report-title-block"><h1>${htmlEscape(title)}</h1>${employerHtml}</div></header>`;
+}
+
 function exportReportTable(
   format: ReportExportFormat,
   title: string,
@@ -1299,7 +1307,7 @@ function exportReportTable(
   const tablesHtml = tableGroups
     .map((rows) => `<table><tbody>${rows.map((row, rowIndex) => `<tr>${row.map((cell) => rowIndex === 0 ? `<th>${htmlEscape(cell)}</th>` : `<td>${htmlEscape(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`)
     .join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#0b2755}h1{font-size:22px;margin:0 0 14px}.report-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin:0 0 18px;font-size:12px}.report-details p{margin:0;border:1px solid #d9e2ec;padding:8px}.report-details strong{display:block;color:#385577;font-size:11px;margin-bottom:3px}.report-details span{display:block;color:#0b2755}table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:18px}th,td{border:1px solid #cfd8e3;padding:8px;text-align:left;vertical-align:top}th{background:#edf4fb;font-weight:700}tfoot td,tr:last-child td{font-weight:600}@media print{.report-details{grid-template-columns:repeat(2,minmax(0,1fr))}}</style></head><body><h1>${htmlEscape(title)}</h1>${reportDetailsHtml(details)}${tablesHtml}${format === 'pdf' ? '<script>window.print()</script>' : ''}</body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#0b2755}.report-print-header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:2px solid #0b75d1;padding-bottom:14px;margin-bottom:18px}.report-brand{display:flex;flex-direction:column;gap:3px;color:#0b75d1}.report-brand strong{font-size:24px;letter-spacing:.2px}.report-brand span{font-size:11px;text-transform:uppercase;color:#385577}.report-title-block{text-align:right}.report-title-block h1{font-size:22px;margin:0 0 8px}.report-title-block p{margin:2px 0;font-size:12px;color:#385577}h1{font-size:22px;margin:0 0 14px}.report-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin:0 0 18px;font-size:12px}.report-details p{margin:0;border:1px solid #d9e2ec;padding:8px}.report-details strong{display:block;color:#385577;font-size:11px;margin-bottom:3px}.report-details span{display:block;color:#0b2755}table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:18px}th,td{border:1px solid #cfd8e3;padding:8px;text-align:left;vertical-align:top}th{background:#edf4fb;font-weight:700}tfoot td,tr:last-child td{font-weight:600}@media print{.report-details{grid-template-columns:repeat(2,minmax(0,1fr))}}</style></head><body>${reportBrandHeader(title, event.currentTarget)}${reportDetailsHtml(details)}${tablesHtml}${format === 'pdf' ? '<script>window.print()</script>' : ''}</body></html>`;
   if (format === 'excel') {
     downloadTextFile(reportFilename(title, 'xls'), 'application/vnd.ms-excel;charset=utf-8', html);
     return;
@@ -2628,7 +2636,7 @@ function OldEmployerDashboard({
     year: 'numeric'
   });
   return (
-    <div className="admin-shell">
+    <div className="admin-shell" data-report-employer-name={data?.company.legalName || ''} data-report-employer-address={data?.company.address || ''}>
       <aside className="admin-sidebar">
         <Logo />
         {nav.map((item, index) => (
@@ -6634,7 +6642,7 @@ function EmployerDashboard({
       dashboard
     );
   return (
-    <div className="admin-shell">
+    <div className="admin-shell" data-report-employer-name={data?.company.legalName || ''} data-report-employer-address={data?.company.address || ''}>
       <aside className="admin-sidebar">
         <Logo />
         {nav.map((item) => (

@@ -627,12 +627,14 @@ router.get(
       company: {
         id: String(company?._id || companyId),
         legalName: company?.legalName || 'ABC Solutions Inc.',
-        customerId: company?.customerId || 'ABC001'
+        customerId: company?.customerId || 'ABC001',
+        address: addressLines(company?.address).join(', ')
       },
       companies: employerCompanies.map((item) => ({
         id: String(item._id),
         legalName: item.legalName,
-        customerId: item.customerId
+        customerId: item.customerId,
+        address: addressLines(item.address).join(', ')
       })),
       metrics: {
         totalEmployees: employeeCount,
