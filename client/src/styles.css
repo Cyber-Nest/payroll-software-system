@@ -5592,8 +5592,10 @@ th {
 }
 
 .payroll-steps {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(96px, 1fr));
   max-width: none;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .payroll-steps b {
@@ -5602,7 +5604,9 @@ th {
 }
 
 .payroll-steps span {
+  line-height: 1.25;
   min-height: 30px;
+  overflow-wrap: anywhere;
 }
 
 .wizard-card.with-side {
@@ -5662,7 +5666,11 @@ th {
 
 .payroll-selection-table td:last-child,
 .payroll-selection-table th:last-child {
-  width: 250px;
+  width: 280px;
+}
+
+.payroll-selection-table td:last-child {
+  white-space: normal;
 }
 
 .payroll-employee-table thead th {
@@ -5704,10 +5712,12 @@ th {
   display: flex;
   gap: 8px;
   margin: 8px 0 0;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .wizard-card table label input[type='checkbox'] {
+  flex: 0 0 16px;
   min-height: 16px;
   width: 16px;
 }
@@ -7264,7 +7274,7 @@ th {
   border: 1px solid #d6e1e9;
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
   margin-bottom: 18px;
   padding: 16px;
 }
@@ -7272,10 +7282,11 @@ th {
 .payroll-field-grid label,
 .payroll-note {
   color: #34495e;
-  display: flex;
+  display: grid;
   font-size: 12px;
   font-weight: 700;
   gap: 7px;
+  line-height: 1.25;
   min-width: 0;
 }
 .payroll-editor-dates input,
@@ -7336,7 +7347,8 @@ th {
 .payroll-employee-heading strong {
   color: #0d6641;
   margin-left: auto;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 .payroll-employee-editor h4 {
   color: #34495e;
@@ -7347,10 +7359,10 @@ th {
 .payroll-field-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
 }
 .payroll-field-grid.three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
 }
 .statutory-preview {
   background: #f6f9fb;
@@ -7376,7 +7388,7 @@ th {
 }
 .payroll-editor > footer {
   background: #fff;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .payroll-editor > footer > span {
@@ -7399,9 +7411,10 @@ th {
 .payroll-editor > footer > .run-payroll {
   background: #0878df;
   color: #fff;
-  min-width: 260px;
+  min-width: min(260px, 100%);
   padding: 0 26px;
   width: auto;
+  white-space: normal;
 }
 .payroll-editor > footer > .run-payroll:hover {
   background: #0568c5;
@@ -8031,5 +8044,125 @@ th {
   }
   .payroll-runs-table {
     min-width: 1080px;
+  }
+}
+
+/* Broad overflow hardening for dense admin screens. */
+.admin-shell,
+.admin-main,
+.admin-content,
+.module-page,
+.admin-panel,
+.wizard-card,
+.payroll-modal,
+.employee-wizard,
+.super-admin-shell {
+  min-width: 0;
+}
+
+.admin-panel,
+.wizard-card,
+.info-card,
+.metric-grid article,
+.paystubs-metrics article,
+.deductions-metrics article,
+.filings-metrics article,
+.payroll-run-summary,
+.deduction-type-detail,
+.filing-detail {
+  overflow-wrap: anywhere;
+}
+
+.admin-panel h1,
+.admin-panel h2,
+.admin-panel h3,
+.module-page h1,
+.module-page h2,
+.module-page h3,
+.wizard-card h2,
+.wizard-card h3,
+.payroll-modal h2,
+.payroll-modal p,
+.admin-topbar,
+.admin-sidebar button,
+.run-employer,
+.payroll-run-summary dd,
+.workflow-details dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-topbar,
+.wizard-actions,
+.paystub-actions,
+.paystubs-bulk,
+.deductions-pagination,
+.filings-pagination,
+.report-export,
+.deduction-editor-actions,
+.payroll-modal > footer {
+  flex-wrap: wrap;
+}
+
+.admin-topbar > *,
+.wizard-actions > *,
+.paystub-actions > *,
+.paystubs-bulk > *,
+.deductions-pagination > *,
+.filings-pagination > *,
+.report-export > *,
+.deduction-editor-actions > *,
+.payroll-modal > footer > * {
+  min-width: 0;
+}
+
+.admin-content input,
+.admin-content select,
+.admin-content textarea,
+.module-page input,
+.module-page select,
+.module-page textarea,
+.payroll-modal input,
+.payroll-modal select,
+.payroll-modal textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.admin-content table td,
+.admin-content table th,
+.module-page table td,
+.module-page table th {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .with-side,
+  .personal-layout,
+  .wizard-card.with-side,
+  .payroll-runs-layout,
+  .deduction-type-form,
+  .deduction-type-layout,
+  .deductions-layout,
+  .filings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-topbar,
+  .wizard-actions,
+  .paystub-actions,
+  .report-export,
+  .payroll-modal > footer {
+    align-items: stretch;
+  }
+
+  .admin-topbar > button,
+  .wizard-actions > button,
+  .paystub-actions > button,
+  .report-export > button,
+  .payroll-modal > footer > button {
+    width: 100%;
   }
 }

@@ -40,6 +40,11 @@ export class EmailService {
       to: message.to,
       subject: message.subject,
       text: message.body,
+      headers: {
+        'X-Auto-Response-Suppress': 'OOF, AutoReply',
+        'X-Priority': '3',
+        Importance: 'Normal'
+      },
       html: message.html
     });
   }
