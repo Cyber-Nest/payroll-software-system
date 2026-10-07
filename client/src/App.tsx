@@ -1409,13 +1409,10 @@ function Login({
   const [mode, setMode] = useState<LoginMode>('email');
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('admin@abcsolutions.ca');
-  const [resetEmail, setResetEmail] = useState('admin@abcsolutions.ca');
-  const [forgotOpen, setForgotOpen] = useState(false);
   const [customerId, setCustomerId] = useState('ABC001');
   const [employeeNumber, setEmployeeNumber] = useState('E1001');
   const [password, setPassword] = useState('Payhours1!');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   async function submit() {
     try {
       setError('');
@@ -1443,19 +1440,6 @@ function Login({
       onLogin(result.token, portal, portal === 'employer' ? result.companies : undefined);
     } catch (error) {
       setError(loginErrorMessage(error, t('loginError')));
-    }
-  }
-  async function forgotPassword() {
-    setError('');
-    setNotice('');
-    try {
-      const result = await api<{ message: string }>('/auth/forgot-password', undefined, {
-        method: 'POST',
-        body: JSON.stringify({ email: resetEmail })
-      });
-      setNotice(result.message);
-    } catch (error) {
-      setError(apiErrorMessage(error, 'Unable to send password reset email.'));
     }
   }
   return (
@@ -1546,18 +1530,9 @@ function Login({
           )}
           <div className="field-row">
             <span>{t('password')}</span>
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setResetEmail(email);
-                setForgotOpen((value) => !value);
-                setError('');
-                setNotice('');
-              }}
-            >
+            <a className="link-button" href="/forgot-password">
               {t('forgotPassword')}
-            </button>
+            </a>
           </div>
           <label className="password-input">
             <input
@@ -1569,25 +1544,10 @@ function Login({
               View
             </button>
           </label>
-          {forgotOpen && (
-            <div className="forgot-password-box">
-              <label>
-                Reset email address
-                <input
-                  value={resetEmail}
-                  onChange={(event) => setResetEmail(event.target.value)}
-                />
-              </label>
-              <button type="button" className="secondary" onClick={forgotPassword}>
-                Send reset link
-              </button>
-            </div>
-          )}
           <label className="check">
             <input type="checkbox" />
             Remember me
           </label>
-          {notice && <p className="success-note">{notice}</p>}
           {error && <p className="error">{error}</p>}
           <button className="primary blue" onClick={submit}>
             Sign In
@@ -1615,12 +1575,9 @@ function Login({
 
 function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal) => void }) {
   const [email, setEmail] = useState('superadmin@payhours.ca');
-  const [resetEmail, setResetEmail] = useState('superadmin@payhours.ca');
-  const [forgotOpen, setForgotOpen] = useState(false);
   const [password, setPassword] = useState('Payhours1!');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   async function submit() {
     try {
       setError('');
@@ -1638,19 +1595,6 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
           'Super admin login failed. Check your Payhours administrator credentials.'
         )
       );
-    }
-  }
-  async function forgotPassword() {
-    setError('');
-    setNotice('');
-    try {
-      const result = await api<{ message: string }>('/auth/forgot-password', undefined, {
-        method: 'POST',
-        body: JSON.stringify({ email: resetEmail })
-      });
-      setNotice(result.message);
-    } catch (error) {
-      setError(apiErrorMessage(error, 'Unable to send password reset email.'));
     }
   }
   return (
@@ -1705,18 +1649,9 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
           </label>
           <div className="field-row">
             <span>Password</span>
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setResetEmail(email);
-                setForgotOpen((value) => !value);
-                setError('');
-                setNotice('');
-              }}
-            >
+            <a className="link-button" href="/forgot-password">
               Forgot your password?
-            </button>
+            </a>
           </div>
           <label className="password-input">
             <input
@@ -1728,27 +1663,70 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
               View
             </button>
           </label>
-          {forgotOpen && (
-            <div className="forgot-password-box">
-              <label>
-                Reset email address
-                <input
-                  value={resetEmail}
-                  onChange={(event) => setResetEmail(event.target.value)}
-                />
-              </label>
-              <button type="button" className="secondary" onClick={forgotPassword}>
-                Send reset link
-              </button>
-            </div>
-          )}
-          {notice && <p className="success-note">{notice}</p>}
           {error && <p className="error">{error}</p>}
           <button className="primary blue" type="submit">
             Enter Super Admin
           </button>
           <a className="regular-login-link" href="/">
             Employer / Employee Login
+          </a>
+        </form>
+        <Footer compact />
+      </section>
+    </main>
+  );
+}
+
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    try {
+      const result = await api<{ message: string }>('/auth/forgot-password', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      setMessage(result.message);
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Unable to send password reset email.'));
+    }
+  }
+  return (
+    <main className="employer-login">
+      <section className="login-story">
+        <Logo />
+        <div>
+          <h1>Forgot Password</h1>
+          <p>Enter your Payhours email address to receive a password reset link.</p>
+        </div>
+      </section>
+      <section className="login-side">
+        <form className="employer-card" onSubmit={submit}>
+          <h2>
+            Reset
+            <br />
+            <strong>Password</strong>
+          </h2>
+          <label>
+            Email address
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </label>
+          {message && <p className="success-note">{message}</p>}
+          {error && <p className="error">{error}</p>}
+          <button className="primary blue" type="submit">
+            Send Reset Link
+          </button>
+          <a className="regular-login-link" href="/">
+            Back to sign in
           </a>
         </form>
         <Footer compact />
@@ -13898,6 +13876,7 @@ export default function App() {
   const [bulletins, setBulletins] = useState<Bulletin[]>([]);
   const [loadError, setLoadError] = useState('');
   const t: T = (key) => (lang === 'en' ? messages.en[key] : messages.en[key]) || key;
+  const isForgotPassword = window.location.pathname === '/forgot-password';
   const isResetPassword = window.location.pathname === '/reset-password';
   function setLang(next: Lang) {
     setLangState(next);
@@ -14193,6 +14172,7 @@ export default function App() {
     token
   ]);
 
+  if (isForgotPassword) return <ForgotPasswordPage />;
   if (isResetPassword) return <ResetPasswordPage />;
   if (!token) {
     const isSuperAdminLogin = ['/payhours-admin', '/super-admin-login'].includes(

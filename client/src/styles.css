@@ -3942,15 +3942,6 @@ td a {
   padding: 0 12px;
 }
 
-.forgot-password-box {
-  background: #f8fbfc;
-  border: 1px solid #d9e5ea;
-  border-radius: 8px;
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-}
-
 .check {
   align-items: center;
   display: flex;
