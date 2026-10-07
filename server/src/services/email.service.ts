@@ -18,9 +18,10 @@ export class EmailService {
   private getTransporter() {
     if (!this.transporter) {
       this.transporter = nodemailer.createTransport({
-        host: env.smtpHost,
+      /*   host: env.smtpHost,
         port: env.smtpPort,
-        secure: env.smtpSecure,
+        secure: env.smtpSecure, */
+        service: 'gmail',
         auth: {
           user: env.smtpUser,
           pass: env.smtpPass

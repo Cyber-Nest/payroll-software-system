@@ -5337,8 +5337,10 @@ function NewPayrollRun({
             return (
               <tr key={employee.employeeNumber}>
                 <td>
-                  <b>{employeeName(employee)}</b>
-                  <small>{details.employeeNumber}</small>
+                  <span className="payroll-employee-identity">
+                    <b>{employeeName(employee)}</b>
+                    <small>{details.employeeNumber}</small>
+                  </span>
                 </td>
                 <td>{details.jobTitle}</td>
                 <td>{details.department}</td>

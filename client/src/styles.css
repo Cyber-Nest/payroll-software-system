@@ -5757,6 +5757,68 @@ th {
   white-space: nowrap;
 }
 
+.payroll-wizard-table table {
+  min-width: 1640px;
+  table-layout: fixed;
+}
+
+.payroll-wizard-table th,
+.payroll-wizard-table td,
+.payroll-wizard-table tbody td {
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.payroll-wizard-table td {
+  line-height: 1.3;
+  padding: 12px 12px;
+}
+
+.payroll-wizard-table td:nth-child(1),
+.payroll-wizard-table th:nth-child(1) {
+  width: 180px;
+}
+
+.payroll-wizard-table td:nth-child(2),
+.payroll-wizard-table th:nth-child(2),
+.payroll-wizard-table td:nth-child(3),
+.payroll-wizard-table th:nth-child(3) {
+  width: 165px;
+}
+
+.payroll-wizard-table td:nth-child(4),
+.payroll-wizard-table th:nth-child(4) {
+  width: 120px;
+}
+
+.payroll-wizard-table td:nth-child(n + 5),
+.payroll-wizard-table th:nth-child(n + 5) {
+  width: 120px;
+}
+
+.payroll-employee-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.payroll-employee-identity b,
+.payroll-employee-identity small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.payroll-employee-identity small {
+  color: #47617e;
+  font-size: 11px;
+}
+
+.wizard-card > .wizard-check {
+  margin-top: 12px;
+}
+
 .wizard-card table th {
   color: #082b65;
   font-size: 12px;
