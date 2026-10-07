@@ -1161,6 +1161,16 @@ function loginErrorMessage(error: unknown, fallback: string) {
     : fallback;
 }
 
+function apiErrorMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : '';
+  try {
+    const parsed = JSON.parse(message) as { message?: string };
+    return parsed.message || fallback;
+  } catch {
+    return message || fallback;
+  }
+}
+
 function LanguageSelect({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) => void }) {
   return (
     <select
@@ -1399,6 +1409,8 @@ function Login({
   const [mode, setMode] = useState<LoginMode>('email');
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('admin@abcsolutions.ca');
+  const [resetEmail, setResetEmail] = useState('admin@abcsolutions.ca');
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [customerId, setCustomerId] = useState('ABC001');
   const [employeeNumber, setEmployeeNumber] = useState('E1001');
   const [password, setPassword] = useState('Payhours1!');
@@ -1436,11 +1448,15 @@ function Login({
   async function forgotPassword() {
     setError('');
     setNotice('');
-    await api<{ message: string }>('/auth/forgot-password', undefined, {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-    setNotice('If that account exists, a reset email has been sent.');
+    try {
+      const result = await api<{ message: string }>('/auth/forgot-password', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ email: resetEmail })
+      });
+      setNotice(result.message);
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Unable to send password reset email.'));
+    }
   }
   return (
     <main className="employer-login">
@@ -1530,7 +1546,16 @@ function Login({
           )}
           <div className="field-row">
             <span>{t('password')}</span>
-            <button type="button" className="link-button" onClick={forgotPassword}>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setResetEmail(email);
+                setForgotOpen((value) => !value);
+                setError('');
+                setNotice('');
+              }}
+            >
               {t('forgotPassword')}
             </button>
           </div>
@@ -1544,6 +1569,20 @@ function Login({
               View
             </button>
           </label>
+          {forgotOpen && (
+            <div className="forgot-password-box">
+              <label>
+                Reset email address
+                <input
+                  value={resetEmail}
+                  onChange={(event) => setResetEmail(event.target.value)}
+                />
+              </label>
+              <button type="button" className="secondary" onClick={forgotPassword}>
+                Send reset link
+              </button>
+            </div>
+          )}
           <label className="check">
             <input type="checkbox" />
             Remember me
@@ -1576,6 +1615,8 @@ function Login({
 
 function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal) => void }) {
   const [email, setEmail] = useState('superadmin@payhours.ca');
+  const [resetEmail, setResetEmail] = useState('superadmin@payhours.ca');
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [password, setPassword] = useState('Payhours1!');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -1602,11 +1643,15 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
   async function forgotPassword() {
     setError('');
     setNotice('');
-    await api<{ message: string }>('/auth/forgot-password', undefined, {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-    setNotice('If that account exists, a reset email has been sent.');
+    try {
+      const result = await api<{ message: string }>('/auth/forgot-password', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ email: resetEmail })
+      });
+      setNotice(result.message);
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Unable to send password reset email.'));
+    }
   }
   return (
     <main className="employer-login super-admin-login">
@@ -1660,7 +1705,16 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
           </label>
           <div className="field-row">
             <span>Password</span>
-            <button type="button" className="link-button" onClick={forgotPassword}>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setResetEmail(email);
+                setForgotOpen((value) => !value);
+                setError('');
+                setNotice('');
+              }}
+            >
               Forgot your password?
             </button>
           </div>
@@ -1674,6 +1728,20 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
               View
             </button>
           </label>
+          {forgotOpen && (
+            <div className="forgot-password-box">
+              <label>
+                Reset email address
+                <input
+                  value={resetEmail}
+                  onChange={(event) => setResetEmail(event.target.value)}
+                />
+              </label>
+              <button type="button" className="secondary" onClick={forgotPassword}>
+                Send reset link
+              </button>
+            </div>
+          )}
           {notice && <p className="success-note">{notice}</p>}
           {error && <p className="error">{error}</p>}
           <button className="primary blue" type="submit">
@@ -1699,14 +1767,18 @@ function ResetPasswordPage() {
     event.preventDefault();
     setError('');
     setMessage('');
+    if (newPassword !== confirmPassword) {
+      setError('Your two passwords are incorrect, please correct them.');
+      return;
+    }
     try {
       await api<{ message: string }>('/auth/reset-password', undefined, {
         method: 'POST',
         body: JSON.stringify({ token, newPassword, confirmPassword })
       });
       setMessage('Password reset complete. You can sign in with your new password.');
-    } catch {
-      setError('Reset link is invalid, expired, or the password does not meet the rules.');
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Reset link is invalid, expired, or the password does not meet the rules.'));
     }
   }
   return (

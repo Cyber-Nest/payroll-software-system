@@ -66,15 +66,16 @@ router.post('/login-customer-id', async (req, res) => {
 
 router.post('/forgot-password', async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
-  if (parsed.success) {
-    await requestPasswordReset(parsed.data.email);
-  }
-  res.json({ message: 'If the account exists, a reset email has been sent.' });
+  if (!parsed.success) return res.status(400).json({ message: 'Enter a valid email address.' });
+  const sent = await requestPasswordReset(parsed.data.email);
+  if (!sent) return res.status(404).json({ message: 'No active Payhours account uses that email address.' });
+  res.json({ message: 'Password reset link sent. Check your email.' });
 });
 
 router.post('/reset-password', async (req, res) => {
   const parsed = z.object({ token: z.string().min(20), newPassword: z.string(), confirmPassword: z.string() }).safeParse(req.body);
-  if (!parsed.success || parsed.data.newPassword !== parsed.data.confirmPassword) return res.status(400).json({ message: 'Invalid password reset request' });
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid password reset request' });
+  if (parsed.data.newPassword !== parsed.data.confirmPassword) return res.status(400).json({ message: 'Your two passwords are incorrect, please correct them.' });
   const failures = validatePasswordRules(parsed.data.newPassword, '');
   if (failures.length) return res.status(400).json({ message: 'Password does not meet Payhours rules', failures });
   const ok = await resetPassword(parsed.data.token, parsed.data.newPassword);

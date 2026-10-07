@@ -27,9 +27,9 @@ async function findResetAccount(email: string): Promise<ResetAccount | undefined
   return undefined;
 }
 
-export async function requestPasswordReset(email: string): Promise<void> {
+export async function requestPasswordReset(email: string): Promise<boolean> {
   const account = await findResetAccount(email);
-  if (!account) return;
+  if (!account) return false;
   await PasswordResetToken.updateMany({ accountType: account.accountType, accountId: account.accountId, usedAt: undefined }, { usedAt: new Date() });
   const token = crypto.randomBytes(32).toString('hex');
   await PasswordResetToken.create({
@@ -52,6 +52,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
       'If you did not request this, you can ignore this email.'
     ].join('\n')
   });
+  return true;
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<boolean> {
