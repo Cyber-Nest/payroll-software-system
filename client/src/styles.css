@@ -882,7 +882,7 @@ button {
 .task-list-body {
   display: grid;
   gap: 10px;
-  max-height: min(62vh, 560px);
+  max-height: min(72vh, 640px);
   overflow: auto;
 }
 
@@ -2093,10 +2093,16 @@ button {
 .alert-row {
   align-items: center;
   border-top: 1px solid #e5edf5;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin: 0;
   padding: 12px 0;
+}
+
+.activity-row span,
+.alert-row span {
+  min-width: 0;
 }
 
 .alert-row button {
@@ -2105,7 +2111,10 @@ button {
   border-radius: 5px;
   color: #0875dd;
   font-weight: 800;
+  min-height: 34px;
+  min-width: 86px;
   padding: 7px 16px;
+  white-space: nowrap;
 }
 
 .employee-head {
@@ -2917,8 +2926,8 @@ textarea {
 .filings-table-wrap th { color: #092e97; }
 .filings-table-wrap tr.selected { background: #eef6ff; }
 .filings-table-wrap td:nth-child(2) { max-width: 230px; white-space: normal; }
-.filings-table-wrap td:last-child { display: flex; gap: 5px; }
-.filings-table-wrap td:last-child button { background: #fff; border: 1px solid #cadbea; border-radius: 4px; color: #0750c9; min-height: 32px; padding: 5px 9px; }
+.filings-table-wrap td:last-child { align-items: center; display: flex; gap: 5px; }
+.filings-table-wrap td:last-child button { background: #fff; border: 1px solid #cadbea; border-radius: 4px; color: #0750c9; min-height: 32px; min-width: 66px; padding: 5px 9px; white-space: nowrap; }
 .filing-status { border-radius: 4px; display: inline-block; font-size: 10px; font-weight: 800; padding: 5px 9px; }
 .filing-status.filed { background: #d9f8e8; color: #087b4b; }
 .filing-status.pending { background: #e9eef8; color: #455a7d; }
@@ -2930,7 +2939,7 @@ textarea {
 .filing-detail > header > div > span { align-items: center; background: #e7efff; border-radius: 50%; color: #0752d8; display: flex; flex: 0 0 46px; font-size: 10px; font-weight: 900; height: 46px; justify-content: center; }
 .filing-detail h2 { color: #10266e; font-size: 16px; margin: 0; overflow-wrap: anywhere; }
 .filing-detail header p { color: #5a70a5; font-size: 12px; margin: 3px 0 0; }
-.filing-detail header > button { background: transparent; border: 0; color: #163f99; font-size: 24px; }
+.filing-detail header > button { align-items: center; background: transparent; border: 0; color: #163f99; display: inline-flex; flex: 0 0 32px; font-size: 20px; height: 32px; justify-content: center; line-height: 1; }
 .filing-detail-tabs { border-bottom: 1px solid #d6e3f3; display: flex; gap: 28px; padding: 0 13px; }
 .filing-detail-tabs b, .filing-detail-tabs span { padding: 10px 0; }
 .filing-detail-tabs b { border-bottom: 2px solid #0752d8; }
@@ -2940,14 +2949,14 @@ textarea {
 .filing-detail dl { display: grid; font-size: 12px; gap: 10px 12px; grid-template-columns: 1fr 1.35fr; margin: 0; padding: 13px; }
 .filing-detail dt { color: #5870a8; }
 .filing-detail dd { color: #10266e; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
-.filing-detail > footer { border-top: 1px solid #d6e3f3; display: flex; gap: 9px; padding: 13px; }
-.filing-detail > footer button { background: #0752d8; border: 1px solid #0752d8; border-radius: 4px; color: #fff; min-height: 40px; padding: 8px 13px; }
+.filing-detail > footer { border-top: 1px solid #d6e3f3; display: grid; gap: 9px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); padding: 13px; }
+.filing-detail > footer button { background: #0752d8; border: 1px solid #0752d8; border-radius: 4px; color: #fff; min-height: 40px; padding: 8px 13px; width: 100%; }
 .filing-detail > footer button:first-child { background: #fff; color: #0752d8; }
 .filings-pagination { align-items: center; display: flex; font-size: 12px; justify-content: space-between; margin-top: 16px; }
 .filings-pagination > div { align-items: center; display: flex; gap: 6px; }
-.filings-pagination button, .filings-pagination select { background: #fff; border: 1px solid #cadbea; border-radius: 4px; color: #0752d8; min-height: 38px; padding: 7px 11px; }
+.filings-pagination button, .filings-pagination select { background: #fff; border: 1px solid #cadbea; border-radius: 4px; color: #0752d8; min-height: 38px; min-width: 58px; padding: 7px 11px; }
 @media (max-width: 1180px) { .filings-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .filings-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filings-search { grid-column: span 2; } .filings-layout { grid-template-columns: 1fr; } }
-@media (max-width: 650px) { .filings-metrics, .filings-filters { grid-template-columns: 1fr; } .filings-search { grid-column: auto; } .filings-pagination { align-items: flex-start; flex-direction: column; gap: 10px; } .filing-detail > footer { flex-direction: column; } }
+@media (max-width: 650px) { .filings-metrics, .filings-filters { grid-template-columns: 1fr; } .filings-search { grid-column: auto; } .filings-pagination { align-items: flex-start; flex-direction: column; gap: 10px; } .filing-detail > footer { grid-template-columns: 1fr; } }
 @media (max-width: 1100px) { .paystubs-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .paystubs-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .paystub-layout { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .paystub-statement-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .paystub-statement-meta div:nth-child(2n) { border-right: 0; } .paystub-statement-meta div:nth-child(4n) { border-right: 0; } }
 @media (max-width: 600px) { .paystubs-metrics { grid-template-columns: 1fr; } .paystubs-filters { grid-template-columns: 1fr; } .paystubs-bulk { flex-wrap: wrap; } .paystubs-bulk .paystubs-primary { margin-left: 0; } .paystubs-pagination { flex-wrap: wrap; } .paystub-preview { padding: 10px; } .paystub-preview .employee-head, .paystub-preview-actions { align-items: flex-start; flex-direction: column; } .paystub-statement { padding: 12px; } .paystub-statement header { align-items: flex-start; flex-direction: column; } .paystub-statement header b { font-size: 20px; } .paystub-statement-section { overflow-x: auto; } .paystub-statement-section table { min-width: 620px; } .paystub-net-pay { grid-template-columns: 1fr auto; } .paystub-net-pay span { font-size: 15px; } .paystub-net-pay strong { font-size: 18px; } }
@@ -5665,6 +5674,7 @@ th {
 }
 
 .payroll-wizard-table table {
+  min-width: 1560px;
   table-layout: fixed;
 }
 
@@ -5676,6 +5686,7 @@ th {
 .payroll-wizard-table td {
   overflow-wrap: anywhere;
   vertical-align: middle;
+  white-space: normal;
 }
 
 .payroll-wizard-table td {
@@ -5684,12 +5695,39 @@ th {
 
 .payroll-wizard-table td:nth-child(1),
 .payroll-wizard-table th:nth-child(1) {
-  width: 92px;
+  width: 170px;
 }
 
 .payroll-wizard-table td:nth-child(2),
 .payroll-wizard-table th:nth-child(2) {
+  width: 150px;
+}
+
+.payroll-wizard-table td:nth-child(3),
+.payroll-wizard-table th:nth-child(3) {
+  width: 150px;
+}
+
+.payroll-wizard-table td:nth-child(4),
+.payroll-wizard-table th:nth-child(4) {
   width: 120px;
+}
+
+.payroll-wizard-table td:nth-child(n + 5),
+.payroll-wizard-table th:nth-child(n + 5) {
+  width: 118px;
+}
+
+.payroll-wizard-table td:first-child b,
+.payroll-wizard-table td:first-child small {
+  display: block;
+  line-height: 1.25;
+}
+
+.payroll-wizard-table td:first-child small {
+  color: #47617e;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 .payroll-selection-table td:nth-child(6),

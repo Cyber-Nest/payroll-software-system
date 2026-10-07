@@ -6515,7 +6515,7 @@ function EmployerDashboard({
                 <h2 id="task-list-title">Action Required</h2>
                 <p>{data?.metrics.actionRequired || 0} open tasks need review.</p>
               </div>
-              <button type="button" aria-label="Close task list" onClick={() => setShowTaskPopup(false)}>×</button>
+              <button type="button" aria-label="Close task list" onClick={() => setShowTaskPopup(false)}>x</button>
             </header>
             <div className="payroll-modal-body task-list-body">
               {(data?.alerts || []).map(([text, action, tone], index) => (

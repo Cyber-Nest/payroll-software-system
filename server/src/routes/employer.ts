@@ -543,7 +543,7 @@ router.get(
       PayrollRun.findOne({ companyId, payDate: { $gte: now } }).sort({ payDate: 1 }),
       PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: 1 }),
       GovernmentFiling.find({ companyId, status: { $in: ['pending', 'prepared', 'overdue'] } }).sort({ dueDate: 1 }),
-      PayrollRun.find({ companyId, status: { $in: ['draft', 'in_review', 'approved'] } }).sort({ payDate: 1 }).limit(10),
+      PayrollRun.find({ companyId, status: { $in: ['draft', 'in_review', 'approved'] } }).sort({ payDate: 1 }),
       AuditLog.find({ companyId }).sort({ createdAt: -1 }).limit(5),
       PayrollRun.find({ companyId }).sort({ payDate: -1 })
     ]);
@@ -599,7 +599,8 @@ router.get(
       }, 0);
       return runSum + runLiability;
     }, 0);
-    const actionRequired = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status)).length + actionRuns.length;
+    const requiredFilings = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status));
+    const actionRequired = requiredFilings.length + actionRuns.length;
     const relativeTime = (date: Date) => {
       const minutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
       if (minutes < 60) return `${minutes || 1} minute${minutes === 1 ? '' : 's'} ago`;
@@ -618,12 +619,12 @@ router.get(
       relativeTime(log.createdAt)
     ] as [string, string]);
     const alerts = [
-      ...filings.slice(0, 3).map((filing) => [
+      ...requiredFilings.map((filing) => [
         `${filing.title} due ${dateLabel(filing.dueDate)}${moneyToNumber(filing.amount) ? ` (${formatMoney(filing.amount)})` : ''}`,
         filing.status === 'overdue' ? 'Review' : 'View',
         filing.status === 'overdue' ? 'danger' : 'warning'
       ] as [string, string, string]),
-      ...actionRuns.slice(0, 3).map((run) => [
+      ...actionRuns.map((run) => [
         `Payroll run ${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} is ${run.status}`,
         'Open',
         run.status === 'draft' ? 'info' : 'warning'
