@@ -536,7 +536,7 @@ router.get(
     const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     await syncGovernmentFilings(companyId);
-    const [company, employer, employeeCount, latestRun, statements, filings, actionRuns, recentLogs] = await Promise.all([
+    const [company, employer, employeeCount, latestRun, statements, filings, actionRuns, recentLogs, payrollRuns] = await Promise.all([
       Company.findById(companyId),
       EmployerUser.findById(req.employerContext?.employerUserId),
       Employee.countDocuments({ companyId }),
@@ -544,7 +544,8 @@ router.get(
       PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: 1 }),
       GovernmentFiling.find({ companyId, status: { $in: ['pending', 'prepared', 'overdue'] } }).sort({ dueDate: 1 }),
       PayrollRun.find({ companyId, status: { $in: ['draft', 'in_review', 'approved'] } }).sort({ payDate: 1 }).limit(10),
-      AuditLog.find({ companyId }).sort({ createdAt: -1 }).limit(5)
+      AuditLog.find({ companyId }).sort({ createdAt: -1 }).limit(5),
+      PayrollRun.find({ companyId }).sort({ payDate: -1 })
     ]);
     const employerCompanyIds = employer
       ? Array.from(
@@ -589,8 +590,15 @@ router.get(
         amount
       };
     });
-    const remittanceFilings = filings.filter((filing) => filing.type === 'CRA_REMITTANCE');
-    const governmentLiabilities = moneyToNumber(sumMoney(remittanceFilings.map((filing) => filing.amount)));
+    const governmentLiabilities = payrollRuns.reduce((runSum, run) => {
+      const runLiability = (run.lines || []).reduce((lineSum, line) => {
+        const employeeCpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
+        const employeeEi = moneyToNumber(line.ei);
+        const incomeTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
+        return lineSum + employeeCpp + employeeEi + incomeTax + employeeCpp + Number((employeeEi * 1.4).toFixed(2));
+      }, 0);
+      return runSum + runLiability;
+    }, 0);
     const actionRequired = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status)).length + actionRuns.length;
     const relativeTime = (date: Date) => {
       const minutes = Math.max(0, Math.round((now.getTime() - date.getTime()) / 60000));
