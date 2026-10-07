@@ -8,8 +8,8 @@ export interface EmailMessage {
   html?: string;
 }
 
-function smtpConfigured() {
-  return Boolean(env.smtpHost && env.smtpUser && env.smtpPass);
+function emailConfigured() {
+  return Boolean(env.smtpUser && env.smtpPass);
 }
 
 export class EmailService {
@@ -17,23 +17,29 @@ export class EmailService {
 
   private getTransporter() {
     if (!this.transporter) {
-      this.transporter = nodemailer.createTransport({
-      /*   host: env.smtpHost,
-        port: env.smtpPort,
-        secure: env.smtpSecure, */
-        service: 'gmail',
-        auth: {
-          user: env.smtpUser,
-          pass: env.smtpPass
-        }
-      });
+      const auth = {
+        user: env.smtpUser,
+        pass: env.smtpPass
+      };
+
+      this.transporter = env.smtpHost
+        ? nodemailer.createTransport({
+            host: env.smtpHost,
+            port: env.smtpPort,
+            secure: env.smtpSecure,
+            auth
+          })
+        : nodemailer.createTransport({
+            service: 'gmail',
+            auth
+          });
     }
     return this.transporter;
   }
 
   async send(message: EmailMessage): Promise<void> {
-    if (!smtpConfigured()) {
-      throw new Error('SMTP email is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASS.');
+    if (!emailConfigured()) {
+      throw new Error('Email is not configured. Set EMAIL_USER and EMAIL_PASS, or SMTP_USER and SMTP_PASS.');
     }
 
     await this.getTransporter().sendMail({
