@@ -6333,6 +6333,7 @@ function EmployerDashboard({
   const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
   const money = (value = 0) => `$ ${value.toLocaleString('en-CA')}`;
   const next = data?.nextPayroll;
+  const [showTaskPopup, setShowTaskPopup] = useState(false);
   const todayLabel = new Date().toLocaleDateString('en-CA', {
     weekday: 'long',
     month: 'long',
@@ -6441,7 +6442,7 @@ function EmployerDashboard({
           <span className="ui-icon alert" aria-hidden="true"></span>
           <p>Action Required</p>
           <strong>{data?.metrics.actionRequired || 0}</strong>
-          <button type="button" className="metric-link" onClick={() => setAdminPage('Government Filings')}>View Tasks</button>
+          <button type="button" className="metric-link" onClick={() => setShowTaskPopup(true)}>View Tasks</button>
         </article>
       </div>
       <div className="admin-grid">
@@ -6506,6 +6507,31 @@ function EmployerDashboard({
           {!data?.alerts.length && <p className="report-empty">No open alerts.</p>}
         </section>
       </div>
+      {showTaskPopup && (
+        <div className="payroll-modal-backdrop" onClick={() => setShowTaskPopup(false)}>
+          <section className="payroll-modal task-list-modal" role="dialog" aria-modal="true" aria-labelledby="task-list-title" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <h2 id="task-list-title">Action Required</h2>
+                <p>{data?.metrics.actionRequired || 0} open tasks need review.</p>
+              </div>
+              <button type="button" aria-label="Close task list" onClick={() => setShowTaskPopup(false)}>×</button>
+            </header>
+            <div className="payroll-modal-body task-list-body">
+              {(data?.alerts || []).map(([text, action, tone], index) => (
+                <p className={`alert-row ${tone}`} key={`${text}-${index}`}>
+                  <span>{text}</span>
+                  <button type="button" onClick={() => {
+                    setShowTaskPopup(false);
+                    setAdminPage(text.startsWith('Payroll run') ? 'Payroll' : 'Government Filings');
+                  }}>{action}</button>
+                </p>
+              ))}
+              {!data?.alerts.length && <p className="report-empty">No open tasks.</p>}
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
   const content =

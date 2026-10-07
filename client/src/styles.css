@@ -875,6 +875,17 @@ button {
   text-decoration: underline;
 }
 
+.task-list-modal {
+  max-width: 720px;
+}
+
+.task-list-body {
+  display: grid;
+  gap: 10px;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+
 .admin-content {
   min-width: 0;
   padding: 26px;

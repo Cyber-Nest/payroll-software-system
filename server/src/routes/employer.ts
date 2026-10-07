@@ -628,7 +628,7 @@ router.get(
         'Open',
         run.status === 'draft' ? 'info' : 'warning'
       ] as [string, string, string])
-    ].slice(0, 5);
+    ];
 
     res.json({
       user: { name: employer?.name || 'Admin User', role: normalizeRole(employer?.role) },
