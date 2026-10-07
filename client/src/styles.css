@@ -1430,12 +1430,17 @@ button {
 }
 
 .payroll-report-filters > button {
+  align-self: end;
   background: #fff;
   border: 1px solid #cbddec;
   border-radius: 4px;
   color: #0751c8;
   font-weight: 800;
   height: 40px;
+}
+
+.payroll-report-filters.hours-report-filters {
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
 }
 
 .payroll-report-layout {
