@@ -6435,13 +6435,13 @@ function EmployerDashboard({
           <span className="ui-icon tax" aria-hidden="true"></span>
           <p>Government Liabilities</p>
           <strong>{money(data?.metrics.governmentLiabilities || 0)}</strong>
-          <small>Open filings</small>
+          <button type="button" className="metric-link" onClick={() => setAdminPage('Government Filings')}>Open filings</button>
         </article>
         <article>
           <span className="ui-icon alert" aria-hidden="true"></span>
           <p>Action Required</p>
           <strong>{data?.metrics.actionRequired || 0}</strong>
-          <small>View Tasks</small>
+          <button type="button" className="metric-link" onClick={() => setAdminPage('Government Filings')}>View Tasks</button>
         </article>
       </div>
       <div className="admin-grid">
