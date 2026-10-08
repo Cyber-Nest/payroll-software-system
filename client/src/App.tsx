@@ -446,10 +446,10 @@ type EmployerDeductionsReport = {
   rows: Array<{ index: number; employeeName: string; employeeNumber: string; department: string; payGroup: string; employmentType: string; grossPay: number; cpp: number; ei: number; federalTax: number; provincialTax: number; otherDeductions: number; totalDeductions: number }>;
 };
 type EmployerGovernmentLiabilitiesReport = {
-  metrics: { payPeriods: number; totalLiabilities: string; paidAmount: string; unpaidAmount: string };
-  filters: { payPeriods: string[]; statuses: string[] };
-  summary: { employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number };
-  rows: Array<{ index: number; payPeriod: string; employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; status: string }>;
+  metrics: { payPeriods: number; totalLiabilities: string; paidAmount: string; unpaidAmount: string; outstandingLiabilities: string };
+  filters: { payPeriods: string[]; departments: string[]; employees: string[]; payGroups: string[]; remittancePeriods: string[]; statuses: string[] };
+  summary: { employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; outstandingLiability: number; hours: number; grossPay: number; deductions: number; netPay: number; employerCosts: number };
+  rows: Array<{ index: number; rowKey: string; runId: string; employeeName: string; employeeNumber: string; department: string; payGroup: string; hours: number; grossPay: number; deductions: number; netPay: number; employerCosts: number; payPeriod: string; payDate: string; remittancePeriod: string; remittanceDueDate: string; employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; outstandingLiability: number; status: string }>;
 };
 type EmployerHistoryReport = {
   metrics: { totalEmployees: number; fullTime: number; partTime: number; currentlyActive: number; onLeave: number; totalPositionChanges: number; averageTenure: number; asOf: string };
@@ -7753,48 +7753,66 @@ function EmployerGovernmentLiabilitiesReportPage({ token, onBack }: { token: str
   const [data, setData] = useState<EmployerGovernmentLiabilitiesReport>();
   const [error, setError] = useState('');
   const [status, setStatus] = useState('All Statuses');
+  const [department, setDepartment] = useState('All Departments');
+  const [employee, setEmployee] = useState('All Employees');
+  const [payGroup, setPayGroup] = useState('All Pay Groups');
+  const [remittancePeriod, setRemittancePeriod] = useState('All Remittance Periods');
   useEffect(() => {
     api<EmployerGovernmentLiabilitiesReport>('/employer/reports/government-liabilities', token)
       .then((result) => { setData(result); setError(''); })
       .catch(() => { setData(undefined); setError('Unable to load government liabilities report data from the database.'); });
   }, [token]);
   const moneyValue = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const visibleRows = (data?.rows || []).filter((row) => matchesFilter(row.status, status, 'All Statuses'));
+  const visibleRows = (data?.rows || [])
+    .filter((row) => matchesFilter(row.status, status, 'All Statuses'))
+    .filter((row) => matchesFilter(row.department, department, 'All Departments'))
+    .filter((row) => matchesFilter(row.employeeName, employee, 'All Employees'))
+    .filter((row) => matchesFilter(row.payGroup, payGroup, 'All Pay Groups'))
+    .filter((row) => matchesFilter(row.remittancePeriod, remittancePeriod, 'All Remittance Periods'));
   const totals = visibleRows.reduce((sum, row) => ({
+    hours: sum.hours + row.hours,
+    grossPay: sum.grossPay + row.grossPay,
+    deductions: sum.deductions + row.deductions,
+    netPay: sum.netPay + row.netPay,
+    employerCosts: sum.employerCosts + row.employerCosts,
     employeeCpp: sum.employeeCpp + row.employeeCpp,
     employeeEi: sum.employeeEi + row.employeeEi,
     incomeTax: sum.incomeTax + row.incomeTax,
     employerCpp: sum.employerCpp + row.employerCpp,
     employerEi: sum.employerEi + row.employerEi,
-    totalLiability: sum.totalLiability + row.totalLiability
-  }), { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0 });
+    totalLiability: sum.totalLiability + row.totalLiability,
+    outstandingLiability: sum.outstandingLiability + row.outstandingLiability
+  }), { hours: 0, grossPay: 0, deductions: 0, netPay: 0, employerCosts: 0, employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0, outstandingLiability: 0 });
   return (
     <section className="payroll-report-page">
       <div className="report-breadcrumb">Reports <span>&gt;</span> Tax & Compliance <span>&gt;</span> Government Liabilities Report</div>
-      <header className="reports-head payroll-report-head"><div><h1>Government Liabilities Report</h1><p>View employee and employer CPP, EI and income tax liabilities by pay period.</p></div><button type="button" className="reports-back" onClick={onBack}>Back</button></header>
+      <header className="reports-head payroll-report-head"><div><h1>Government Liabilities Report</h1><p>Payroll-style liability rows generated automatically from finalized payroll runs.</p></div><button type="button" className="reports-back" onClick={onBack}>Back</button></header>
       {error && <p className="report-empty">{error}</p>}
       {!data && !error && <p className="report-empty">Loading government liabilities report...</p>}
       {data && <>
         <div className="report-metrics payroll-report-metrics">
-          <article><span>cal</span><p>Pay Periods</p><strong>{visibleRows.length}</strong><small>Matching status</small></article>
-          <article><span>$</span><p>Total Liabilities</p><strong>{moneyValue(totals.totalLiability)}</strong><small>Employee and employer</small></article>
+          <article><span>cal</span><p>Rows</p><strong>{visibleRows.length}</strong><small>Matching filters</small></article>
+          <article><span>$</span><p>Total Liabilities</p><strong>{moneyValue(totals.totalLiability)}</strong><small>Before remittance payments</small></article>
           <article><span>paid</span><p>Paid</p><strong>{data.metrics.paidAmount}</strong><small>Filed CRA remittances</small></article>
-          <article><span>due</span><p>Unpaid</p><strong>{data.metrics.unpaidAmount}</strong><small>Pending or prepared</small></article>
+          <article><span>due</span><p>Outstanding</p><strong>{moneyValue(totals.outstandingLiability)}</strong><small>After paid remittances</small></article>
         </div>
         <div className="payroll-report-filters hours-report-filters">
-          <label>Pay Period<select value={data.filters.payPeriods[0] || ''} onChange={() => undefined}>{data.filters.payPeriods.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Department<select value={department} onChange={(event) => setDepartment(event.target.value)}>{data.filters.departments.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Employee<select value={employee} onChange={(event) => setEmployee(event.target.value)}>{data.filters.employees.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Pay Group<select value={payGroup} onChange={(event) => setPayGroup(event.target.value)}>{data.filters.payGroups.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Remittance Period<select value={remittancePeriod} onChange={(event) => setRemittancePeriod(event.target.value)}>{data.filters.remittancePeriods.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{data.filters.statuses.map((item) => <option key={item}>{item}</option>)}</select></label>
-          <button type="button" onClick={() => setStatus('All Statuses')}>Clear Filters</button>
+          <button type="button" onClick={() => { setStatus('All Statuses'); setDepartment('All Departments'); setEmployee('All Employees'); setPayGroup('All Pay Groups'); setRemittancePeriod('All Remittance Periods'); }}>Clear Filters</button>
         </div>
         <div className="payroll-report-layout">
-          <section className="payroll-report-main"><header><div><h2>Government Liabilities Report</h2><p>Pay period liability amounts split between employee deductions and employer contributions.</p></div><ReportExportButtons title="Government Liabilities Report" /></header>
-            <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Pay Period</th><th>Employee CPP</th><th>Employee EI</th><th>Income Tax</th><th>Employer CPP</th><th>Employer EI</th><th>Total Liability</th><th>Status</th></tr></thead><tbody>
-              {visibleRows.map((row, index) => <tr key={row.payPeriod}><td>{index + 1}</td><td>{row.payPeriod}</td><td>{moneyValue(row.employeeCpp)}</td><td>{moneyValue(row.employeeEi)}</td><td>{moneyValue(row.incomeTax)}</td><td>{moneyValue(row.employerCpp)}</td><td>{moneyValue(row.employerEi)}</td><td><b>{moneyValue(row.totalLiability)}</b></td><td>{row.status}</td></tr>)}
-              {!visibleRows.length && <tr><td colSpan={9}>No government liability records found in the database.</td></tr>}
-            </tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Pay Periods</td><td>{moneyValue(totals.employeeCpp)}</td><td>{moneyValue(totals.employeeEi)}</td><td>{moneyValue(totals.incomeTax)}</td><td>{moneyValue(totals.employerCpp)}</td><td>{moneyValue(totals.employerEi)}</td><td>{moneyValue(totals.totalLiability)}</td><td></td></tr></tfoot></table></div>
-            <footer><span>Showing {visibleRows.length ? 1 : 0} - {visibleRows.length} of {visibleRows.length} pay periods</span><div><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button></div><select defaultValue="25"><option>25 / page</option></select></footer>
+          <section className="payroll-report-main"><header><div><h2>Government Liabilities Report</h2><p>Same payroll columns plus CRA remittance status. YTD is excluded.</p></div><ReportExportButtons title="Government Liabilities Report" /></header>
+            <div className="payroll-report-table-wrap"><table className="payroll-report-table"><thead><tr><th>#</th><th>Employee</th><th>Employee ID</th><th>Department</th><th>Pay Group</th><th>Hours</th><th>Gross Pay</th><th>Deductions</th><th>Net Pay</th><th>Employer Costs</th><th>Employee CPP</th><th>Employee EI</th><th>Income Tax</th><th>Employer CPP</th><th>Employer EI</th><th>Total Liability</th><th>Outstanding</th><th>Pay Date</th><th>Remittance Period</th><th>Due Date</th><th>Status</th></tr></thead><tbody>
+              {visibleRows.map((row, index) => <tr key={row.rowKey || `${row.runId}-${row.employeeNumber}-${index}`}><td>{index + 1}</td><td>{row.employeeName}</td><td>{row.employeeNumber}</td><td>{row.department || '-'}</td><td>{row.payGroup || '-'}</td><td>{row.hours.toFixed(2)}</td><td>{moneyValue(row.grossPay)}</td><td>{moneyValue(row.deductions)}</td><td>{moneyValue(row.netPay)}</td><td>{moneyValue(row.employerCosts)}</td><td>{moneyValue(row.employeeCpp)}</td><td>{moneyValue(row.employeeEi)}</td><td>{moneyValue(row.incomeTax)}</td><td>{moneyValue(row.employerCpp)}</td><td>{moneyValue(row.employerEi)}</td><td><b>{moneyValue(row.totalLiability)}</b></td><td><b>{moneyValue(row.outstandingLiability)}</b></td><td>{row.payDate}</td><td>{row.remittancePeriod}</td><td>{row.remittanceDueDate || '-'}</td><td>{row.status}</td></tr>)}
+              {!visibleRows.length && <tr><td colSpan={21}>No government liability records found in the database.</td></tr>}
+            </tbody><tfoot><tr><td>Total</td><td>{visibleRows.length} Rows</td><td></td><td></td><td></td><td>{totals.hours.toFixed(2)}</td><td>{moneyValue(totals.grossPay)}</td><td>{moneyValue(totals.deductions)}</td><td>{moneyValue(totals.netPay)}</td><td>{moneyValue(totals.employerCosts)}</td><td>{moneyValue(totals.employeeCpp)}</td><td>{moneyValue(totals.employeeEi)}</td><td>{moneyValue(totals.incomeTax)}</td><td>{moneyValue(totals.employerCpp)}</td><td>{moneyValue(totals.employerEi)}</td><td>{moneyValue(totals.totalLiability)}</td><td>{moneyValue(totals.outstandingLiability)}</td><td></td><td></td><td></td><td></td></tr></tfoot></table></div>
+            <footer><span>Showing {visibleRows.length ? 1 : 0} - {visibleRows.length} of {visibleRows.length} rows</span><div><button disabled>&lt;</button><button className="active">1</button><button disabled>&gt;</button></div><select defaultValue="25"><option>25 / page</option></select></footer>
           </section>
-          <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Government Liabilities Report"><option>Government Liabilities Report</option></select></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{data.filters.statuses.map((item) => <option key={item}>{item}</option>)}</select></label><b>Include in Report</b>{['Pay Period', 'Employee CPP', 'Employee EI', 'Income Tax', 'Employer CPP', 'Employer EI', 'Paid/Unpaid Status'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<button type="button">Generate Report</button></aside>
+          <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Government Liabilities Report"><option>Government Liabilities Report</option></select></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{data.filters.statuses.map((item) => <option key={item}>{item}</option>)}</select></label><b>Include in Report</b>{['Employee', 'Employee ID', 'Department', 'Pay Group', 'Hours', 'Gross Pay', 'Deductions', 'Net Pay', 'Employer Costs', 'CPP', 'EI', 'Income Tax', 'Outstanding Liability', 'Remittance Status'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<button type="button">Generate Report</button></aside>
         </div>
       </>}
     </section>

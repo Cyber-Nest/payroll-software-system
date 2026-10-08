@@ -969,25 +969,16 @@ router.get('/reports/government-liabilities', authenticate, requirePermission('r
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
   await syncGovernmentFilings(companyId);
-  const [runs, filings] = await Promise.all([
+  const [runs, filings, employees] = await Promise.all([
     PayrollRun.find({ companyId, status: { $in: ['finalized', 'locked', 'adjusted'] } }).sort({ payDate: -1 }),
-    GovernmentFiling.find({ companyId, type: 'CRA_REMITTANCE' }).sort({ dueDate: -1 })
+    GovernmentFiling.find({ companyId, type: 'CRA_REMITTANCE' }).sort({ dueDate: -1 }),
+    Employee.find({ companyId }).select(
+      'legalFirstName legalLastName employeeNumber occupation payGroup adminProfile.employment adminProfile.compensation'
+    )
   ]);
   const filingByPeriod = new Map(filings.map((filing) => [filing.period, filing]));
-  const rows = runs.map((run, index) => {
-    const totals = (run.lines || []).reduce((sum, line) => {
-      const employeeCpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
-      const employeeEi = moneyToNumber(line.ei);
-      const incomeTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
-      return {
-        employeeCpp: sum.employeeCpp + employeeCpp,
-        employeeEi: sum.employeeEi + employeeEi,
-        incomeTax: sum.incomeTax + incomeTax,
-        employerCpp: sum.employerCpp + employeeCpp,
-        employerEi: sum.employerEi + Number((employeeEi * 1.4).toFixed(2))
-      };
-    }, { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0 });
-    const payPeriod = `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} (#${runs.length - index})`;
+  const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  const rows = runs.flatMap((run) => {
     const remittancePeriod = run.payDate.toLocaleDateString('en-CA', {
       month: 'short',
       year: 'numeric',
@@ -995,27 +986,71 @@ router.get('/reports/government-liabilities', authenticate, requirePermission('r
     });
     const filing = filingByPeriod.get(remittancePeriod);
     const status = filing?.status === 'filed' ? 'Paid' : 'Unpaid';
-    const totalLiability = totals.employeeCpp + totals.employeeEi + totals.incomeTax + totals.employerCpp + totals.employerEi;
-    return {
-      index: index + 1,
-      payPeriod,
-      employeeCpp: Number(totals.employeeCpp.toFixed(2)),
-      employeeEi: Number(totals.employeeEi.toFixed(2)),
-      incomeTax: Number(totals.incomeTax.toFixed(2)),
-      employerCpp: Number(totals.employerCpp.toFixed(2)),
-      employerEi: Number(totals.employerEi.toFixed(2)),
-      totalLiability: Number(totalLiability.toFixed(2)),
-      status
-    };
-  });
+    const remittanceDueDate = filing?.dueDate ? dateLabel(filing.dueDate) : '';
+    const payPeriod = `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)}`;
+    return (run.lines || []).map((line, lineIndex) => {
+      const employee = employeeById.get(String(line.employeeId));
+      const employeeCpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
+      const employeeEi = moneyToNumber(line.ei);
+      const incomeTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
+      const employerCpp = employeeCpp;
+      const employerEi = Number((employeeEi * 1.4).toFixed(2));
+      const governmentLiability = employeeCpp + employeeEi + incomeTax + employerCpp + employerEi;
+      const grossPay = safeMoneyToNumber(line.grossPay);
+      const deductions = safeMoneyToNumber(line.deductionsTotal);
+      const netPay = safeMoneyToNumber(line.netPay);
+      const employerCosts = Number((employerCpp + employerEi).toFixed(2));
+      const department = String(employee?.adminProfile?.employment?.department || employee?.occupation || '');
+      const payGroup = String(
+        employee?.adminProfile?.compensation?.payFrequency ||
+          employee?.payGroup ||
+          run.payFrequency ||
+          ''
+      );
+      return {
+        index: 0,
+        runId: String(run._id),
+        employeeName: employee
+          ? `${employee.legalFirstName} ${employee.legalLastName}`.trim()
+          : 'Unknown employee',
+        employeeNumber: employee?.employeeNumber || '',
+        department,
+        payGroup,
+        hours: Number((Number(line.regularHours || 0) + Number(line.overtimeHours || 0) + Number(line.statePayHours || 0)).toFixed(2)),
+        grossPay,
+        deductions,
+        netPay,
+        employerCosts,
+        payPeriod,
+        payDate: dateLabel(run.payDate),
+        remittancePeriod,
+        remittanceDueDate,
+        employeeCpp: Number(employeeCpp.toFixed(2)),
+        employeeEi: Number(employeeEi.toFixed(2)),
+        incomeTax: Number(incomeTax.toFixed(2)),
+        employerCpp: Number(employerCpp.toFixed(2)),
+        employerEi: Number(employerEi.toFixed(2)),
+        totalLiability: Number(governmentLiability.toFixed(2)),
+        outstandingLiability: status === 'Paid' ? 0 : Number(governmentLiability.toFixed(2)),
+        status,
+        rowKey: `${String(run._id)}-${String(line.employeeId)}-${lineIndex}`
+      };
+    });
+  }).map((row, index) => ({ ...row, index: index + 1 }));
   const summary = rows.reduce((sum, row) => ({
     employeeCpp: sum.employeeCpp + row.employeeCpp,
     employeeEi: sum.employeeEi + row.employeeEi,
     incomeTax: sum.incomeTax + row.incomeTax,
     employerCpp: sum.employerCpp + row.employerCpp,
     employerEi: sum.employerEi + row.employerEi,
-    totalLiability: sum.totalLiability + row.totalLiability
-  }), { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0 });
+    totalLiability: sum.totalLiability + row.totalLiability,
+    outstandingLiability: sum.outstandingLiability + row.outstandingLiability,
+    hours: sum.hours + row.hours,
+    grossPay: sum.grossPay + row.grossPay,
+    deductions: sum.deductions + row.deductions,
+    netPay: sum.netPay + row.netPay,
+    employerCosts: sum.employerCosts + row.employerCosts
+  }), { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0, totalLiability: 0, outstandingLiability: 0, hours: 0, grossPay: 0, deductions: 0, netPay: 0, employerCosts: 0 });
   const paidAmount = rows.filter((row) => row.status === 'Paid').reduce((sum, row) => sum + row.totalLiability, 0);
   const unpaidAmount = rows.filter((row) => row.status === 'Unpaid').reduce((sum, row) => sum + row.totalLiability, 0);
   res.json({
@@ -1023,10 +1058,15 @@ router.get('/reports/government-liabilities', authenticate, requirePermission('r
       payPeriods: rows.length,
       totalLiabilities: formatMoney(summary.totalLiability),
       paidAmount: formatMoney(paidAmount),
-      unpaidAmount: formatMoney(unpaidAmount)
+      unpaidAmount: formatMoney(unpaidAmount),
+      outstandingLiabilities: formatMoney(summary.outstandingLiability)
     },
     filters: {
-      payPeriods: rows.map((row) => row.payPeriod),
+      payPeriods: Array.from(new Set(rows.map((row) => row.payPeriod))),
+      departments: Array.from(new Set(['All Departments', ...rows.map((row) => row.department).filter(Boolean)])),
+      employees: ['All Employees', ...Array.from(new Set(rows.map((row) => row.employeeName)))],
+      payGroups: Array.from(new Set(['All Pay Groups', ...rows.map((row) => row.payGroup).filter(Boolean)])),
+      remittancePeriods: Array.from(new Set(['All Remittance Periods', ...rows.map((row) => row.remittancePeriod).filter(Boolean)])),
       statuses: ['All Statuses', 'Paid', 'Unpaid']
     },
     summary,
