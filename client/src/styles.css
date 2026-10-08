@@ -106,7 +106,7 @@ button {
   font-size: 27px;
   font-weight: 900;
   letter-spacing: 0;
-  line-height: 1.05;
+  line-height: 1.12;
   min-width: 124px;
 }
 
@@ -115,7 +115,7 @@ button {
   display: block;
   font-size: 10px;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.12;
   margin-top: 4px;
   white-space: nowrap;
 }
