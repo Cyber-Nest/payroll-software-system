@@ -59,9 +59,13 @@ button {
 
 .logo {
   align-items: center;
+  background: #084273;
   display: flex;
-  gap: 9px;
+  gap: 8px;
   justify-content: center;
+  min-height: 57px;
+  padding: 8px 12px;
+  width: max-content;
 }
 
 .logo-mark {
@@ -97,20 +101,20 @@ button {
 }
 
 .logo-word {
-  color: #1463f3;
+  color: #fff;
   display: block;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: 0;
   line-height: 0.95;
 }
 
 .logo small {
-  color: #25b9d6;
+  color: #fff;
   display: block;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 0.95;
   margin-top: 2px;
 }
 
@@ -138,30 +142,31 @@ button {
 }
 
 .login-story .logo-mark {
-  height: 58px;
-  width: 58px;
+  height: 40px;
+  width: 40px;
 }
 
 .login-story .logo-mark::before {
-  height: 25px;
-  width: 25px;
+  height: 17px;
+  width: 17px;
 }
 
 .login-story .logo-mark span {
-  height: 17px;
-  left: 26px;
-  top: 12px;
-  width: 8px;
+  height: 12px;
+  left: 18px;
+  top: 8px;
+  width: 6px;
 }
 
 .login-story .logo-word {
-  color: #1463f3;
-  font-size: 36px;
+  color: #fff;
+  font-size: 22px;
 }
 
 .login-story .logo small {
-  color: #25b9d6;
-  font-size: 13px;
+  color: #fff;
+  font-size: 8px;
+  margin-top: 2px;
 }
 
 .login-story h1 {
@@ -308,11 +313,6 @@ button {
 .admin-sidebar .logo {
   justify-content: flex-start;
   margin-bottom: 14px;
-}
-
-.admin-sidebar .logo-word,
-.admin-sidebar .logo small {
-  color: #fff;
 }
 
 .admin-sidebar button {
@@ -4392,11 +4392,11 @@ th {
 }
 
 .help-brand .logo-mark {
-  display: none;
+  display: grid;
 }
 
 .help-brand .logo-word {
-  font-style: italic;
+  font-style: normal;
 }
 
 .help-hero,
@@ -5877,14 +5877,10 @@ th {
   padding: 10px 7px 12px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .logo {
-  background: #fff;
+  background: #084273;
   margin: -10px -7px 8px;
   min-height: 57px;
   padding: 8px 16px;
-}
-.super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .logo-word,
-.super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .logo small {
-  color: #0874de;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button {
   border-radius: 4px;
