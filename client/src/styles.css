@@ -59,12 +59,12 @@ button {
 
 .logo {
   align-items: center;
-  background: #084273;
+  background: transparent;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
-  min-height: 57px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 0;
   width: max-content;
 }
 
@@ -103,19 +103,21 @@ button {
 .logo-word {
   color: #fff;
   display: block;
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 900;
   letter-spacing: 0;
-  line-height: 0.95;
+  line-height: 1;
+  min-width: 116px;
 }
 
 .logo small {
   color: #fff;
   display: block;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 800;
-  line-height: 0.95;
-  margin-top: 2px;
+  line-height: 1;
+  margin-top: 1px;
+  white-space: nowrap;
 }
 
 .employer-login {
@@ -160,13 +162,13 @@ button {
 
 .login-story .logo-word {
   color: #fff;
-  font-size: 22px;
+  font-size: 25px;
 }
 
 .login-story .logo small {
   color: #fff;
-  font-size: 8px;
-  margin-top: 2px;
+  font-size: 9px;
+  margin-top: 1px;
 }
 
 .login-story h1 {
@@ -5877,9 +5879,9 @@ th {
   padding: 10px 7px 12px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .logo {
-  background: #084273;
+  background: transparent;
   margin: -10px -7px 8px;
-  min-height: 57px;
+  min-height: 44px;
   padding: 8px 16px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button {
