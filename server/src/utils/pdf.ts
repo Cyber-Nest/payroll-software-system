@@ -209,8 +209,8 @@ function drawPayhoursLogo(page: PdfPage, x: number, y: number, scale = 1): void 
   page.fillCircleRightSide(x + 22 * scale, y + 18 * scale, radius, x + 22 * scale + radius * 0.8, [0.078, 0.388, 0.953]);
   page.fillCircle(x + 22 * scale, y + 18 * scale, 6 * scale, [0.973, 0.984, 1]);
   page.fillRect(x + 19.75 * scale, y + 19 * scale, 4.5 * scale, 11 * scale, [0.078, 0.388, 0.953]);
-  page.text('Payhours', x + 48 * scale, y + 19 * scale, 20 * scale, true, [0.078, 0.388, 0.953]);
-  page.text('Payroll Made Simple', x + 49 * scale, y + 7 * scale, 7 * scale, true, [0.031, 0.259, 0.451]);
+  page.text('Payhours', x + 48 * scale, y + 20 * scale, 21 * scale, true, [0.078, 0.388, 0.953]);
+  page.text('Payroll Made Simple', x + 49 * scale, y + 4 * scale, 8 * scale, true, [0.031, 0.259, 0.451]);
 }
 
 function drawDocumentHeader(

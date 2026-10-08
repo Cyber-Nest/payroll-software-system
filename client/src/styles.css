@@ -103,20 +103,20 @@ button {
 .logo-word {
   color: #fff;
   display: block;
-  font-size: 25px;
+  font-size: 27px;
   font-weight: 900;
   letter-spacing: 0;
-  line-height: 1;
-  min-width: 116px;
+  line-height: 1.05;
+  min-width: 124px;
 }
 
 .logo small {
   color: #fff;
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
-  line-height: 1;
-  margin-top: 1px;
+  line-height: 1.05;
+  margin-top: 4px;
   white-space: nowrap;
 }
 
@@ -162,13 +162,13 @@ button {
 
 .login-story .logo-word {
   color: #fff;
-  font-size: 25px;
+  font-size: 27px;
 }
 
 .login-story .logo small {
   color: #fff;
-  font-size: 9px;
-  margin-top: 1px;
+  font-size: 10px;
+  margin-top: 4px;
 }
 
 .login-story h1 {
