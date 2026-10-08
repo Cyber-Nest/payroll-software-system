@@ -8,6 +8,7 @@ import { EmployerUser } from '../models/EmployerUser';
 import { Employee } from '../models/Employee';
 import { PayrollRun } from '../models/PayrollRun';
 import { PayStatement } from '../models/PayStatement';
+import { GovernmentFiling } from '../models/GovernmentFiling';
 import { TaxFormDocument } from '../models/TaxFormDocument';
 import { RoeDocument } from '../models/RoeDocument';
 import { PlatformNotification } from '../models/PlatformNotification';
@@ -20,7 +21,7 @@ import { sendEmployerCredentialsEmail } from '../services/employerWelcome.servic
 import { normalizeProvince, withVacationPolicy } from '../services/vacationPolicy.service';
 import { roleNames } from '../security/rbac';
 import { auditEvent } from '../utils/audit';
-import { formatMoney, sumMoney } from '../utils/money';
+import { formatMoney, moneyToDecimal, sumMoney, MoneyValue } from '../utils/money';
 import { decimalToMoney } from '../utils/money';
 import { roePdf, t4sPdf, T4PdfData } from '../utils/pdf';
 
@@ -358,6 +359,84 @@ function nextRemittanceDate(frequencyOrRemitterType: string) {
   return date;
 }
 
+function payrollLineGovernmentLiability(line: {
+  cpp?: MoneyValue;
+  cpp2?: MoneyValue;
+  ei?: MoneyValue;
+  federalTax?: MoneyValue;
+  provincialTax?: MoneyValue;
+}): MoneyValue {
+  const cpp = sumMoney([line.cpp || 0, line.cpp2 || 0]);
+  const ei = moneyToDecimal(line.ei || 0);
+  return sumMoney([
+    cpp,
+    ei,
+    line.federalTax || 0,
+    line.provincialTax || 0,
+    cpp,
+    ei.times(1.4)
+  ]);
+}
+
+function monthlyRemittanceDueDate(year: number, month: number) {
+  return new Date(Date.UTC(year, month + 1, 15));
+}
+
+function remittancePeriodLabel(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 1)).toLocaleDateString('en-CA', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC'
+  });
+}
+
+async function syncCompanyCraRemittancesFromRuns(companyId: mongoose.Types.ObjectId | string) {
+  const runs = await PayrollRun.find({
+    companyId,
+    status: { $in: ['finalized', 'locked', 'adjusted'] }
+  }).sort({ payDate: 1 });
+  const monthly = new Map<string, { year: number; month: number; amounts: MoneyValue[] }>();
+  for (const run of runs) {
+    const year = run.payDate.getUTCFullYear();
+    const month = run.payDate.getUTCMonth();
+    const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const bucket = monthly.get(key) || { year, month, amounts: [] };
+    bucket.amounts.push(...run.lines.map(payrollLineGovernmentLiability));
+    monthly.set(key, bucket);
+  }
+  const operations: Parameters<typeof GovernmentFiling.bulkWrite>[0] = [];
+  for (const [key, bucket] of monthly) {
+    const dueDate = monthlyRemittanceDueDate(bucket.year, bucket.month);
+    operations.push({
+      updateOne: {
+        filter: { companyId, filingKey: `CRA_REMITTANCE:${key}` },
+        update: {
+          $set: {
+            title: 'CRA Remittance (Wages, CPP, EI, Income Tax)',
+            year: bucket.year,
+            period: remittancePeriodLabel(bucket.year, bucket.month),
+            dueDate,
+            amount: formatMoney(sumMoney(bucket.amounts))
+          },
+          $setOnInsert: {
+            companyId,
+            filingKey: `CRA_REMITTANCE:${key}`,
+            type: 'CRA_REMITTANCE',
+            status: 'pending',
+            documents: [{ name: `cra_remittance-${key}.csv`, kind: 'data' }]
+          }
+        },
+        upsert: true
+      }
+    });
+  }
+  if (operations.length) await GovernmentFiling.bulkWrite(operations);
+  await GovernmentFiling.updateMany(
+    { companyId, type: 'CRA_REMITTANCE', status: { $in: ['pending', 'prepared'] }, dueDate: { $lt: new Date() } },
+    { $set: { status: 'overdue' } }
+  );
+}
+
 function normalizedCraPayroll(value: unknown) {
   const cra = asRecord(value);
   const frequency = remittanceFrequencyFromCra(cra);
@@ -373,10 +452,17 @@ function normalizedCraPayroll(value: unknown) {
 }
 
 async function buildPayrollAccountsPayload() {
-  const [companies, runs] = await Promise.all([
-    Company.find().sort({ legalName: 1 }),
-    PayrollRun.find({ status: { $in: ['finalized', 'locked', 'adjusted'] } }).sort({ payDate: -1 })
+  const companies = await Company.find().sort({ legalName: 1 });
+  await Promise.all(companies.map((company) => syncCompanyCraRemittancesFromRuns(company._id)));
+  const [runs, filings] = await Promise.all([
+    PayrollRun.find({ status: { $in: ['finalized', 'locked', 'adjusted'] } }).sort({ payDate: -1 }),
+    GovernmentFiling.find({ type: 'CRA_REMITTANCE' }).sort({ dueDate: 1 })
   ]);
+  const filingsByCompany = new Map<string, typeof filings>();
+  for (const filing of filings) {
+    const key = String(filing.companyId);
+    filingsByCompany.set(key, [...(filingsByCompany.get(key) || []), filing]);
+  }
   const runsByCompany = new Map<string, typeof runs>();
   for (const run of runs) {
     const key = String(run.companyId);
@@ -388,11 +474,23 @@ async function buildPayrollAccountsPayload() {
     const remitterType = textValue(cra.remitterType, textValue(cra.remittanceFrequency, 'Regular'));
     const frequency = remittanceFrequencyFromCra(cra);
     const companyRuns = runsByCompany.get(String(company._id)) || [];
-    const grossLiability = companyRuns.length ? Number(formatMoney(sumMoney(companyRuns.slice(0, 4).map((run) => run.totalDeductions)))) : Number(textValue(cra.currentLiability, '0.00'));
     const payments = Array.isArray(cra.payments) ? cra.payments : [];
-    const paidAmount = payments.reduce((sum, payment) => sum + Number(asRecord(payment).amount || 0), 0);
-    const liability = Math.max(0, grossLiability - paidAmount).toFixed(2);
-    const due = textValue(cra.nextRemittanceDue) || formatDate(nextRemittanceDate(frequency));
+    const companyFilings = filingsByCompany.get(String(company._id)) || [];
+    const unpaidFilings = companyFilings.filter((filing) => filing.status !== 'filed');
+    const legacyPaidAmount = payments
+      .filter((payment) => {
+        const record = asRecord(payment);
+        return !record.filingId && !Array.isArray(record.appliedFilingIds);
+      })
+      .reduce((sum, payment) => sum + Number(asRecord(payment).amount || 0), 0);
+    const grossLiability = unpaidFilings.length
+      ? Number(formatMoney(sumMoney(unpaidFilings.map((filing) => filing.amount))))
+      : Number(textValue(cra.currentLiability, '0.00'));
+    const liability = Math.max(0, grossLiability - legacyPaidAmount).toFixed(2);
+    const nextUnpaidFiling = unpaidFilings[0];
+    const due = nextUnpaidFiling
+      ? formatDate(nextUnpaidFiling.dueDate)
+      : textValue(cra.nextRemittanceDue) || formatDate(nextRemittanceDate(frequency));
     return {
       id: String(company._id),
       employer: company.legalName,
@@ -1092,9 +1190,45 @@ router.post('/payroll-accounts/:id/remittance-payment', authenticate, requirePer
   if (!parsed.success) return res.status(400).json({ message: 'Invalid payment details', issues: parsed.error.issues });
   const company = await Company.findById(req.params.id);
   if (!company) return res.status(404).json({ message: 'Employer not found' });
+  await syncCompanyCraRemittancesFromRuns(company._id);
+  const remittances = await GovernmentFiling.find({
+    companyId: company._id,
+    type: 'CRA_REMITTANCE',
+    status: { $ne: 'filed' }
+  }).sort({ dueDate: 1 });
+  let remaining = moneyToDecimal(parsed.data.amount);
+  const appliedFilingIds: string[] = [];
+  for (const filing of remittances) {
+    if (remaining.lessThan(moneyToDecimal(filing.amount))) continue;
+    const now = new Date();
+    filing.status = 'filed';
+    filing.filedAt = new Date(parsed.data.paymentDate);
+    filing.reference = parsed.data.referenceNumber;
+    filing.confirmationNumber = `CRA${String(now.getTime()).slice(-10)}`;
+    await filing.save();
+    appliedFilingIds.push(String(filing._id));
+    remaining = remaining.minus(moneyToDecimal(filing.amount));
+  }
   const cra = asRecord(company.craPayroll);
   const payments = Array.isArray(cra.payments) ? cra.payments : [];
-  company.craPayroll = { ...cra, payments: [...payments, { ...parsed.data, recordedAt: new Date().toISOString(), recordedBy: 'Super Admin' }] };
+  company.craPayroll = {
+    ...cra,
+    payments: [
+      ...payments,
+      {
+        ...parsed.data,
+        appliedFilingIds,
+        unappliedAmount: remaining.toFixed(2),
+        recordedAt: new Date().toISOString(),
+        recordedBy: 'Super Admin'
+      }
+    ],
+    currentLiability: (await GovernmentFiling.find({
+      companyId: company._id,
+      type: 'CRA_REMITTANCE',
+      status: { $ne: 'filed' }
+    })).reduce((sum, filing) => sum + Number(formatMoney(filing.amount)), 0).toFixed(2)
+  };
   await company.save();
   await auditEvent(req, { userId: req.superAdminContext!.superAdminId, companyId: company._id, eventType: 'REMITTANCE_PAYMENT_RECORDED', metadata: { action: `Recorded CRA payment ${parsed.data.referenceNumber}`, module: 'Payroll Accounts' } });
   res.status(201).json({ account: (await buildPayrollAccountsPayload()).accounts.find((account) => account.id === String(company._id)) });

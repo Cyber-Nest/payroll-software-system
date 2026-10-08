@@ -3051,7 +3051,9 @@ function AdminInput({
   type,
   placeholder,
   disabled = false,
-  error
+  error,
+  min,
+  max
 }: {
   label: string;
   value: string;
@@ -3060,6 +3062,8 @@ function AdminInput({
   placeholder?: string;
   disabled?: boolean;
   error?: string;
+  min?: string;
+  max?: string;
 }) {
   const inputType = type || (isDateField(label) ? 'date' : 'text');
   const dateProps =
@@ -3073,6 +3077,8 @@ function AdminInput({
         value={value}
         placeholder={inputPlaceholder}
         disabled={disabled}
+        min={min}
+        max={max}
         onChange={(event) => onChange(event.target.value)}
         {...(inputType === 'date' ? { pattern: dateProps.pattern } : {})}
       />
@@ -4346,6 +4352,7 @@ function PayrollPage({
   const [rejectingRun, setRejectingRun] = useState<PayrollRun>();
   const [rejectionReason, setRejectionReason] = useState('');
   const [savingRejection, setSavingRejection] = useState(false);
+  const editingMinPayDate = editingRun ? nextSelectablePayrollDate(runs, editingRun.id) : undefined;
   const tabs = ['Payroll Runs', 'Paystubs', 'Reconciliation'];
   const activeRun = runs[0];
   const totals = runs.reduce(
@@ -4911,6 +4918,7 @@ function PayrollPage({
                   type="date"
                   value={editingRun.payDate.slice(0, 10)}
                   disabled={payrollDialogMode === 'view'}
+                  min={editingMinPayDate}
                   onChange={(value) =>
                     payrollDialogMode === 'edit' && setEditingRun({ ...editingRun, payDate: value })
                   }
@@ -5166,6 +5174,12 @@ function localIsoDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
 function suggestedPayrollDates(periodStart: string, frequency: PayrollFrequency) {
   const parts = periodStart.split('-').map(Number);
   if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return undefined;
@@ -5213,6 +5227,16 @@ function nextPayrollDatesFromLastRun(lastRun: PayrollRun, frequency: PayrollFreq
     periodEnd: suggested.periodEnd,
     payDate: localIsoDate(addPayrollFrequency(payDate, frequency))
   };
+}
+
+function nextSelectablePayrollDate(runs: PayrollRun[], excludeRunId?: string) {
+  const latestRun = runs
+    .filter((item) => item.status !== 'reversed' && item.id !== excludeRunId)
+    .sort((left, right) => right.payDate.localeCompare(left.payDate))[0];
+  if (!latestRun) return undefined;
+  const latestPayDate = new Date(`${latestRun.payDate.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(latestPayDate.getTime())) return undefined;
+  return localIsoDate(addDays(latestPayDate, 1));
 }
 
 function NewPayrollRun({
@@ -5282,6 +5306,7 @@ function NewPayrollRun({
   );
   const calculatedLines = run?.lines || [];
   const regularHoursLimit = { weekly: 44, biweekly: 88, monthly: 176 }[payFrequency];
+  const minPayDate = nextSelectablePayrollDate(runs);
   useEffect(() => {
     if (!draftKey) return;
     writeStoredJson(draftKey, {
@@ -5311,7 +5336,7 @@ function NewPayrollRun({
     const dates = suggestedPayrollDates(start, frequency);
     if (!dates) return;
     setPeriodEnd(dates.periodEnd);
-    setPayDate(dates.payDate);
+    setPayDate(minPayDate && dates.payDate < minPayDate ? minPayDate : dates.payDate);
   }
   function updatePeriodStart(value: string) {
     setPeriodStart(value);
@@ -5327,9 +5352,9 @@ function NewPayrollRun({
     if (!dates) return;
     setPeriodStart(dates.periodStart);
     setPeriodEnd(dates.periodEnd);
-    setPayDate(dates.payDate);
+    setPayDate(minPayDate && dates.payDate < minPayDate ? minPayDate : dates.payDate);
     setSeededFromLastRun(true);
-  }, [runs, payFrequency, paySettingsLoaded, seededFromLastRun, periodStart, periodEnd, payDate]);
+  }, [runs, payFrequency, paySettingsLoaded, seededFromLastRun, periodStart, periodEnd, payDate, minPayDate]);
   useEffect(() => {
     api<{
       payFrequency: PayrollFrequency;
@@ -5441,6 +5466,10 @@ function NewPayrollRun({
     setMessage('');
     try {
       if (step === 1) {
+        if (minPayDate && payDate < minPayDate) {
+          setMessage(`Pay Date must be after the last payroll date. Select ${minPayDate} or later.`);
+          return;
+        }
         const result = await api<{ run: PayrollRun }>('/employer/payroll-runs', token, {
           method: 'POST',
           body: JSON.stringify({ periodStart, periodEnd, payDate })
@@ -5544,6 +5573,7 @@ function NewPayrollRun({
                 label="Pay Date *"
                 value={payDate}
                 placeholder="yyyy-mm-dd"
+                min={minPayDate}
                 onChange={setPayDate}
               />
             </div>

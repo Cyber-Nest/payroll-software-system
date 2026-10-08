@@ -968,8 +968,9 @@ router.get(
 router.get('/reports/government-liabilities', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
+  await syncGovernmentFilings(companyId);
   const [runs, filings] = await Promise.all([
-    PayrollRun.find({ companyId }).sort({ payDate: -1 }),
+    PayrollRun.find({ companyId, status: { $in: ['finalized', 'locked', 'adjusted'] } }).sort({ payDate: -1 }),
     GovernmentFiling.find({ companyId, type: 'CRA_REMITTANCE' }).sort({ dueDate: -1 })
   ]);
   const filingByPeriod = new Map(filings.map((filing) => [filing.period, filing]));
@@ -987,7 +988,12 @@ router.get('/reports/government-liabilities', authenticate, requirePermission('r
       };
     }, { employeeCpp: 0, employeeEi: 0, incomeTax: 0, employerCpp: 0, employerEi: 0 });
     const payPeriod = `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} (#${runs.length - index})`;
-    const filing = filingByPeriod.get(payPeriod) || filings.find((item) => item.period === payPeriod || item.period.includes(dateLabel(run.periodEnd)));
+    const remittancePeriod = run.payDate.toLocaleDateString('en-CA', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC'
+    });
+    const filing = filingByPeriod.get(remittancePeriod);
     const status = filing?.status === 'filed' ? 'Paid' : 'Unpaid';
     const totalLiability = totals.employeeCpp + totals.employeeEi + totals.incomeTax + totals.employerCpp + totals.employerEi;
     return {
@@ -1677,6 +1683,27 @@ const createPayrollRunSchema = z.object({
   originalRunId: z.string().optional()
 });
 
+function dateOnly(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+async function validatePayDateAfterLatestPayrollRun(
+  companyId: string,
+  payDate: Date,
+  excludeRunId?: string
+) {
+  const filter: Record<string, unknown> = {
+    companyId,
+    status: { $ne: 'reversed' }
+  };
+  if (excludeRunId) filter._id = { $ne: new mongoose.Types.ObjectId(excludeRunId) };
+  const latestRun = await PayrollRun.findOne(filter).sort({ payDate: -1, _id: -1 }).select('payDate');
+  if (!latestRun || payDate.getTime() > latestRun.payDate.getTime()) return;
+  throw new Error(
+    `Pay date must be after the last payroll date (${dateOnly(latestRun.payDate)}).`
+  );
+}
+
 function valueOrDefault<T extends Record<string, unknown>>(
   values: T,
   key: string,
@@ -1914,10 +1941,6 @@ function text(value: unknown, fallback = '') {
 
 function sinDigits(value: unknown) {
   return text(value).replace(/\D/g, '');
-}
-
-function dateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
 }
 
 function employeeNotificationEmail(employee?: IEmployee | null) {
@@ -2326,6 +2349,11 @@ router.post(
     if (!company) return res.status(404).json({ message: 'Company not found' });
     const configuredFrequency = String(company.payrollConfiguration?.payFrequency || 'biweekly').toLowerCase();
     const payFrequency = z.enum(['weekly', 'biweekly', 'monthly']).catch('biweekly').parse(configuredFrequency);
+    try {
+      await validatePayDateAfterLatestPayrollRun(companyId, parsed.data.payDate);
+    } catch (error) {
+      return res.status(409).json({ message: error instanceof Error ? error.message : 'Invalid pay date' });
+    }
     const run = await PayrollRun.create({
       companyId,
       periodStart: parsed.data.periodStart,
@@ -2373,6 +2401,15 @@ router.put(
       return res
         .status(400)
         .json({ message: 'Invalid payroll run payload', issues: parsed.error.issues });
+    try {
+      await validatePayDateAfterLatestPayrollRun(
+        String(run.companyId),
+        parsed.data.payDate,
+        String(run._id)
+      );
+    } catch (error) {
+      return res.status(409).json({ message: error instanceof Error ? error.message : 'Invalid pay date' });
+    }
     run.periodStart = parsed.data.periodStart;
     run.periodEnd = parsed.data.periodEnd;
     run.payDate = parsed.data.payDate;
@@ -2743,6 +2780,17 @@ router.put(
     const oldPeriodStart = run.periodStart.toISOString().slice(0, 10);
     const oldPeriodEnd = run.periodEnd.toISOString().slice(0, 10);
     const oldPayDate = run.payDate.toISOString().slice(0, 10);
+    if (parsed.data.payDate) {
+      try {
+        await validatePayDateAfterLatestPayrollRun(
+          String(run.companyId),
+          parsed.data.payDate,
+          String(run._id)
+        );
+      } catch (error) {
+        return res.status(409).json({ message: error instanceof Error ? error.message : 'Invalid pay date' });
+      }
+    }
     if (parsed.data.periodStart) run.periodStart = parsed.data.periodStart;
     if (parsed.data.periodEnd) run.periodEnd = parsed.data.periodEnd;
     if (parsed.data.payDate) run.payDate = parsed.data.payDate;
@@ -3110,6 +3158,11 @@ router.post(
         .json({ message: 'Invalid payroll adjustment payload', issues: parsed.error.issues });
     const original = await PayrollRun.findOne({ _id: parsed.data.originalRunId, companyId });
     if (!original) return res.status(404).json({ message: 'Original payroll run not found' });
+    try {
+      await validatePayDateAfterLatestPayrollRun(companyId, parsed.data.payDate);
+    } catch (error) {
+      return res.status(409).json({ message: error instanceof Error ? error.message : 'Invalid pay date' });
+    }
     const run = await PayrollRun.create({
       companyId,
       periodStart: parsed.data.periodStart,
