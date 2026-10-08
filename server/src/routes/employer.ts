@@ -590,15 +590,9 @@ router.get(
         amount
       };
     });
-    const governmentLiabilities = payrollRuns.reduce((runSum, run) => {
-      const runLiability = (run.lines || []).reduce((lineSum, line) => {
-        const employeeCpp = moneyToNumber(line.cpp) + moneyToNumber(line.cpp2);
-        const employeeEi = moneyToNumber(line.ei);
-        const incomeTax = moneyToNumber(line.federalTax) + moneyToNumber(line.provincialTax);
-        return lineSum + employeeCpp + employeeEi + incomeTax + employeeCpp + Number((employeeEi * 1.4).toFixed(2));
-      }, 0);
-      return runSum + runLiability;
-    }, 0);
+    const governmentLiabilities = filings
+      .filter((filing) => filing.type === 'CRA_REMITTANCE' && filing.status !== 'filed')
+      .reduce((total, filing) => total + moneyToNumber(filing.amount), 0);
     const requiredFilings = filings.filter((filing) => ['pending', 'overdue'].includes(filing.status));
     const actionRequired = requiredFilings.length + actionRuns.length;
     const relativeTime = (date: Date) => {
