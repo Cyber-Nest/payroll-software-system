@@ -881,6 +881,33 @@ button {
   justify-content: space-between;
 }
 
+.company-page .run-payroll,
+.company-page button,
+.company-page .danger-button {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 14px;
+  justify-content: center;
+  line-height: 1.1;
+  min-height: 36px;
+  padding: 8px 14px;
+  width: auto;
+}
+
+.company-button-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.company-section-head .run-payroll,
+.company-settings-head .run-payroll {
+  min-width: 118px;
+}
+
 .company-section-head p,
 .company-detail-card p,
 .company-settings-menu p {
@@ -974,11 +1001,13 @@ button {
 
 .company-detail-card footer {
   border-top: 1px solid #e3edf7;
+  flex-wrap: wrap;
   padding-top: 12px;
 }
 
 .company-detail-card footer button {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 92px;
 }
 
 .company-pagination {
@@ -988,7 +1017,14 @@ button {
 
 .company-pagination div {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.company-pagination button,
+.company-pagination select {
+  min-height: 34px;
+  padding: 6px 10px;
 }
 
 .company-logo-box {

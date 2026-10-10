@@ -6430,11 +6430,15 @@ function EmployerCompanyPage({ token }: { token: string }) {
   const [activeTab, setActiveTab] = useState('Company Profile');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [message, setMessage] = useState('');
+  async function loadCompanyModule() {
+    const result = await api<EmployerCompanyModuleData>('/employer/company-module', token);
+    setData(result);
+    setModule(result.companyModule || {});
+  }
   useEffect(() => {
-    api<EmployerCompanyModuleData>('/employer/company-module', token)
+    loadCompanyModule()
       .then((result) => {
-        setData(result);
-        setModule(result.companyModule || {});
+        void result;
       })
       .catch(() => setMessage('Unable to load company data from the database.'));
   }, [token]);
@@ -6462,6 +6466,38 @@ function EmployerCompanyPage({ token }: { token: string }) {
     });
     setModule(result.companyModule);
     setMessage('Company changes saved.');
+  }
+  function cancelChanges() {
+    if (data?.companyModule) {
+      setModule(structuredClone(data.companyModule));
+      setMessage('Unsaved changes cancelled.');
+    } else {
+      void loadCompanyModule();
+    }
+  }
+  function previousRecord() {
+    setSelectedIndex((index) => Math.max(0, index - 1));
+  }
+  function backToProfile() {
+    setActiveTab('Company Profile');
+    setSelectedIndex(0);
+  }
+  function addRecord() {
+    const listKey =
+      activeTab === 'Locations' ? 'locations' :
+      activeTab === 'Departments' ? 'departments' :
+      activeTab === 'Job Positions' ? 'jobPositions' :
+      activeTab === 'Pay Schedules' ? 'paySchedules' :
+      activeTab === 'Pay Rates' ? 'payRates' :
+      activeTab === 'Holidays' ? 'holidays' :
+      activeTab === 'Accruals' ? 'accruals' :
+      activeTab === 'Bank Accounts' ? 'bankAccounts' : '';
+    if (!listKey) return;
+    const current = value(listKey, []);
+    const next = { id: `new-${Date.now()}`, index: current.length + 1, name: `New ${activeTab.replace(/s$/, '')}`, title: `New ${activeTab.replace(/s$/, '')}`, status: 'Active' };
+    setValue(listKey, [...current, next]);
+    setSelectedIndex(current.length);
+    setMessage('New record added. Save changes to persist it.');
   }
   const field = (label: string, path: string, type = 'text', options?: string[]) => (
     <label>{label}{options ? <select value={value(path)} onChange={(event) => setValue(path, event.target.value)}>{options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={type} value={value(path)} onChange={(event) => setValue(path, event.target.value)} />}</label>
@@ -6516,9 +6552,9 @@ function EmployerCompanyPage({ token }: { token: string }) {
       <section className="settings-card"><h2><span>⚙</span>Default Settings</h2><div className="settings-fields two">{field('Default Currency', 'profile.currency')}{field('Default Language', 'profile.language')}{field('Date Format', 'profile.dateFormat')}{field('Time Zone', 'profile.timeZone')}</div></section>
       <section className="settings-card wide"><h2><span>👥</span>Contact Information</h2><div className="settings-fields four">{field('HR Email', 'profile.hrEmail')}{field('Payroll Email', 'profile.payrollEmail')}{field('Accounts Payable Email', 'profile.apEmail')}{field('General Inquiries Email', 'profile.infoEmail')}</div></section>
       <section className="settings-card"><h2><span>▤</span>Subscription & Plan</h2><dl className="company-plan"><dt>Plan</dt><dd>{value('profile.plan')}</dd><dt>Status</dt><dd>{pill(value('profile.subscriptionStatus'))}</dd><dt>Renewal Date</dt><dd>{value('profile.renewalDate')}</dd><dt>Billing Email</dt><dd>{value('profile.billingEmail')}</dd></dl></section>
-    </div> : activeTab === 'Settings' ? <div className="company-settings-layout"><aside className="settings-card company-settings-menu"><h2><span>⚙</span>Settings</h2><p>Configure your company preferences and payroll settings.</p>{settingsMenu.map((item) => <button key={item} className={item === 'General' ? 'active' : ''}>{item}</button>)}</aside><section className="settings-card wide"><header className="company-settings-head"><h2><span>⚙</span>General Settings</h2><button className="run-payroll" onClick={save}>Save Changes</button></header><div className="settings-fields three">{field('Company Legal Name *', 'profile.legalName')}{field('Business Number (BN)', 'profile.businessNumber')}{field('Operating Name (Trade Name)', 'profile.operatingName')}{field('Industry', 'profile.industry')}{field('Company Email', 'profile.infoEmail')}{field('Phone Number', 'profile.primaryContactPhone')}{field('Website', 'profile.website')}{field('Address', 'profile.addressLine1')}</div><h3>Payroll Year Settings</h3><div className="settings-fields three">{field('Payroll Year Start *', 'settings.general.payrollYearStart', 'date')}{field('First Pay Period Start *', 'settings.general.firstPayPeriodStart', 'date')}{field('Fiscal Year End', 'settings.general.fiscalYearEnd', 'date')}</div><h3>Display & Localization</h3><div className="settings-fields four">{field('Country', 'settings.display.country')}{field('Province', 'settings.display.province')}{field('Time Zone', 'settings.display.timeZone')}{field('Date Format', 'settings.display.dateFormat')}{field('Time Format', 'settings.display.timeFormat')}{field('Currency', 'settings.display.currency')}{field('Language', 'settings.display.language')}</div><h3>Company Logo</h3><div className="company-logo-row"><div className="company-upload">Drag and drop your logo here<br />PNG, JPG or SVG</div><Logo word="Payhours" /><button className="danger-button">Remove Logo</button></div></section></div> : <div className="company-master-detail">
-      <section className="settings-card company-list-card"><header className="company-section-head"><div><h2><span>{tabIcon(activeTab)}</span>{activeTab}</h2><p>Manage {activeTab.toLowerCase()} for your company.</p></div><button className="run-payroll">+ Add {activeTab.slice(0, -1)}</button></header>{['Pay Schedules', 'Pay Rates', 'Holidays', 'Bank Accounts'].includes(activeTab) && <div className="company-metrics">{metric(`Total ${activeTab}`, rows.length, 'Active records')}{metric('Total Employees', data.summary.totalEmployees || 0, 'Across all locations')}{metric('Active', rows.filter((row: any) => row.status === 'Active').length, 'Currently active')}{metric('Inactive', rows.filter((row: any) => row.status === 'Inactive').length, 'Currently inactive')}</div>}<div className="company-filters"><input placeholder={`Search ${activeTab.toLowerCase()}...`} /><select><option>All Status</option></select><button>Clear Filters</button></div><div className="settings-table">{table()}</div><footer className="company-pagination"><span>Showing 1 - {rows.length} of {rows.length} {activeTab.toLowerCase()}</span><div><button>‹</button><button className="run-payroll">1</button><button>›</button><select><option>10 / page</option><option>50 / page</option></select></div></footer></section>
-      <aside className="settings-card company-detail-card"><header><div><h2><span>{tabIcon(activeTab)}</span>{activeTab.replace(/s$/, '')} Details</h2><p>View and edit {activeTab.toLowerCase()} information.</p></div>{pill(selected.status || 'Active')}</header>{detail()}<footer><button className="danger-button">Delete {activeTab.replace(/s$/, '')}</button><button className="run-payroll" onClick={save}>Save Changes</button></footer></aside>
+    </div> : activeTab === 'Settings' ? <div className="company-settings-layout"><aside className="settings-card company-settings-menu"><h2><span>⚙</span>Settings</h2><p>Configure your company preferences and payroll settings.</p>{settingsMenu.map((item) => <button key={item} className={item === 'General' ? 'active' : ''}>{item}</button>)}</aside><section className="settings-card wide"><header className="company-settings-head"><h2><span>⚙</span>General Settings</h2><div className="company-button-row"><button onClick={backToProfile}>Back</button><button onClick={cancelChanges}>Cancel</button><button className="run-payroll" onClick={save}>Save Changes</button></div></header><div className="settings-fields three">{field('Company Legal Name *', 'profile.legalName')}{field('Business Number (BN)', 'profile.businessNumber')}{field('Operating Name (Trade Name)', 'profile.operatingName')}{field('Industry', 'profile.industry')}{field('Company Email', 'profile.infoEmail')}{field('Phone Number', 'profile.primaryContactPhone')}{field('Website', 'profile.website')}{field('Address', 'profile.addressLine1')}</div><h3>Payroll Year Settings</h3><div className="settings-fields three">{field('Payroll Year Start *', 'settings.general.payrollYearStart', 'date')}{field('First Pay Period Start *', 'settings.general.firstPayPeriodStart', 'date')}{field('Fiscal Year End', 'settings.general.fiscalYearEnd', 'date')}</div><h3>Display & Localization</h3><div className="settings-fields four">{field('Country', 'settings.display.country')}{field('Province', 'settings.display.province')}{field('Time Zone', 'settings.display.timeZone')}{field('Date Format', 'settings.display.dateFormat')}{field('Time Format', 'settings.display.timeFormat')}{field('Currency', 'settings.display.currency')}{field('Language', 'settings.display.language')}</div><h3>Company Logo</h3><div className="company-logo-row"><div className="company-upload">Drag and drop your logo here<br />PNG, JPG or SVG</div><Logo word="Payhours" /><button className="danger-button">Remove Logo</button></div></section></div> : <div className="company-master-detail">
+      <section className="settings-card company-list-card"><header className="company-section-head"><div><h2><span>{tabIcon(activeTab)}</span>{activeTab}</h2><p>Manage {activeTab.toLowerCase()} for your company.</p></div><div className="company-button-row"><button onClick={backToProfile}>Back</button><button className="run-payroll" onClick={addRecord}>+ Add {activeTab.replace(/s$/, '')}</button></div></header>{['Pay Schedules', 'Pay Rates', 'Holidays', 'Bank Accounts'].includes(activeTab) && <div className="company-metrics">{metric(`Total ${activeTab}`, rows.length, 'Active records')}{metric('Total Employees', data.summary.totalEmployees || 0, 'Across all locations')}{metric('Active', rows.filter((row: any) => row.status === 'Active').length, 'Currently active')}{metric('Inactive', rows.filter((row: any) => row.status === 'Inactive').length, 'Currently inactive')}</div>}<div className="company-filters"><input placeholder={`Search ${activeTab.toLowerCase()}...`} /><select><option>All Status</option></select><button>Clear Filters</button></div><div className="settings-table">{table()}</div><footer className="company-pagination"><span>Showing 1 - {rows.length} of {rows.length} {activeTab.toLowerCase()}</span><div><button onClick={previousRecord} disabled={selectedIndex <= 0}>Previous</button><button>‹</button><button className="run-payroll">1</button><button>›</button><select><option>10 / page</option><option>50 / page</option></select></div></footer></section>
+      <aside className="settings-card company-detail-card"><header><div><h2><span>{tabIcon(activeTab)}</span>{activeTab.replace(/s$/, '')} Details</h2><p>View and edit {activeTab.toLowerCase()} information.</p></div>{pill(selected.status || 'Active')}</header>{detail()}<footer><button onClick={backToProfile}>Back</button><button onClick={previousRecord} disabled={selectedIndex <= 0}>Previous</button><button onClick={cancelChanges}>Cancel</button><button className="danger-button">Delete {activeTab.replace(/s$/, '')}</button><button className="run-payroll" onClick={save}>Save Changes</button></footer></aside>
     </div>}
     <footer className="settings-actions"><span>{message}</span>{activeTab === 'Company Profile' && <button className="run-payroll" onClick={save}>Save Changes</button>}</footer>
   </section>;
