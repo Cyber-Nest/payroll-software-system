@@ -600,6 +600,11 @@ type EmployerCompanyModuleData = {
   summary: Record<string, number>;
   employees: Array<Record<string, any>>;
 };
+type EmployerDocumentsData = {
+  metrics: Record<string, number>;
+  employees: Array<Record<string, any>>;
+  documents: Array<Record<string, any>>;
+};
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const currentYear = new Date().getFullYear();
 const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -6322,6 +6327,19 @@ function EmployerNotifications({
 }
 
 const settingsTabs = ['General', 'Payroll', 'Taxes', 'Deductions & Benefits', 'Time & Attendance', 'Paystubs', 'Payment', 'Government Filings', 'Users & Roles', 'Integrations', 'Notifications'];
+const settingsTabIcons: Record<string, string> = {
+  General: '⚙',
+  Payroll: '$',
+  Taxes: '▥',
+  'Deductions & Benefits': '◇',
+  'Time & Attendance': '◷',
+  Paystubs: '◴',
+  Payment: '▤',
+  'Government Filings': '▥',
+  'Users & Roles': '♙',
+  Integrations: '↗',
+  Notifications: '♢'
+};
 const settingsSubtitles: Record<string, string> = {
   General: 'Configure your payroll settings, company information and system preferences.',
   Payroll: 'Configure your payroll settings, pay periods, earnings, deductions and calculation rules.',
@@ -6379,16 +6397,16 @@ function EmployerSettingsPage({ token }: { token: string }) {
   const toggle = (label: string, path: string) => (
     <label className="settings-toggle"><span>{label}</span><button type="button" className={value(path, false) ? 'on' : ''} onClick={() => setValue(path, !value(path, false))}><i /></button><b>{value(path, false) ? 'Yes' : 'No'}</b></label>
   );
-  const card = (title: string, children: ReactNode, icon = '⚙') => <section className="settings-card"><h2><span>{icon}</span>{title}</h2>{children}</section>;
+  const card = (title: string, children: ReactNode, icon = '⚙', subtitle = '', editable = false) => <section className="settings-card"><header className="settings-card-head"><div><h2><span>{icon}</span>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{editable && <button type="button" className="settings-edit">✎ Edit</button>}</header>{children}</section>;
   const table = (headers: string[], rows: Array<Record<string, any>>, keys: string[]) => <div className="settings-table"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || row.name || index}>{keys.map((key) => <td key={key}>{typeof row[key] === 'boolean' ? <span className={`status ${row[key] ? 'paid' : 'pending'}`}>{row[key] ? 'Active' : 'Inactive'}</span> : String(row[key] ?? '')}</td>)}</tr>)}</tbody></table></div>;
   if (!data) return <section className="settings-page"><p>{message || 'Loading settings...'}</p></section>;
   const provinceRows = ['Alberta|AB|10.00% - 15.00%|Jan 1, 2025', 'British Columbia|BC|5.06% - 20.50%|Jan 1, 2025', 'Manitoba|MB|10.80% - 17.40%|Jan 1, 2025', 'Saskatchewan|SK|10.50% - 14.50%|Jan 1, 2025', 'Ontario|ON|5.05% - 13.16%|Jan 1, 2025'].map((row) => { const [province, abbreviation, taxRateRange, effectiveDate] = row.split('|'); return { province, abbreviation, taxRateRange, effectiveDate }; });
   const integrations = ['QuickBooks Online|Connected|Export payroll data, journal entries and employee expenses.', 'Xero|Not Connected|Sync payroll, expenses and charts of accounts.', 'Sage 50 Canada|Not Connected|Export payroll summaries and GL entries.', 'RBC|Connected|Direct deposit employee payments via RBC.', 'Scotiabank|Not Connected|Set up direct deposit via Scotiabank.', 'BMO|Not Connected|Direct deposit and file upload.', 'Deputy|Connected|Sync employee hours and schedules.', 'Microsoft 365|Connected|Send emails and store documents.'].map((row) => { const [name, status, description] = row.split('|'); return { name, status, description }; });
   return <section className="settings-page">
     <header><h1>Settings</h1><p>{settingsSubtitles[activeTab]}</p></header>
-    <nav className="settings-tabs">{settingsTabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}><span>{tab.charAt(0)}</span>{tab}</button>)}</nav>
+    <nav className="settings-tabs">{settingsTabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}><span>{settingsTabIcons[tab]}</span>{tab}</button>)}</nav>
     <div className="settings-grid">
-      {activeTab === 'General' && <>{card('Company Information', <div className="settings-fields four">{field('Legal Company Name *', 'general.companyInformation.legalCompanyName')}{field('Operating Name (DBA)', 'general.companyInformation.operatingName')}{field('Business Number (BN)', 'general.companyInformation.businessNumber')}{field('CRA Program Account Number', 'general.companyInformation.craProgramAccountNumber')}{field('Address *', 'general.companyInformation.address')}{field('City *', 'general.companyInformation.city')}{field('Province *', 'general.companyInformation.province', 'text', ['Saskatchewan', 'Alberta', 'British Columbia', 'Manitoba', 'Ontario'])}{field('Postal Code *', 'general.companyInformation.postalCode')}{field('Phone', 'general.companyInformation.phone')}{field('Email', 'general.companyInformation.email')}{field('Website', 'general.companyInformation.website')}</div>, '🏢')}{card('Logo & Branding', <div className="settings-logo"><Logo word="Payhours" /><button>Upload Logo</button><button className="danger-button">Remove</button></div>, '🖼')}{card('System Preferences', <div className="settings-fields two">{field('Date Format', 'general.systemPreferences.dateFormat', 'text', ['MMM d, yyyy', 'yyyy-MM-dd'])}{field('Time Format', 'general.systemPreferences.timeFormat', 'text', ['12 Hour (AM/PM)', '24 Hour'])}{field('Currency', 'general.systemPreferences.currency', 'text', ['CAD - Canadian Dollar ($)'])}{field('Default Items Per Page', 'general.systemPreferences.itemsPerPage', 'text', ['25', '50', '100'])}{toggle('Enable Dark Mode', 'general.systemPreferences.darkMode')}{field('Language', 'general.systemPreferences.language', 'text', ['English (Canada)', 'French (Canada)'])}</div>, '⚙')}{card('Year-End Settings', <div className="settings-fields two">{field('Tax Year End', 'general.yearEnd.taxYearEnd', 'text', ['December 31'])}{toggle('Generate T4 Automatically', 'general.yearEnd.generateT4Automatically')}{toggle('Generate ROE Automatically', 'general.yearEnd.generateRoeAutomatically')}</div>, '📄')}</>}
+      {activeTab === 'General' && <>{card('Company Information', <div className="settings-fields four">{field('Legal Company Name *', 'general.companyInformation.legalCompanyName')}{field('Operating Name (DBA)', 'general.companyInformation.operatingName')}{field('Business Number (BN)', 'general.companyInformation.businessNumber')}{field('CRA Program Account Number', 'general.companyInformation.craProgramAccountNumber')}{field('Address *', 'general.companyInformation.address')}{field('City *', 'general.companyInformation.city')}{field('Province *', 'general.companyInformation.province', 'text', ['Saskatchewan', 'Alberta', 'British Columbia', 'Manitoba', 'Ontario'])}{field('Postal Code *', 'general.companyInformation.postalCode')}{field('Phone', 'general.companyInformation.phone')}{field('Email', 'general.companyInformation.email')}{field('Website', 'general.companyInformation.website')}</div>, '▧', 'Basic information used on paystubs, reports and government filings.', true)}{card('Logo & Branding', <div className="settings-logo"><div className="settings-logo-preview"><Logo word="Payhours" /></div><div className="settings-logo-actions"><button>↥ Upload Logo</button><button className="danger-button">▣ Remove</button></div><small>Recommended size: 300 x 100 pixels (PNG, JPG, SVG)<br />This logo will appear on payslips and reports.</small></div>, '▣')}{card('Payroll Settings', <div className="settings-fields four">{field('Pay Frequency *', 'payroll.paySchedule.payFrequency', 'text', ['Weekly', 'Bi-Weekly', 'Monthly'])}{field('First Pay Period Start Date *', 'payroll.paySchedule.firstPayPeriodStartDate', 'date')}{field('Default Work Hours Per Week', 'payroll.calculation.workHoursPerWeek', 'number')}{field('Default Overtime Daily (hours)', 'payroll.calculation.overtimeDaily', 'number')}{field('Default Overtime Weekly (hours)', 'payroll.calculation.overtimeWeekly', 'number')}{field('Rounding Method', 'payroll.calculation.roundingMethod', 'text', ['Nearest 0.25 hour', 'Nearest 0.1 hour'])}{field('Pay Date Offset (days after period end)', 'payroll.paySchedule.payDateOffset', 'number')}{toggle('Allow Manual Payroll Adjustments', 'payroll.payOptions.allowManualPayroll')}</div>, '$', 'Configure your payroll processing options.', true)}{card('System Preferences', <div className="settings-fields two">{field('Date Format', 'general.systemPreferences.dateFormat', 'text', ['MMM d, yyyy', 'yyyy-MM-dd'])}{field('Time Format', 'general.systemPreferences.timeFormat', 'text', ['12 Hour (AM/PM)', '24 Hour'])}{field('Currency', 'general.systemPreferences.currency', 'text', ['CAD - Canadian Dollar ($)'])}{field('Default Items Per Page', 'general.systemPreferences.itemsPerPage', 'text', ['25', '50', '100'])}{toggle('Enable Dark Mode', 'general.systemPreferences.darkMode')}{field('Language', 'general.systemPreferences.language', 'text', ['English (Canada)', 'French (Canada)'])}</div>, '⚙')}{card('Time & Attendance Settings', <div className="settings-fields four">{field('Default Start Time', 'timeAttendance.defaults.startTime')}{field('Default End Time', 'timeAttendance.defaults.endTime')}{field('Auto Deduct Break (minutes)', 'timeAttendance.defaults.autoDeductBreak', 'number')}{field('Allow Early Clock In (minutes)', 'timeAttendance.defaults.earlyClockIn', 'number')}{field('Allow Late Clock Out (minutes)', 'timeAttendance.defaults.lateClockOut', 'number')}{toggle('Require Manager Approval for OT', 'timeAttendance.defaults.managerApprovalForOt')}{toggle('Track Location (GPS)', 'timeAttendance.defaults.trackGps')}{toggle('Allow Employee to Edit Time', 'timeAttendance.defaults.employeeEditTime')}</div>, '◷', 'Configure default rules for tracking employee hours.', true)}{card('Year-End Settings', <div className="settings-fields two">{field('Tax Year End', 'general.yearEnd.taxYearEnd', 'text', ['December 31'])}{toggle('Generate T4 Automatically', 'general.yearEnd.generateT4Automatically')}{toggle('Generate ROE Automatically', 'general.yearEnd.generateRoeAutomatically')}</div>, '▤')}</>}
       {activeTab === 'Payroll' && <>{card('Pay Schedule & Periods', <div className="settings-fields four">{field('Pay Frequency', 'payroll.paySchedule.payFrequency', 'text', ['Weekly', 'Bi-Weekly', 'Monthly'])}{field('First Pay Period Start Date', 'payroll.paySchedule.firstPayPeriodStartDate', 'date')}{field('Pay Period Length', 'payroll.paySchedule.payPeriodLength', 'text', ['1 Week', '2 Weeks', '1 Month'])}{field('Pay Day (Default)', 'payroll.paySchedule.payDay', 'text', ['Friday', 'Thursday', 'Wednesday'])}{field('Pay Period Numbering', 'payroll.paySchedule.payPeriodNumbering')}{field('Current Pay Period', 'payroll.paySchedule.currentPayPeriod')}</div>, '📅')}{card('Payroll Calculation Settings', <div className="settings-fields three">{field('Default Work Hours Per Week', 'payroll.calculation.workHoursPerWeek', 'number')}{field('Default Daily Hours', 'payroll.calculation.dailyHours', 'number')}{field('Overtime Daily (after hours)', 'payroll.calculation.overtimeDaily', 'number')}{field('Overtime Weekly (after hours)', 'payroll.calculation.overtimeWeekly', 'number')}{field('Double Time (after hours)', 'payroll.calculation.doubleTimeAfter', 'number')}{field('Statutory Holiday Pay', 'payroll.calculation.statutoryHolidayPay', 'text', ['As per Province Rules'])}</div>, '⚙')}{card('Earning Rules', table(['Earning Type', 'Rate Type', 'Default Rate', 'Calculation Rule'], [{ type: 'Regular Hours', rate: 'Hourly', default: '$25.00', rule: 'Per hour' }, { type: 'Overtime Hours', rate: 'Hourly', default: '', rule: '1.5 x Regular Rate' }, { type: 'Double Time Hours', rate: 'Hourly', default: '', rule: '2.0 x Regular Rate' }, { type: 'Vacation Pay', rate: 'Percentage', default: '$400', rule: '% of Regular Earnings' }], ['type', 'rate', 'default', 'rule']), '💵')}{card('Pay Options', <div className="settings-fields two">{field('Default Payment Method', 'payroll.payOptions.defaultPaymentMethod', 'text', ['Direct Deposit', 'Cheque'])}{field('Direct Deposit Provider', 'payroll.payOptions.directDepositProvider')}{toggle('Allow Multiple Bank Accounts', 'payroll.payOptions.allowMultipleBankAccounts')}{toggle('Require Bank Account for New Employees', 'payroll.payOptions.requireBankAccountForNewEmployees')}{toggle('Generate Paystubs Automatically', 'payroll.payOptions.generatePaystubsAutomatically')}{toggle('Send Paystub by Email', 'payroll.payOptions.sendPaystubByEmail')}{toggle('Allow Off-Cycle / Manual Payroll', 'payroll.payOptions.allowManualPayroll')}{toggle('Require Approval Before Processing', 'payroll.payOptions.requireApprovalBeforeProcessing')}</div>, '💳')}</>}
       {activeTab === 'Taxes' && <>{card('Tax Configuration', <div className="settings-fields two">{field('Pay Province *', 'taxes.configuration.payProvince')}{field('CRA Payroll Program Account Number (RP)', 'taxes.configuration.craPayrollProgramAccountNumber')}{field('Fiscal Year', 'taxes.configuration.fiscalYear', 'text', ['2025', '2026'])}{field('Payroll Type', 'taxes.configuration.payrollType')}{toggle('Use CRA latest tax tables automatically', 'taxes.configuration.useLatestCraTables')}</div>, '⚙')}{card('CRA Tax Tables', <div className="settings-fields two">{field('Tax Year *', 'taxes.craTaxTables.taxYear', 'text', ['2025', '2026'])}{field('Province *', 'taxes.craTaxTables.province')}<p>Tax tables are updated based on CRA and provincial releases. Last updated: {value('taxes.craTaxTables.lastUpdated')}</p><button className="run-payroll">Update Tax Tables</button></div>, '📄')}{card('Additional Tax Options', <div>{toggle('Apply Basic Personal Amount (BPA)', 'taxes.additionalOptions.applyBpa')}{toggle('Apply Provincial Credits', 'taxes.additionalOptions.applyProvincialCredits')}{toggle('Apply Canada Employment Amount', 'taxes.additionalOptions.applyCanadaEmploymentAmount')}{toggle('Use TD1 information for calculations', 'taxes.additionalOptions.useTd1')}{toggle('Allow additional tax withholding', 'taxes.additionalOptions.allowAdditionalWithholding')}{toggle('Enable Quebec Tax (QPP/QPIP)', 'taxes.additionalOptions.enableQuebecTax')}</div>, '☷')}{card('Federal Tax Settings', <div className="settings-fields two">{field('Basic Personal Amount (BPA)', 'taxes.federal.bpa')}{field('Canada Employment Amount', 'taxes.federal.canadaEmploymentAmount')}{field('Age Amount (65+)', 'taxes.federal.ageAmount')}{field('Pension Income Amount', 'taxes.federal.pensionIncomeAmount')}{field('Disability Amount', 'taxes.federal.disabilityAmount')}{field('Caregiver Amount', 'taxes.federal.caregiverAmount')}</div>, '🇨🇦')}{card('CPP, EI and QPIP Settings', table(['Item', 'Employee Rate', 'Employer Rate', 'Annual Maximum'], value('taxes.cppEiQpip', []), ['item', 'employeeRate', 'employerRate', 'annualMaximum']), '☂')}{card('Province & Territory Tax Rates', table(['Province / Territory', 'Abbreviation', 'Tax Rate Range', 'Effective Date'], provinceRows, ['province', 'abbreviation', 'taxRateRange', 'effectiveDate']), '📍')}</>}
       {activeTab === 'Deductions & Benefits' && <>{card('Deduction Types', table(['#', 'Deduction Name', 'Type', 'Calculation Method', 'Default Value', 'Applies To', 'Taxable', 'Status'], data.deductions, ['index', 'name', 'type', 'calculationMethod', 'defaultValue', 'appliesTo', 'taxable', 'status']), '💳')}{card('Benefit Types', table(['Benefit Name', 'Type', 'Calculation Method', 'Default Value', 'Applies To', 'Taxable', 'Status'], data.benefits, ['name', 'type', 'calculationMethod', 'defaultValue', 'appliesTo', 'taxable', 'status']), '🎁')}{card('Additional Options', <div>{toggle('Calculate statutory deductions automatically', 'deductionsBenefits.options.calculateStatutory')}{toggle('Prorate deductions for partial periods', 'deductionsBenefits.options.prorate')}{toggle('Apply deduction limits (CRA rules)', 'deductionsBenefits.options.applyLimits')}{toggle('Allow negative net pay', 'deductionsBenefits.options.allowNegativeNetPay')}{toggle('Show employer paid benefits on paystubs', 'deductionsBenefits.options.showEmployerPaidBenefits')}{toggle('Use year-to-date limits for statutory deductions', 'deductionsBenefits.options.useYtdLimits')}</div>, '⚙')}</>}
@@ -6503,6 +6521,81 @@ function EmployerCompanyPage({ token }: { token: string }) {
       <aside className="settings-card company-detail-card"><header><div><h2><span>{tabIcon(activeTab)}</span>{activeTab.replace(/s$/, '')} Details</h2><p>View and edit {activeTab.toLowerCase()} information.</p></div>{pill(selected.status || 'Active')}</header>{detail()}<footer><button className="danger-button">Delete {activeTab.replace(/s$/, '')}</button><button className="run-payroll" onClick={save}>Save Changes</button></footer></aside>
     </div>}
     <footer className="settings-actions"><span>{message}</span>{activeTab === 'Company Profile' && <button className="run-payroll" onClick={save}>Save Changes</button>}</footer>
+  </section>;
+}
+
+function EmployerDocumentsPage({ token }: { token: string }) {
+  const [data, setData] = useState<EmployerDocumentsData>();
+  const [activeTab, setActiveTab] = useState('All Documents');
+  const [selectedId, setSelectedId] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All Types');
+  const [categoryFilter, setCategoryFilter] = useState('All Categories');
+  const [employeeFilter, setEmployeeFilter] = useState('All Employees');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  useEffect(() => {
+    api<EmployerDocumentsData>('/employer/documents', token)
+      .then((result) => {
+        setData(result);
+        setSelectedId(result.documents[0]?.id || '');
+      })
+      .catch(() => setData({ metrics: {}, employees: [], documents: [] }));
+  }, [token]);
+  const documents = data?.documents || [];
+  const tabs = ['All Documents', 'Payroll Documents', 'Employee Documents', 'Government Documents', 'Company Documents', 'Templates'];
+  const matchesTab = (doc: Record<string, any>) =>
+    activeTab === 'All Documents' ||
+    (activeTab === 'Payroll Documents' && doc.category === 'Payroll') ||
+    (activeTab === 'Employee Documents' && doc.employeeId) ||
+    (activeTab === 'Government Documents' && doc.category === 'Government') ||
+    (activeTab === 'Company Documents' && doc.category === 'Company') ||
+    (activeTab === 'Templates' && doc.category === 'Template');
+  const normalized = search.trim().toLowerCase();
+  const filtered = documents
+    .filter(matchesTab)
+    .filter((doc) => typeFilter === 'All Types' || doc.type === typeFilter)
+    .filter((doc) => categoryFilter === 'All Categories' || doc.category === categoryFilter)
+    .filter((doc) => employeeFilter === 'All Employees' || doc.employeeId === employeeFilter)
+    .filter((doc) => !normalized || `${doc.fileName} ${doc.relatedTo} ${(doc.tags || []).join(' ')}`.toLowerCase().includes(normalized));
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice((Math.min(page, pages) - 1) * pageSize, Math.min(page, pages) * pageSize);
+  const selected = documents.find((doc) => doc.id === selectedId) || visible[0] || documents[0];
+  const docTypes = Array.from(new Set(documents.map((doc) => String(doc.type)).filter(Boolean))).sort();
+  const categories = Array.from(new Set(documents.map((doc) => String(doc.category)).filter(Boolean))).sort();
+  const metric = (label: string, value: number, note: string, icon: string) => <article><span>{icon}</span><div><small>{label}</small><strong>{value || 0}</strong><p>{note}</p></div></article>;
+  const iconFor = (type: string) => type === 'Report' ? 'XLS' : type === 'Policy' ? 'DOC' : 'PDF';
+  const downloadHref = (doc: Record<string, any>) => doc.downloadUrl ? (String(doc.downloadUrl).startsWith('/api') ? `${apiBase.replace(/\/api$/, '')}${doc.downloadUrl}` : doc.downloadUrl) : '#';
+  return <section className="documents-admin-page">
+    <header className="documents-head"><div><h1>Documents</h1><p>Store, manage and share important payroll, HR and company documents.</p></div><button className="run-payroll">+ Upload Document</button></header>
+    <div className="documents-metrics">
+      {metric('Total Documents', data?.metrics.totalDocuments || documents.length, 'All time', 'D')}
+      {metric('Payroll Documents', data?.metrics.payrollDocuments || 0, 'Paystubs, T4, ROE, PD7A', 'P')}
+      {metric('Employee Documents', data?.metrics.employeeDocuments || 0, 'Contracts, IDs, Forms', 'E')}
+      {metric('Company Documents', data?.metrics.companyDocuments || 0, 'Policies, Licences, Reports', 'C')}
+      {metric('Pending Reviews', data?.metrics.pendingReviews || 0, 'Require action', '!')}
+    </div>
+    <nav className="documents-tabs">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => { setActiveTab(tab); setPage(1); }}>{tab}</button>)}</nav>
+    <div className="documents-filters">
+      <label>Document Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}><option>All Types</option>{docTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+      <label>Category<select value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option>All Categories</option>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
+      <label>Employee<select value={employeeFilter} onChange={(event) => { setEmployeeFilter(event.target.value); setPage(1); }}><option>All Employees</option>{(data?.employees || []).map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>
+      <label>Date Range<input value="Jan 1, 2025 - Dec 31, 2025" readOnly /></label>
+      <label>Search<input placeholder="Search by document name, employee, or tags..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
+      <button onClick={() => { setTypeFilter('All Types'); setCategoryFilter('All Categories'); setEmployeeFilter('All Employees'); setSearch(''); setPage(1); }}>Clear Filters</button>
+    </div>
+    <div className="documents-layout">
+      <section className="settings-card documents-table-card">
+        <div className="settings-table"><table><thead><tr><th><input type="checkbox" /></th><th>File Name</th><th>Type</th><th>Category</th><th>Related To</th><th>Upload Date</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visible.map((doc) => <tr key={doc.id} className={selected?.id === doc.id ? 'selected' : ''} onClick={() => setSelectedId(String(doc.id))}><td><input type="checkbox" checked={selected?.id === doc.id} readOnly /></td><td><span className={`doc-file-icon ${iconFor(String(doc.type)).toLowerCase()}`}>{iconFor(String(doc.type))}</span><b>{doc.fileName}</b></td><td><span className="type-pill">{doc.type}</span></td><td><span className="type-pill neutral">{doc.category}</span></td><td>{doc.relatedTo}</td><td>{formatDate(String(doc.uploadDate), 'en')}</td><td>{doc.size}</td><td><span className={`status ${String(doc.status).toLowerCase() === 'filed' || String(doc.status).toLowerCase() === 'active' ? 'paid' : 'pending'}`}>{doc.status}</span></td><td className="table-actions"><a href={downloadHref(doc)}>↓</a><button>⋯</button></td></tr>)}{!visible.length && <tr><td colSpan={9}>No documents match the selected filters.</td></tr>}</tbody></table></div>
+        <footer className="company-pagination"><span>Showing {filtered.length ? (Math.min(page, pages) - 1) * pageSize + 1 : 0} - {Math.min(Math.min(page, pages) * pageSize, filtered.length)} of {filtered.length} documents</span><div><button disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>{[1, 2, 3, 4, 5].filter((item) => item <= pages).map((item) => <button key={item} className={item === Math.min(page, pages) ? 'run-payroll' : ''} onClick={() => setPage(item)}>{item}</button>)}<button disabled={page >= pages} onClick={() => setPage(page + 1)}>›</button><select value={pageSize} disabled><option>10 / page</option></select></div></footer>
+      </section>
+      {selected && <aside className="settings-card document-detail-card">
+        <header><div className={`doc-file-icon large ${iconFor(String(selected.type)).toLowerCase()}`}>{iconFor(String(selected.type))}</div><div><h2>{selected.fileName}</h2><p>{selected.size} • {selected.type}</p></div><button>x</button></header>
+        <nav><button className="active">Details</button><button>Preview</button><button>Version History</button></nav>
+        <dl><dt>File Name</dt><dd>{selected.fileName}</dd><dt>Document Type</dt><dd><span className="type-pill">{selected.type}</span></dd><dt>Category</dt><dd><span className="type-pill neutral">{selected.category}</span></dd><dt>Related To</dt><dd>{selected.relatedTo}</dd>{selected.taxYear && <><dt>Tax Year</dt><dd>{selected.taxYear}</dd></>}<dt>Upload Date</dt><dd>{formatDate(String(selected.uploadDate), 'en')}</dd><dt>Uploaded By</dt><dd>{selected.uploadedBy}</dd><dt>Status</dt><dd><span className="status paid">{selected.status}</span></dd><dt>Description</dt><dd>{selected.description}</dd><dt>Tags</dt><dd className="doc-tags">{(selected.tags || []).map((tag: string) => <span key={tag}>{tag}</span>)}</dd></dl>
+        <footer><a className="run-payroll" href={downloadHref(selected)}>↓ Download</a><button>Share</button><button>Move</button><button className="danger-button">Delete</button><button>Edit Details</button></footer>
+      </aside>}
+    </div>
   </section>;
 }
 
@@ -6897,6 +6990,8 @@ function EmployerDashboard({
       }} />
     ) : adminPage === 'Government Filings' ? (
       <GovernmentFilingsPage token={token} />
+    ) : adminPage === 'Documents' ? (
+      <EmployerDocumentsPage token={token} />
     ) : adminPage === 'Reports' ? (
       <EmployerReportsPage
         token={token}

@@ -823,6 +823,128 @@ router.put('/company-module', authenticate, requirePermission('users.manage'), a
   res.json({ companyModule: mergeSettings(companyModuleDefaults(company, []), (company.settings.companyModule || {}) as Record<string, unknown>) });
 });
 
+router.get('/documents', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const [company, employees, taxForms, roes, filings, paystubs] = await Promise.all([
+    Company.findById(companyId),
+    Employee.find({ companyId }).sort({ employeeNumber: 1 }),
+    TaxFormDocument.find({ companyId }).sort({ generatedAt: -1 }),
+    RoeDocument.find({ companyId }).sort({ generatedAt: -1 }),
+    GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }),
+    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(80)
+  ]);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  const savedDocuments = (((company.settings || {}).documents || []) as Array<Record<string, unknown>>).map((item, index) => ({
+    id: String(item.id || `company-${index}`),
+    fileName: String(item.fileName || item.name || 'Company document'),
+    type: String(item.type || 'Policy'),
+    category: String(item.category || 'Company'),
+    relatedTo: String(item.relatedTo || 'Company'),
+    employeeId: String(item.employeeId || ''),
+    uploadDate: String(item.uploadDate || company.createdAt?.toISOString() || new Date().toISOString()),
+    size: String(item.size || '0 KB'),
+    status: String(item.status || 'Active'),
+    uploadedBy: String(item.uploadedBy || 'Admin User'),
+    description: String(item.description || ''),
+    tags: Array.isArray(item.tags) ? item.tags : ['Company'],
+    source: 'company'
+  }));
+  const taxDocuments = taxForms.map((document) => {
+    const employee = employeeById.get(String(document.employeeId));
+    const employeeName = employee ? employeeDisplayName(employee) : 'Employee';
+    return {
+      id: String(document._id),
+      fileName: `${document.formType}_${document.taxYear}_${employeeName.replace(/\s+/g, '_')}.pdf`,
+      type: document.formType,
+      category: 'Government',
+      relatedTo: employee ? `${employeeName} (${employee.employeeNumber})` : employeeName,
+      employeeId: String(document.employeeId),
+      taxYear: document.taxYear,
+      uploadDate: document.generatedAt.toISOString(),
+      size: '245 KB',
+      status: 'Filed',
+      uploadedBy: 'Admin User',
+      description: `${document.formType} slip for tax year ${document.taxYear}`,
+      tags: [document.formType, String(document.taxYear), 'CRA'],
+      source: 'tax-form',
+      downloadUrl: document.fileUrl || ''
+    };
+  });
+  const roeDocuments = roes.map((document) => {
+    const employee = employeeById.get(String(document.employeeId));
+    const employeeName = employee ? employeeDisplayName(employee) : 'Employee';
+    return {
+      id: String(document._id),
+      fileName: `ROE_${employeeName.replace(/\s+/g, '_')}.pdf`,
+      type: 'ROE',
+      category: 'Government',
+      relatedTo: employee ? `${employeeName} (${employee.employeeNumber})` : employeeName,
+      employeeId: String(document.employeeId),
+      uploadDate: document.generatedAt.toISOString(),
+      size: '180 KB',
+      status: 'Filed',
+      uploadedBy: 'Admin User',
+      description: 'Record of Employment generated from payroll data',
+      tags: ['ROE', 'Government'],
+      source: 'roe'
+    };
+  });
+  const filingDocuments = filings.flatMap((filing) =>
+    (filing.documents || []).map((document, index) => ({
+      id: `${filing._id}:${index}`,
+      fileName: document.name,
+      type: filing.type === 'CRA_REMITTANCE' ? 'PD7A' : filing.type.replace(/_/g, ' '),
+      category: 'Government',
+      relatedTo: 'Company',
+      employeeId: '',
+      uploadDate: (filing.filedAt || filing.preparedAt || filing.dueDate).toISOString(),
+      size: '320 KB',
+      status: filing.status === 'filed' ? 'Filed' : filing.status === 'prepared' ? 'Internal' : 'Pending',
+      uploadedBy: 'Admin User',
+      description: `${filing.title} document for ${filing.period}`,
+      tags: [filing.type, String(filing.year)],
+      source: 'government-filing'
+    }))
+  );
+  const paystubDocuments = paystubs.map((statement) => {
+    const employee = employeeById.get(String(statement.employeeId));
+    const employeeName = employee ? employeeDisplayName(employee) : 'Employee';
+    return {
+      id: String(statement._id),
+      fileName: `Paystub_${employeeName.replace(/\s+/g, '_')}_${statement.payDate.toISOString().slice(0, 10)}.pdf`,
+      type: 'Paystub',
+      category: 'Payroll',
+      relatedTo: employee ? `${employeeName} (${employee.employeeNumber})` : employeeName,
+      employeeId: String(statement.employeeId),
+      uploadDate: statement.payDate.toISOString(),
+      size: '190 KB',
+      status: 'Active',
+      uploadedBy: 'Payroll',
+      description: 'Employee paystub generated from payroll run',
+      tags: ['Paystub', String(statement.payPeriodYear)],
+      source: 'paystub',
+      downloadUrl: `/api/employer/paystubs/${statement._id}/download`
+    };
+  });
+  const documents = [...taxDocuments, ...roeDocuments, ...filingDocuments, ...paystubDocuments, ...savedDocuments]
+    .sort((left, right) => new Date(right.uploadDate).getTime() - new Date(left.uploadDate).getTime());
+  const countBy = (predicate: (item: typeof documents[number]) => boolean) => documents.filter(predicate).length;
+  res.json({
+    documents,
+    employees: employees.map((employee) => ({ id: String(employee._id), name: employeeDisplayName(employee), employeeNumber: employee.employeeNumber })),
+    metrics: {
+      totalDocuments: documents.length,
+      payrollDocuments: countBy((item) => item.category === 'Payroll'),
+      employeeDocuments: countBy((item) => Boolean(item.employeeId)),
+      governmentDocuments: countBy((item) => item.category === 'Government'),
+      companyDocuments: countBy((item) => item.category === 'Company'),
+      pendingReviews: countBy((item) => ['Pending', 'Internal'].includes(item.status))
+    }
+  });
+});
+
 router.post('/auth/login', async (req, res) => {
   const parsed = z.object({ email: z.string().email(), password: z.string() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid login request' });
