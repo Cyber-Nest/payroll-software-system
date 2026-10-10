@@ -22,6 +22,7 @@ export interface ICompany {
   craPayroll?: Record<string, unknown>;
   payrollConfiguration?: Record<string, unknown>;
   banking?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
   subscription?: { plan?: string; billingFrequency?: string; startDate?: string };
   features?: Record<string, boolean>;
   createdAt: Date;
@@ -50,6 +51,7 @@ const companySchema = new Schema<ICompany>(
     craPayroll: Schema.Types.Mixed,
     payrollConfiguration: Schema.Types.Mixed,
     banking: Schema.Types.Mixed,
+    settings: Schema.Types.Mixed,
     subscription: {
       plan: String,
       billingFrequency: String,

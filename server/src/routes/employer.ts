@@ -38,6 +38,7 @@ import {
   sumMoney
 } from '../utils/money';
 import { normalizeRole } from '../security/rbac';
+import { roleNames, rolePermissions } from '../security/rbac';
 import {
   decryptSin,
   encryptSin,
@@ -58,6 +59,206 @@ import { calculateStatutoryDeductions } from '../services/taxEngine.service';
 import { env } from '../config/env';
 
 const router = Router();
+
+function settingDefaults(company?: InstanceType<typeof Company>) {
+  const province = company?.address?.province || 'SK';
+  const legalName = company?.legalName || '';
+  const operatingName = company?.operatingName || legalName;
+  const rp = String(company?.craPayroll?.programAccountNumber || company?.businessNumber || 'RP0001 2345 6789');
+  return {
+    general: {
+      companyInformation: {
+        legalCompanyName: legalName,
+        operatingName,
+        businessNumber: company?.businessNumber || '',
+        craProgramAccountNumber: rp,
+        address: company?.address?.street || '',
+        city: company?.address?.city || '',
+        province,
+        postalCode: company?.address?.postalCode || '',
+        phone: company?.customerCarePhone || '',
+        email: company?.craPayroll?.email || '',
+        website: company?.craPayroll?.website || ''
+      },
+      logoBranding: { brandName: 'Payhours', tagline: 'People • Hours • Pay • Simpler' },
+      systemPreferences: { dateFormat: 'MMM d, yyyy', timeFormat: '12 Hour (AM/PM)', currency: 'CAD - Canadian Dollar ($)', itemsPerPage: '25', darkMode: false, language: 'English (Canada)' },
+      yearEnd: { taxYearEnd: 'December 31', generateT4Automatically: true, generateRoeAutomatically: true }
+    },
+    payroll: {
+      paySchedule: { payFrequency: company?.payrollConfiguration?.payFrequency || 'Bi-Weekly', firstPayPeriodStartDate: '2025-01-01', payPeriodLength: '2 Weeks', payDay: 'Friday', payPeriodNumbering: 'Continuous (1, 2, 3...)', currentPayPeriod: 'Apr 1, 2025 - Apr 15, 2025 (#24)' },
+      calculation: { workHoursPerWeek: 40, dailyHours: 8, overtimeDaily: 8, overtimeWeekly: 40, doubleTimeAfter: 12, statutoryHolidayPay: 'As per Province Rules' },
+      rounding: { hours: 'Nearest 0.25 hour', amounts: 'Nearest $0.01', minimumPayPerDay: 0, minimumPayPerPeriod: '0.00', roundOvertimeSeparately: true, roundTotalEarnings: true, applyRoundingToDeductions: false },
+      payOptions: { defaultPaymentMethod: 'Direct Deposit', directDepositProvider: 'Manual / Bank Upload', allowMultipleBankAccounts: true, requireBankAccountForNewEmployees: true, generatePaystubsAutomatically: true, sendPaystubByEmail: true, allowManualPayroll: false, requireApprovalBeforeProcessing: true },
+      additionalOptions: { defaultDepartment: 'Select Department', defaultPayGroup: 'Select Pay Group', includeZeroHourEmployees: false, allowRetroactivePayAdjustments: true, enableCosting: true, trackPto: true }
+    },
+    taxes: {
+      configuration: { payProvince: province, craPayrollProgramAccountNumber: rp, fiscalYear: '2025', payrollType: 'Regular Payroll', useLatestCraTables: true },
+      craTaxTables: { taxYear: '2025', province, lastUpdated: 'Jan 1, 2025' },
+      additionalOptions: { applyBpa: true, applyProvincialCredits: true, applyCanadaEmploymentAmount: true, useTd1: true, allowAdditionalWithholding: true, enableQuebecTax: false },
+      federal: { bpa: '$16,129.00', canadaEmploymentAmount: '$1,433.00', ageAmount: '$8,790.00', pensionIncomeAmount: '$2,000.00', disabilityAmount: '$9,428.00', caregiverAmount: '$2,616.00' },
+      provincial: { bpa: '$22,125.00', lowIncomeTaxCredit: '$428.00', employmentAmount: '$1,463.00', pensionIncomeAmount: '$2,000.00', disabilityAmount: '$10,275.00', caregiverAmount: '$2,600.00' },
+      cppEiQpip: [
+        { item: 'CPP', employeeRate: '5.95%', employerRate: '5.95%', annualMaximum: '$71,300.00' },
+        { item: 'EI', employeeRate: '1.66%', employerRate: '2.32%', annualMaximum: '$65,700.00' },
+        { item: 'QPIP (QC)', employeeRate: '0.494%', employerRate: '0.692%', annualMaximum: '$94,000.00' },
+        { item: 'QPP (QC)', employeeRate: '5.95%', employerRate: '5.95%', annualMaximum: '$71,300.00' }
+      ]
+    },
+    timeAttendance: { defaults: { startTime: '9:00 AM', endTime: '5:00 PM', autoDeductBreak: 30, earlyClockIn: 10, lateClockOut: 10, managerApprovalForOt: true, trackGps: false, employeeEditTime: false } },
+    paystubs: { template: 'Standard (Detailed)', title: 'Earnings Statement', payPeriodLabel: 'Pay Period', regularHourLabel: 'Regular Hours', overtimeHourLabel: 'Overtime Hours', doubleTimeHourLabel: 'Double Time Hours', rateDisplayFormat: 'Show $ per hour', showPayGroup: true, showDepartment: true, showJobTitle: true, showLocation: true, showEmployeeSin: false, maskSin: true, showHireDate: true, showAccruals: true, message: 'Thank you for your hard work!', disclaimer: 'This pay statement is for information purposes only. Please contact HR if you have any questions.', delivery: { availableInPortal: true, emailAutomatically: true, passwordProtectPdf: false, allowDownload: true, keepYears: '7 Years' } },
+    payment: { methods: { defaultPaymentMethod: 'Direct Deposit', allowMultiplePaymentMethods: true, allowManualPayment: true, allowPaycard: false }, directDeposit: { timing: 'Same Day (on pay date)', fileFormat: 'EFT (Canadian NACHA) - .txt', uploadMethod: 'Manual Upload to Bank Portal', requirePreNote: true, allowForeignBankAccounts: true }, schedule: { day: 'Friday', time: '10:00 AM', daysBeforePayDate: 2, sendFileAutomatically: false, sendConfirmationEmail: true, includeZeroNetPay: false }, bank: { bankName: company?.banking?.bankName || 'Royal Bank of Canada (RBC)', accountHolderName: legalName, transitNumber: company?.banking?.transitNumber || '', institutionNumber: company?.banking?.institutionNumber || '', accountNumber: company?.banking?.accountNumber || '' }, notifications: { employeeConfirmations: true, adminConfirmations: true, failedPaymentAlerts: true, includePaystub: true, message: 'Your payroll has been processed. Please find your paystub attached.' }, security: { managerApproval: false, adminApproval: true, minimumApprovers: 1, editAfterApproval: false, lockAfterProcessing: true, twoFactor: true } },
+    governmentFilings: { cra: { remittanceFrequency: 'Monthly (Regular)', nextRemittanceDueDate: '2025-05-15', remittanceMethod: 'EFT (My Business Account)', bankAccount: 'RBC Operating Account', generatePd7a: true, autofillFromPayrollRuns: true, validateBeforeSubmission: true }, provincial: { province, remittanceFrequency: 'Monthly', nextRemittanceDueDate: '2025-05-15', remittanceMethod: 'EFT (eTax Services)', generateProvincialReturn: true, autofillFromPayrollRuns: true }, yearEnd: { taxYear: '2025', filingMethod: 'CRA Web Forms / EFILE', autoGenerateT4: true, autoGenerateT4A: false, includeRl1: false, includeT4Summary: true, electronicFiling: true, createReleve1: false }, notifications: { dueReminder: true, daysBefore: 5, success: true, errors: true, summary: true, yearEnd: true, email: 'admin@abcsolutions.ca', recipients: 'hr@abcsolutions.ca, finance@abcsolutions.ca' }, advanced: { includeZeroAmountSlips: true, useYtdTotals: true, enableTestFiling: true, logActivities: true, retainYears: '7 Years', defaultContact: 'Company Admin' } },
+    integrations: { api: { apiKey: '••••••••••••••••', apiSecret: '••••••••••••••••' }, webhooks: { enabled: true, url: '', events: ['Payroll Completed', 'Employee Added', 'Government Filing Submitted'] } },
+    notifications: { preferences: { email: true, inApp: true, sms: false, digest: true, language: 'English (Canada)', timeZone: '(GMT-06:00) Saskatchewan' }, email: { fromName: 'Payhours Payroll', fromEmail: 'noreply@payhours.ca', replyTo: 'support@payhours.ca' }, recipients: { payroll: 'Admin Only', government: 'Admin & Accountant', system: 'Admin Only', employeeSelfService: 'Employees', failedPayment: 'Admin & Payroll Manager', security: 'Admin Only' }, reminders: { payrollApproval: 2, governmentFiling: 5, documentExpiry: 14, inactiveEmployee: 30 } }
+  };
+}
+
+function mergeSettings(defaults: Record<string, unknown>, saved?: Record<string, unknown>): Record<string, unknown> {
+  const output: Record<string, unknown> = { ...defaults };
+  for (const [key, value] of Object.entries(saved || {})) {
+    output[key] = value && typeof value === 'object' && !Array.isArray(value)
+      ? mergeSettings((defaults[key] as Record<string, unknown>) || {}, value as Record<string, unknown>)
+      : value;
+  }
+  return output;
+}
+
+function companyModuleDefaults(company: InstanceType<typeof Company>, employees: IEmployee[]) {
+  const province = company.address?.province || 'SK';
+  const city = company.address?.city || 'Yorkton';
+  const legalName = company.legalName || 'ABC Solutions Inc.';
+  const employeeCounts = employees.reduce<Record<string, number>>((counts, employee) => {
+    const department = String(employee.adminProfile?.employment?.department || 'Operations');
+    counts[department] = (counts[department] || 0) + 1;
+    return counts;
+  }, {});
+  const departments = [
+    ['Kitchen', 'KCH', 'All Locations', 18, 'Kitchen staff including cooks, prep staff and dishwashers.'],
+    ['Front of House', 'FOH', 'All Locations', 22, 'Servers, cashiers and customer-facing team members.'],
+    ['Management', 'MGT', 'All Locations', 8, 'Store and restaurant leadership team.'],
+    ['Administration', 'ADM', 'Head Office', 5, 'Office administration and business support.'],
+    ['Delivery', 'DLV', 'Medicine Hat, Yorkton', 12, 'Delivery drivers and logistics staff.'],
+    ['Maintenance', 'MNT', 'All Locations', 3, 'Facilities and equipment maintenance.'],
+    ['Human Resources', 'HR', 'Head Office', 4, 'Recruiting, onboarding and employee relations.'],
+    ['Finance & Accounting', 'FIN', 'Head Office', 6, 'Payroll, accounting and financial operations.'],
+    ['Marketing', 'MKT', 'Head Office', 3, 'Campaigns and local promotions.'],
+    ['Purchasing', 'PUR', 'All Locations', 2, 'Procurement and vendor management.']
+  ].map(([name, code, locations, fallbackEmployees, description], index) => ({
+    id: code,
+    index: index + 1,
+    name,
+    code,
+    locations,
+    employees: employeeCounts[String(name)] || Number(fallbackEmployees),
+    status: 'Active',
+    description
+  }));
+  const jobPositions = [
+    ['Restaurant Manager', 'RM', 'Management', 'Hourly', '$32.00', 3],
+    ['Assistant Manager', 'ASM', 'Management', 'Hourly', '$26.00', 5],
+    ['Shift Supervisor', 'SUP', 'Front of House', 'Hourly', '$22.00', 4],
+    ['Crew Member', 'CREW', 'Front of House', 'Hourly', '$17.50', 18],
+    ['Kitchen Staff', 'KCH', 'Kitchen', 'Hourly', '$18.00', 10],
+    ['Cashier', 'CSH', 'Front of House', 'Hourly', '$18.00', 6],
+    ['Delivery Driver', 'DRV', 'Delivery', 'Hourly', '$19.00', 4],
+    ['Maintenance Technician', 'MNT', 'Maintenance', 'Hourly', '$24.00', 2],
+    ['Accountant', 'ACC', 'Finance & Accounting', 'Salary', '$65,000.00', 1],
+    ['HR Coordinator', 'HR', 'Human Resources', 'Salary', '$55,000.00', 1]
+  ].map(([title, code, department, payType, rate, count], index) => ({
+    id: code,
+    index: index + 1,
+    title,
+    code,
+    department,
+    payType,
+    defaultPayRate: rate,
+    employees: count,
+    status: index === 9 ? 'Inactive' : 'Active',
+    standardHours: 40,
+    description: 'Oversee daily restaurant operations, manage staff, ensure customer satisfaction, maintain food safety standards, and achieve sales targets.'
+  }));
+  const paySchedules = [
+    ['Bi-Weekly (SK)', 'Bi-Weekly', '14 days\nSun - Sat', 'Every 2nd Friday', 24],
+    ['Weekly (Hourly)', 'Weekly', '7 days\nSun - Sat', 'Every Friday', 8],
+    ['Semi-Monthly (Salary)', 'Semi-Monthly', '1st - 15th\n16th - EOM', '15th & Last day', 5],
+    ['Monthly (Management)', 'Monthly', '1 month\n1st - EOM', 'Last business day', 0]
+  ].map(([name, frequency, payPeriod, regularPayDays, count], index) => ({ id: String(index + 1), index: index + 1, name, frequency, payPeriod, regularPayDays, employees: count, status: 'Active' }));
+  const holidays = [
+    ['New Year’s Day', 'Jan 1, 2025', 'Wed', 'Statutory', 'All Locations'],
+    ['Family Day', 'Feb 17, 2025', 'Mon', 'Statutory', 'Saskatchewan'],
+    ['Good Friday', 'Apr 18, 2025', 'Fri', 'Statutory', 'All Locations'],
+    ['Victoria Day', 'May 19, 2025', 'Mon', 'Statutory', 'All Locations'],
+    ['Canada Day', 'Jul 1, 2025', 'Tue', 'Statutory', 'All Locations'],
+    ['Civic Holiday', 'Aug 4, 2025', 'Mon', 'Statutory', 'Saskatchewan'],
+    ['Labour Day', 'Sep 1, 2025', 'Mon', 'Statutory', 'All Locations'],
+    ['National Day for Truth and Reconciliation', 'Sep 30, 2025', 'Tue', 'Statutory', 'All Locations'],
+    ['Thanksgiving Day', 'Oct 13, 2025', 'Mon', 'Statutory', 'Saskatchewan'],
+    ['Christmas Day', 'Dec 25, 2025', 'Thu', 'Statutory', 'All Locations'],
+    ['Boxing Day', 'Dec 26, 2025', 'Fri', 'Statutory', 'All Locations'],
+    ['Diwali', 'Oct 20, 2025', 'Mon', 'Custom', 'All Locations']
+  ].map(([name, date, day, type, appliesTo], index) => ({ id: String(index + 1), index: index + 1, name, date, day, type, appliesTo, paidHours: '8.00', status: 'Active' }));
+  const locations = [
+    { id: 'head-office', index: 1, name: `${legalName.replace('ABC Solutions Inc.', 'McDonald’s')} ${city}`, address: '123 Broadway Street\nYorkton, SK\nS3N 2V8', city, province, employees: 18, status: 'Active', badge: 'Head Office' },
+    { id: 'medicine-hat', index: 2, name: 'Pizza Hut Medicine Hat', address: '2005 Strachan Road SE\nMedicine Hat, AB\nT1B 4V2', city: 'Medicine Hat', province: 'AB', employees: 12, status: 'Active' },
+    { id: 'winnipeg', index: 3, name: 'Chicken Delight Winnipeg', address: '123 Main Street\nWinnipeg, MB\nR2C 3A1', city: 'Winnipeg', province: 'MB', employees: 6, status: 'Active' },
+    { id: 'langley', index: 4, name: 'Barburrito Langley', address: '456 Fraser Highway\nLangley, BC\nV3A 7N1', city: 'Langley', province: 'BC', employees: 1, status: 'Active' }
+  ];
+  return {
+    profile: {
+      legalName,
+      operatingName: company.operatingName || legalName,
+      industry: company.industry || 'Restaurant / Food Services',
+      companySize: '1 - 50 Employees',
+      businessNumber: company.businessNumber || '',
+      payrollAccountNumber: company.craPayroll?.programAccountNumber || company.businessNumber || '',
+      incorporationDate: '2020-01-15',
+      primaryContactName: company.craPayroll?.primaryContactName || 'Anil Kumar',
+      primaryContactEmail: company.craPayroll?.primaryContactEmail || 'admin@abcsolutions.ca',
+      primaryContactPhone: company.customerCarePhone || '+1 306-555-0101',
+      website: company.craPayroll?.website || 'https://www.abcsolutions.ca',
+      addressLine1: company.address?.street || '123 Main Street',
+      addressLine2: company.address?.line2 || 'Suite 100',
+      city,
+      province,
+      postalCode: company.address?.postalCode || 'S3N 2V8',
+      country: company.address?.country || 'Canada',
+      currency: 'CAD - Canadian Dollar',
+      language: 'English (Canada)',
+      dateFormat: 'MMM DD, YYYY (Jan 15, 2025)',
+      timeZone: '(GMT-06:00) Saskatchewan',
+      plan: company.subscription?.plan || 'Pro',
+      subscriptionStatus: 'Active',
+      renewalDate: 'Dec 31, 2025',
+      billingEmail: 'admin@abcsolutions.ca',
+      hrEmail: 'hr@abcsolutions.ca',
+      payrollEmail: 'payroll@abcsolutions.ca',
+      apEmail: 'ap@abcsolutions.ca',
+      infoEmail: 'info@abcsolutions.ca'
+    },
+    locations,
+    departments,
+    jobPositions,
+    paySchedules,
+    payRates: jobPositions.map((job, index) => ({ id: job.id, index: index + 1, jobPosition: job.title, department: job.department, payType: job.payType, payRate: job.payType === 'Salary' ? `${job.defaultPayRate} / year` : job.defaultPayRate, effectiveDate: index === 3 ? 'Mar 1, 2025' : 'Jan 1, 2025', status: 'Active' })),
+    holidays,
+    accruals: [
+      { id: 'vac', index: 1, name: 'Vacation', type: 'Paid Time Off', method: 'Percentage', rate: '4%', eligibility: 'All Employees', status: 'Active' },
+      { id: 'sick', index: 2, name: 'Sick Leave', type: 'Paid Leave', method: 'Hours Per Year', rate: '40 hours', eligibility: 'Full-Time', status: 'Active' },
+      { id: 'pto', index: 3, name: 'Personal Time Off', type: 'Paid Time Off', method: 'Fixed Hours', rate: '24 hours', eligibility: 'After Probation', status: 'Active' }
+    ],
+    bankAccounts: [
+      { id: 'payroll', index: 1, name: 'Payroll Account', bankName: company.banking?.bankName || 'RBC Royal Bank', accountType: 'Payroll', accountNumber: `****${String(company.banking?.accountNumber || '1234').slice(-4)}`, transitNumber: company.banking?.transitNumber || '01234', status: 'Active', notes: 'Main payroll account for employee direct deposits.' },
+      { id: 'tax', index: 2, name: 'Tax Remittance', bankName: 'TD Canada Trust', accountType: 'Tax Payment', accountNumber: '****5678', transitNumber: '56789', status: 'Active' },
+      { id: 'operating', index: 3, name: 'General Operating', bankName: 'Scotiabank', accountType: 'General', accountNumber: '****9012', transitNumber: '90123', status: 'Active' },
+      { id: 'reimbursements', index: 4, name: 'Employee Reimbursements', bankName: 'BMO', accountType: 'Other', accountNumber: '****3456', transitNumber: '34567', status: 'Inactive' }
+    ],
+    settings: {
+      general: { payrollYearStart: '2025-01-01', firstPayPeriodStart: '2025-01-01', fiscalYearEnd: '2025-12-31' },
+      payroll: { defaultPaymentFrequency: company.payrollConfiguration?.payFrequency || 'Bi-Weekly', defaultTaxProvince: province },
+      display: { country: 'Canada', province, timeZone: '(UTC-06:00) Saskatchewan', dateFormat: 'MMM dd, yyyy (Jan 15, 2025)', timeFormat: '12 Hour (1:00 PM)', currency: 'CAD - Canadian Dollar ($)', language: 'English (Canada)' }
+    }
+  };
+}
 
 function requireEmployer(req: AuthRequest, res: import('express').Response): string | undefined {
   const companyId = req.employerContext?.companyId;
@@ -443,6 +644,184 @@ router.delete(
     res.json({ success: true });
   }
 );
+
+router.get('/settings', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const [company, users, employees, deductions, filings, paystubs] = await Promise.all([
+    Company.findById(companyId),
+    EmployerUser.find({ $or: [{ companyId }, { companyIds: companyId }] }).sort({ name: 1 }),
+    Employee.find({ companyId }).sort({ employeeNumber: 1 }).limit(20),
+    DeductionType.find({ $or: [{ employerId: companyId }, { employerId: { $exists: false } }] }).sort({ mandatory: -1, name: 1 }),
+    GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }).limit(12),
+    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1)
+  ]);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const settings = mergeSettings(settingDefaults(company), company.settings || {});
+  const roleCounts = new Map<string, number>();
+  users.forEach((user) => roleCounts.set(normalizeRole(user.role), (roleCounts.get(normalizeRole(user.role)) || 0) + 1));
+  const roles = roleNames
+    .filter((role) => role !== 'CyberNest Super Admin')
+    .map((role, index) => ({
+      id: role,
+      index: index + 1,
+      name: role === 'Company Owner' ? 'Super Admin' : role.replace('Payroll Administrator', 'Payroll Admin').replace('HR Administrator', 'HR Manager'),
+      description: role === 'Company Owner' ? 'Full access to all modules' : role === 'Employee' ? 'Self service access' : `Manage ${role.toLowerCase()} access`,
+      users: roleCounts.get(role) || 0,
+      status: 'Active',
+      permissions: rolePermissions[role]
+    }));
+  res.json({
+    settings,
+    company: {
+      id: String(company._id),
+      legalName: company.legalName,
+      operatingName: company.operatingName,
+      businessNumber: company.businessNumber,
+      address: company.address,
+      customerCarePhone: company.customerCarePhone
+    },
+    users: users.map((user, index) => ({
+      id: String(user._id),
+      index: index + 1,
+      name: user.name,
+      email: user.email,
+      role: normalizeRole(user.role).replace('Payroll Administrator', 'Payroll Admin').replace('HR Administrator', 'HR Manager').replace('Company Owner', 'Super Admin'),
+      status: user.isActive ? 'Active' : 'Inactive',
+      lastLogin: user.lastLoginAt ? user.lastLoginAt.toISOString() : ''
+    })),
+    roles,
+    employees: employees.map((employee) => ({
+      id: String(employee._id),
+      name: employeeDisplayName(employee),
+      employeeNumber: employee.employeeNumber,
+      department: employee.adminProfile?.employment?.department || 'Operations',
+      jobTitle: employee.occupation || employee.adminProfile?.employment?.jobTitle || ''
+    })),
+    deductions: deductions.map((item, index) => ({
+      id: String(item._id),
+      index: index + 1,
+      name: item.name,
+      type: item.kind === 'statutory' ? 'Statutory' : item.customType === 'custom' ? 'Other' : 'Voluntary',
+      calculationMethod: item.calculationMethod === 'fixed' ? 'Flat Amount' : item.calculationMethod === 'percentage' ? 'Percentage' : 'CRA Formula',
+      defaultValue: item.value ? `$${item.value.toString()}` : item.kind === 'statutory' ? 'Auto' : 'Custom',
+      appliesTo: item.employeeScope === 'all' || item.mandatory ? 'All Employees' : 'Selected',
+      taxable: item.includeInCraReports ? 'Yes' : 'No',
+      status: item.status === 'active'
+    })),
+    benefits: ((settings.deductionsBenefits as Record<string, unknown> | undefined)?.benefits as unknown[]) || [
+      { name: 'Extended Health Care', type: 'Health', calculationMethod: 'Employer Paid', defaultValue: '$100.00/month', appliesTo: 'Selected', taxable: 'No', status: true },
+      { name: 'Dental Care', type: 'Health', calculationMethod: 'Employer Paid', defaultValue: '$75.00/month', appliesTo: 'Selected', taxable: 'No', status: true },
+      { name: 'RRSP Contribution', type: 'Retirement', calculationMethod: 'Percentage', defaultValue: '3%', appliesTo: 'Selected', taxable: 'Yes', status: true }
+    ],
+    filings: filings.map((filing) => ({
+      id: String(filing._id),
+      filingType: filing.title || filing.type,
+      period: filing.period,
+      dueDate: filing.dueDate,
+      amount: safeFormatMoney(filing.amount),
+      status: filing.status,
+      referenceNumber: filing.reference || filing.confirmationNumber || ''
+    })),
+    samplePaystub: paystubs[0] ? { id: String(paystubs[0]._id), payDate: paystubs[0].payDate, netPay: safeFormatMoney(paystubs[0].netPay), grossPay: safeFormatMoney(paystubs[0].grossPay) } : undefined
+  });
+});
+
+router.put('/settings', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const parsed = z.object({ settings: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid settings payload', issues: parsed.error.issues });
+  const company = await Company.findById(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  company.settings = mergeSettings(company.settings || {}, parsed.data.settings);
+  const general = (company.settings.general as Record<string, unknown> | undefined)?.companyInformation as Record<string, unknown> | undefined;
+  const payment = (company.settings.payment as Record<string, unknown> | undefined)?.bank as Record<string, unknown> | undefined;
+  const payroll = (company.settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
+  if (general) {
+    company.legalName = String(general.legalCompanyName || company.legalName);
+    company.operatingName = String(general.operatingName || company.operatingName || company.legalName);
+    company.businessNumber = String(general.businessNumber || company.businessNumber || '');
+    company.customerCarePhone = String(general.phone || company.customerCarePhone || '');
+    company.address = { ...(company.address || {}), street: String(general.address || ''), city: String(general.city || ''), province: String(general.province || ''), postalCode: String(general.postalCode || ''), country: 'Canada' };
+    company.craPayroll = { ...(company.craPayroll || {}), programAccountNumber: general.craProgramAccountNumber, email: general.email, website: general.website };
+  }
+  if (payment) company.banking = { ...(company.banking || {}), ...payment };
+  if (payroll) company.payrollConfiguration = { ...(company.payrollConfiguration || {}), payFrequency: payroll.payFrequency };
+  await company.save();
+  await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Settings updated' } });
+  res.json({ settings: mergeSettings(settingDefaults(company), company.settings || {}) });
+});
+
+router.get('/company-module', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const [company, employees] = await Promise.all([
+    Company.findById(companyId),
+    Employee.find({ companyId }).sort({ employeeNumber: 1 })
+  ]);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const defaults = companyModuleDefaults(company, employees);
+  const saved = (company.settings?.companyModule || {}) as Record<string, unknown>;
+  const module = mergeSettings(defaults, saved);
+  res.json({
+    companyModule: module,
+    summary: {
+      totalEmployees: employees.length,
+      activeEmployees: employees.filter((employee) => employee.adminProfile?.employment?.employmentStatus !== 'Inactive').length,
+      departments: Object.keys(employees.reduce<Record<string, true>>((acc, employee) => {
+        acc[String(employee.adminProfile?.employment?.department || 'Operations')] = true;
+        return acc;
+      }, {})).length
+    },
+    employees: employees.map((employee) => ({
+      id: String(employee._id),
+      name: employeeDisplayName(employee),
+      employeeNumber: employee.employeeNumber,
+      department: employee.adminProfile?.employment?.department || 'Operations',
+      jobTitle: employee.occupation || employee.adminProfile?.employment?.jobTitle || '',
+      location: employee.adminProfile?.employment?.location || company.address?.city || ''
+    }))
+  });
+});
+
+router.put('/company-module', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const parsed = z.object({ companyModule: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid company payload', issues: parsed.error.issues });
+  const company = await Company.findById(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  company.settings = {
+    ...(company.settings || {}),
+    companyModule: mergeSettings((company.settings?.companyModule || {}) as Record<string, unknown>, parsed.data.companyModule)
+  };
+  const profile = ((company.settings.companyModule as Record<string, unknown>).profile || {}) as Record<string, unknown>;
+  company.legalName = String(profile.legalName || company.legalName);
+  company.operatingName = String(profile.operatingName || company.operatingName || company.legalName);
+  company.businessNumber = String(profile.businessNumber || company.businessNumber || '');
+  company.industry = String(profile.industry || company.industry || '');
+  company.customerCarePhone = String(profile.primaryContactPhone || company.customerCarePhone || '');
+  company.address = {
+    ...(company.address || {}),
+    street: String(profile.addressLine1 || company.address?.street || ''),
+    line2: String(profile.addressLine2 || company.address?.line2 || ''),
+    city: String(profile.city || company.address?.city || ''),
+    province: String(profile.province || company.address?.province || ''),
+    postalCode: String(profile.postalCode || company.address?.postalCode || ''),
+    country: String(profile.country || company.address?.country || 'Canada')
+  };
+  company.craPayroll = {
+    ...(company.craPayroll || {}),
+    programAccountNumber: profile.payrollAccountNumber,
+    primaryContactName: profile.primaryContactName,
+    primaryContactEmail: profile.primaryContactEmail,
+    website: profile.website
+  };
+  await company.save();
+  await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Company module updated' } });
+  res.json({ companyModule: mergeSettings(companyModuleDefaults(company, []), (company.settings.companyModule || {}) as Record<string, unknown>) });
+});
 
 router.post('/auth/login', async (req, res) => {
   const parsed = z.object({ email: z.string().email(), password: z.string() }).safeParse(req.body);
