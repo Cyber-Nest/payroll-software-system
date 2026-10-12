@@ -14206,7 +14206,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       </div>
     </>,
     <>
-      <h2>Payroll Schedule</h2>
+      <h2>Payroll Configuration, Tax Config & Paystub Template</h2>
       <div className="wizard-fields four">
         <AdminSelect
           label="Pay Frequency *"
@@ -14217,6 +14217,10 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         <AdminInput label="Payroll Year Start *" value="2026-01-01" onChange={() => undefined} />
         <AdminInput label="Standard Hours Per Week *" value="44" onChange={() => undefined} />
         <AdminInput label="Default Hours Per Day *" value="8" onChange={() => undefined} />
+      </div>
+      <div className="sa-section">
+        <h3>Employer Tax & Paystub Configuration</h3>
+        <div className="wizard-fields two">
         <AdminSelect
           label="Tax Config"
           value={form.taxYear}
@@ -14229,6 +14233,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           onChange={(value) => update('paystubTemplate', value)}
           options={['Standard', 'Compact']}
         />
+        </div>
       </div>
       <div className="check-grid">
         <WizardCheck label="Enable Direct Deposit" checked />
@@ -14350,6 +14355,17 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <p>
             <span>Remittance</span>
             <b>{form.remittanceFrequency}</b>
+          </p>
+        </article>
+        <article>
+          <h3>4. Payroll Configuration</h3>
+          <p>
+            <span>Tax Config</span>
+            <b>{form.taxYear}</b>
+          </p>
+          <p>
+            <span>Paystub Template</span>
+            <b>{form.paystubTemplate}</b>
           </p>
         </article>
         <article>
