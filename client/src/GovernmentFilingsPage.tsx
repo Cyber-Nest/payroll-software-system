@@ -56,10 +56,10 @@ const tabTypes: Record<string, FilingType[]> = {
   'ROE Filings': ['ROE']
 };
 
-export default function GovernmentFilingsPage({ token }: { token: string }) {
+export default function GovernmentFilingsPage({ token, initialTab = 'All Filings' }: { token: string; initialTab?: string }) {
   const [filings, setFilings] = useState<Filing[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [tab, setTab] = useState('All Filings');
+  const [tab, setTab] = useState(initialTab);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
@@ -86,6 +86,9 @@ export default function GovernmentFilingsPage({ token }: { token: string }) {
   };
 
   useEffect(() => { void load(); }, [token]);
+  useEffect(() => {
+    if (tabTypes[initialTab]) setTab(initialTab);
+  }, [initialTab]);
 
   const years = useMemo(() => Array.from(new Set(filings.map((item) => item.year))).sort((a, b) => b - a), [filings]);
   const periods = useMemo(() => Array.from(new Set(filings.map((item) => item.period))), [filings]);

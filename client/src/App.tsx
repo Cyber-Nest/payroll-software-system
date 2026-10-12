@@ -2705,6 +2705,7 @@ function OldEmployerDashboard({
     'Employee Details Report',
     'Deductions Report',
     'Government Liabilities Report',
+    'CRA Source Deductions Report',
     'T4 Summary Report',
     'Employee History Report'
   ];
@@ -6829,6 +6830,7 @@ function EmployerDashboard({
     'Employee Details Report',
     'Deductions Report',
     'Government Liabilities Report',
+    'CRA Source Deductions Report',
     'T4 Summary Report',
     'Employee History Report'
   ];
@@ -7112,6 +7114,8 @@ function EmployerDashboard({
       }} />
     ) : adminPage === 'Government Filings' ? (
       <GovernmentFilingsPage token={token} />
+    ) : adminPage === 'CRA Source Deductions Report' ? (
+      <GovernmentFilingsPage token={token} initialTab="Remittance Schedule" />
     ) : adminPage === 'Documents' ? (
       <EmployerDocumentsPage token={token} />
     ) : adminPage === 'Reports' ? (
@@ -7124,6 +7128,7 @@ function EmployerDashboard({
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
         onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
+        onOpenSourceDeductions={() => setAdminPage('CRA Source Deductions Report')}
         onOpenT4Summary={() => setAdminPage('T4 Summary Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
@@ -7137,6 +7142,7 @@ function EmployerDashboard({
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
         onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
+        onOpenSourceDeductions={() => setAdminPage('CRA Source Deductions Report')}
         onOpenT4Summary={() => setAdminPage('T4 Summary Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
@@ -7253,6 +7259,7 @@ function EmployerReportsPage({
   onOpenEmployees,
   onOpenDeductions,
   onOpenGovernmentLiabilities,
+  onOpenSourceDeductions,
   onOpenT4Summary,
   onOpenHistory
 }: {
@@ -7264,6 +7271,7 @@ function EmployerReportsPage({
   onOpenEmployees: () => void;
   onOpenDeductions: () => void;
   onOpenGovernmentLiabilities: () => void;
+  onOpenSourceDeductions: () => void;
   onOpenT4Summary: () => void;
   onOpenHistory: () => void;
 }) {
@@ -7344,6 +7352,7 @@ function EmployerReportsPage({
                   if (report.name === 'Employee Earnings Report') onOpenEarnings();
                   if (report.name === 'Employee Deduction Report') onOpenDeductions();
                   if (report.name === 'Government Liabilities Report') onOpenGovernmentLiabilities();
+                  if (report.name === 'CRA Source Deductions Report') onOpenSourceDeductions();
                   if (report.name === 'T4 Summary Report') onOpenT4Summary();
                   if (report.name === 'Employee Profile Audit') onOpenHistory();
                 }}
