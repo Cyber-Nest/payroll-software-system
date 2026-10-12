@@ -8412,6 +8412,22 @@ const employerFormPlaceholders = {
   transitNumber: '003',
   institutionNumber: '003',
   accountNumber: '123456789',
+  taxYear: '2026',
+  taxJurisdiction: 'Federal + Provinces',
+  taxDefaultProvince: 'SK',
+  federalBpa: '16452.00',
+  canadaEmploymentAmount: '1501.00',
+  cppRate: '5.95%',
+  cppYmpe: '71300.00',
+  eiRate: '1.63%',
+  eiMaxInsurableEarnings: '68900.00',
+  paystubTemplate: 'Standard',
+  paystubTitle: 'Earnings Statement',
+  payPeriodLabel: 'Pay Period',
+  regularHourLabel: 'Regular Hours',
+  overtimeHourLabel: 'Overtime Hours',
+  doubleTimeHourLabel: 'Double Time Hours',
+  rateDisplayFormat: 'Show $ per hour',
   plan: 'Standard',
   billingFrequency: 'Monthly'
 };
@@ -13448,11 +13464,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     { label: 'Remittance Schedule', section: 'payroll' },
     { label: 'Reports' },
     { label: 'Compliance & Tax' },
-    { label: 'Tax Config' },
     { label: 'Deduction Types' },
     { label: 'Year End (T4)' },
     { label: 'ROE' },
-    { label: 'Paystub Template' },
     { label: 'Notifications' },
     { label: 'Users & Access' },
     { label: 'Settings' }
@@ -13527,6 +13541,32 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
               overtimeMultiplier: 1.5
             }
           },
+          settings: {
+            taxes: {
+              configuration: {
+                fiscalYear: form.taxYear,
+                jurisdiction: form.taxJurisdiction,
+                payProvince: form.taxDefaultProvince
+              },
+              federal: {
+                bpa: form.federalBpa,
+                canadaEmploymentAmount: form.canadaEmploymentAmount
+              },
+              cppEiQpip: [
+                { item: 'CPP', employeeRate: form.cppRate, employerRate: form.cppRate, annualMaximum: form.cppYmpe },
+                { item: 'EI', employeeRate: form.eiRate, employerRate: '', annualMaximum: form.eiMaxInsurableEarnings }
+              ]
+            },
+            paystubs: {
+              template: form.paystubTemplate,
+              title: form.paystubTitle,
+              payPeriodLabel: form.payPeriodLabel,
+              regularHourLabel: form.regularHourLabel,
+              overtimeHourLabel: form.overtimeHourLabel,
+              doubleTimeHourLabel: form.doubleTimeHourLabel,
+              rateDisplayFormat: form.rateDisplayFormat
+            }
+          },
           banking: {
             bankName: form.bankName,
             transitNumber: form.transitNumber,
@@ -13584,6 +13624,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           address: Record<string, string>;
           craPayroll: Record<string, unknown>;
           payrollConfiguration: Record<string, unknown>;
+          settings: Record<string, unknown>;
           banking: Record<string, unknown>;
           subscription: Record<string, string>;
           primaryContact?: {
@@ -13596,6 +13637,14 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         };
       }>('/super-admin/employers/' + employer.id, token);
       const detail = response.employer;
+      const employerSettings = detail.settings || {};
+      const taxSettings = (employerSettings.taxes as Record<string, any> | undefined) || {};
+      const taxConfig = (taxSettings.configuration as Record<string, any> | undefined) || {};
+      const federalTax = (taxSettings.federal as Record<string, any> | undefined) || {};
+      const statutoryRows = (taxSettings.cppEiQpip as Array<Record<string, any>> | undefined) || [];
+      const cppRow = statutoryRows.find((row) => String(row.item).toUpperCase() === 'CPP') || {};
+      const eiRow = statutoryRows.find((row) => String(row.item).toUpperCase() === 'EI') || {};
+      const paystubSettings = (employerSettings.paystubs as Record<string, any> | undefined) || {};
       const provinceName =
         provinceNamesByCode[String(detail.address.province || '').toUpperCase()] ||
         detail.address.province ||
@@ -13648,6 +13697,22 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         transitNumber: String(detail.banking.transitNumber || ''),
         institutionNumber: String(detail.banking.institutionNumber || ''),
         accountNumber: String(detail.banking.accountNumber || ''),
+        taxYear: String(taxConfig.fiscalYear || '2026'),
+        taxJurisdiction: String(taxConfig.jurisdiction || 'Federal + Provinces'),
+        taxDefaultProvince: String(taxConfig.payProvince || 'SK'),
+        federalBpa: String(federalTax.bpa || '16452.00'),
+        canadaEmploymentAmount: String(federalTax.canadaEmploymentAmount || '1501.00'),
+        cppRate: String(cppRow.employeeRate || '5.95%'),
+        cppYmpe: String(cppRow.annualMaximum || '71300.00'),
+        eiRate: String(eiRow.employeeRate || '1.63%'),
+        eiMaxInsurableEarnings: String(eiRow.annualMaximum || '68900.00'),
+        paystubTemplate: String(paystubSettings.template || 'Standard'),
+        paystubTitle: String(paystubSettings.title || 'Earnings Statement'),
+        payPeriodLabel: String(paystubSettings.payPeriodLabel || 'Pay Period'),
+        regularHourLabel: String(paystubSettings.regularHourLabel || 'Regular Hours'),
+        overtimeHourLabel: String(paystubSettings.overtimeHourLabel || 'Overtime Hours'),
+        doubleTimeHourLabel: String(paystubSettings.doubleTimeHourLabel || 'Double Time Hours'),
+        rateDisplayFormat: String(paystubSettings.rateDisplayFormat || 'Show $ per hour'),
         plan: detail.subscription.plan || employer.plan || 'Standard',
         billingFrequency: detail.subscription.billingFrequency || 'Monthly'
       });
@@ -13711,6 +13776,32 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
                 dates: form.statePayDates ? form.statePayDates.split(',').filter(Boolean) : [],
                 holidays: parseStatePayHolidays(form.statePayHolidays),
                 overtimeMultiplier: 1.5
+              }
+            },
+            settings: {
+              taxes: {
+                configuration: {
+                  fiscalYear: form.taxYear,
+                  jurisdiction: form.taxJurisdiction,
+                  payProvince: form.taxDefaultProvince
+                },
+                federal: {
+                  bpa: form.federalBpa,
+                  canadaEmploymentAmount: form.canadaEmploymentAmount
+                },
+                cppEiQpip: [
+                  { item: 'CPP', employeeRate: form.cppRate, employerRate: form.cppRate, annualMaximum: form.cppYmpe },
+                  { item: 'EI', employeeRate: form.eiRate, employerRate: '', annualMaximum: form.eiMaxInsurableEarnings }
+                ]
+              },
+              paystubs: {
+                template: form.paystubTemplate,
+                title: form.paystubTitle,
+                payPeriodLabel: form.payPeriodLabel,
+                regularHourLabel: form.regularHourLabel,
+                overtimeHourLabel: form.overtimeHourLabel,
+                doubleTimeHourLabel: form.doubleTimeHourLabel,
+                rateDisplayFormat: form.rateDisplayFormat
               }
             },
             banking: {
@@ -13940,6 +14031,32 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         <WizardCheck label="Enable Employee Self-Service" checked />
         <WizardCheck label="Enable CPP" checked />
         <WizardCheck label="Enable EI" checked />
+      </div>
+      <div className="sa-section">
+        <h3>Tax Config</h3>
+        <div className="wizard-fields four">
+          <AdminSelect label="Tax Year" value={form.taxYear} onChange={(value) => update('taxYear', value)} options={['2025', '2026']} />
+          {field('taxJurisdiction', 'Jurisdiction')}
+          <AdminSelect label="Default Province" value={form.taxDefaultProvince} onChange={(value) => update('taxDefaultProvince', value)} options={['AB', 'BC', 'MB', 'ON', 'SK']} />
+          {field('federalBpa', 'Federal Basic Personal Amount')}
+          {field('canadaEmploymentAmount', 'Canada Employment Amount')}
+          {field('cppRate', 'CPP Rate')}
+          {field('cppYmpe', 'CPP YMPE')}
+          {field('eiRate', 'EI Rate')}
+          {field('eiMaxInsurableEarnings', 'EI Max Insurable Earnings')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>Paystub Template</h3>
+        <div className="wizard-fields four">
+          <AdminSelect label="Template" value={form.paystubTemplate} onChange={(value) => update('paystubTemplate', value)} options={['Standard', 'Compact']} />
+          {field('paystubTitle', 'Paystub Title')}
+          {field('payPeriodLabel', 'Pay Period Label')}
+          {field('regularHourLabel', 'Regular Hour Label')}
+          {field('overtimeHourLabel', 'Overtime Hour Label')}
+          {field('doubleTimeHourLabel', 'Double Time Hour Label')}
+          <AdminSelect label="Rate Display Format" value={form.rateDisplayFormat} onChange={(value) => update('rateDisplayFormat', value)} options={['Show $ per hour']} />
+        </div>
       </div>
     </>,
     <>
@@ -14360,10 +14477,6 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <SuperAdminT4 token={token} />
           ) : page === 'ROE' ? (
             <SuperAdminRoe token={token} />
-          ) : page === 'Tax Config' ? (
-            <SuperAdminTaxConfig />
-          ) : page === 'Paystub Template' ? (
-            <SuperAdminPaystubTemplate />
           ) : payrollPages.includes(page) ? (
             <SuperAdminPayrollAccounts
               token={token}

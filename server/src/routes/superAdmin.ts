@@ -882,6 +882,7 @@ const createEmployerSchema = z.object({
   }),
   craPayroll: z.record(z.string(), z.unknown()).optional(),
   payrollConfiguration: z.record(z.string(), z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
   banking: z.record(z.string(), z.unknown()).optional(),
   subscription: z.object({
     plan: z.string().optional(),
@@ -926,6 +927,7 @@ router.post('/employers', authenticate, requirePermission('users.manage'), async
     address: data.address,
     craPayroll: normalizedCraPayroll(data.craPayroll),
     payrollConfiguration: withVacationPolicy(data.payrollConfiguration, data.address?.province),
+    settings: data.settings,
     banking: data.banking,
     subscription: data.subscription,
     features: data.features,
@@ -990,6 +992,7 @@ router.get('/employers/:id', authenticate, requirePermission('users.manage'), as
       address: company.address || {},
       craPayroll: company.craPayroll || {},
       payrollConfiguration: company.payrollConfiguration || {},
+      settings: company.settings || {},
       banking: company.banking || {},
       subscription: company.subscription || {},
       features: company.features || {},
@@ -1028,6 +1031,7 @@ router.put('/employers/:id', authenticate, requirePermission('users.manage'), as
       data.address?.province || company.address?.province
     );
   }
+  if (data.settings !== undefined) company.settings = data.settings;
   if (data.banking !== undefined) company.banking = data.banking;
   if (data.subscription !== undefined) company.subscription = data.subscription;
   if (data.features !== undefined) company.features = data.features;
