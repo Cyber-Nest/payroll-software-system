@@ -194,6 +194,29 @@ class PdfPage {
     );
   }
 
+  fillCircleLeftSide(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    endX: number,
+    color: [number, number, number]
+  ): void {
+    const control = radius * 0.5522847498;
+    this.ops.push(
+      'q',
+      `${centerX + radius} ${centerY} m`,
+      `${centerX + radius} ${centerY + control} ${centerX + control} ${centerY + radius} ${centerX} ${centerY + radius} c`,
+      `${centerX - control} ${centerY + radius} ${centerX - radius} ${centerY + control} ${centerX - radius} ${centerY} c`,
+      `${centerX - radius} ${centerY - control} ${centerX - control} ${centerY - radius} ${centerX} ${centerY - radius} c`,
+      `${centerX + control} ${centerY - radius} ${centerX + radius} ${centerY - control} ${centerX + radius} ${centerY} c`,
+      'W n',
+      `${color.join(' ')} rg`,
+      `${centerX - radius} ${centerY - radius} ${endX - (centerX - radius)} ${radius * 2} re f`,
+      'Q',
+      '0 0 0 rg'
+    );
+  }
+
   content(): string {
     return this.ops.join('\n');
   }
@@ -205,8 +228,8 @@ class PdfPage {
 
 function drawPayhoursLogo(page: PdfPage, x: number, y: number, scale = 1): void {
   const radius = 15 * scale;
-  page.fillCircle(x + 22 * scale, y + 18 * scale, radius, [0.145, 0.725, 0.839]);
-  page.fillCircleRightSide(x + 22 * scale, y + 18 * scale, radius, x + 22 * scale + radius * 0.8, [0.078, 0.388, 0.953]);
+  page.fillCircle(x + 22 * scale, y + 18 * scale, radius, [0.078, 0.388, 0.953]);
+  page.fillCircleLeftSide(x + 22 * scale, y + 18 * scale, radius, x + 14 * scale, [0.094, 0.863, 0.765]);
   page.fillCircle(x + 22 * scale, y + 18 * scale, 6 * scale, [0.973, 0.984, 1]);
   page.fillRect(x + 19.75 * scale, y + 19 * scale, 4.5 * scale, 11 * scale, [0.078, 0.388, 0.953]);
   page.text('Payhours', x + 48 * scale, y + 20 * scale, 21 * scale, true, [0.078, 0.388, 0.953]);

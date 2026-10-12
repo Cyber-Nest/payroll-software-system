@@ -594,7 +594,9 @@ button {
   padding: 16px;
 }
 
-.settings-card:has(.settings-paystub.full-review) {
+.settings-card:has(.settings-paystub.full-review),
+.settings-card:has(.settings-paystub-pdf-frame),
+.settings-card:has(.settings-paystub-pdf) {
   grid-column: 1 / -1;
 }
 
@@ -881,6 +883,222 @@ button {
 .settings-paystub.full-review.compact .paystub-review-tables,
 .settings-paystub.full-review.compact .paystub-review-grid {
   grid-template-columns: 1fr;
+}
+
+.settings-paystub-pdf-frame {
+  background: #edf3f9;
+  border: 1px solid #c9d8e8;
+  border-radius: 6px;
+  min-height: 780px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.settings-paystub-pdf-frame iframe {
+  background: #fff;
+  border: 0;
+  display: block;
+  height: 780px;
+  width: 100%;
+}
+
+.settings-paystub-pdf {
+  background: #fff;
+  border: 2px solid #111;
+  box-shadow: 0 18px 45px rgba(11, 47, 103, 0.12);
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0 auto;
+  max-width: 1180px;
+  min-height: 760px;
+  padding: 0 20px 150px;
+  width: 100%;
+}
+
+.settings-paystub-pdf header {
+  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  padding: 0 8px 18px;
+}
+
+.settings-paystub-pdf .logo {
+  justify-content: flex-start;
+}
+
+.settings-paystub-pdf .logo-word {
+  color: #1268ff;
+}
+
+.settings-paystub-pdf .logo small {
+  color: #0b426f;
+}
+
+.settings-paystub-pdf h3 {
+  color: #07111f;
+  font-size: 18px;
+  margin: 12px 78px 0 0;
+}
+
+.pdf-paystub-party {
+  border-bottom: 2px solid #111;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  padding: 0 8px 6px;
+}
+
+.pdf-paystub-party div {
+  display: grid;
+  gap: 2px;
+}
+
+.pdf-paystub-party small {
+  color: #344f7f;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.pdf-paystub-party b,
+.pdf-paystub-party span {
+  color: #000;
+  font-size: 12px;
+}
+
+.pdf-paystub-payline {
+  border: 2px solid #111;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 4px 0 16px;
+  min-height: 76px;
+}
+
+.pdf-paystub-payline > div {
+  display: grid;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.pdf-paystub-payline > div:nth-child(2) {
+  grid-template-columns: 1fr auto;
+}
+
+.pdf-paystub-payline b {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.pdf-paystub-payline span {
+  font-size: 18px;
+}
+
+.pdf-paystub-payline strong {
+  display: flex;
+  font-size: 20px;
+  gap: 84px;
+  justify-content: space-between;
+}
+
+.pdf-paystub-body {
+  border: 2px solid #111;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr);
+  min-height: 455px;
+}
+
+.pdf-paystub-earnings,
+.pdf-paystub-deductions,
+.pdf-paystub-info {
+  min-width: 0;
+}
+
+.pdf-paystub-side {
+  border-left: 2px solid #111;
+  display: grid;
+  grid-template-rows: minmax(300px, 1fr) 174px;
+}
+
+.settings-paystub-pdf h4 {
+  align-items: center;
+  border-bottom: 2px solid #111;
+  display: grid;
+  font-size: 23px;
+  font-weight: 400;
+  grid-template-columns: 1fr auto auto;
+  gap: 60px;
+  margin: 0;
+  padding: 8px 12px 20px;
+}
+
+.settings-paystub-pdf h4 em {
+  font-style: normal;
+}
+
+.settings-paystub-pdf h4 strong {
+  font-weight: 400;
+}
+
+.settings-paystub-pdf table {
+  border-collapse: collapse;
+  font-size: 10px;
+  width: 100%;
+}
+
+.settings-paystub-pdf th,
+.settings-paystub-pdf td {
+  border: 0;
+  color: #000;
+  padding: 7px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.settings-paystub-pdf th:not(:first-child),
+.settings-paystub-pdf td:not(:first-child) {
+  text-align: right;
+}
+
+.settings-paystub-pdf th {
+  font-weight: 700;
+}
+
+.settings-paystub-pdf tr.total td {
+  font-weight: 700;
+}
+
+.pdf-paystub-info {
+  border-top: 2px solid #111;
+}
+
+.pdf-paystub-info h4 {
+  display: block;
+  font-size: 22px;
+  padding: 16px 12px;
+}
+
+.pdf-paystub-info p {
+  font-size: 10px;
+  line-height: 1.1;
+  margin: 0;
+  padding: 12px;
+}
+
+.settings-paystub-pdf.compact {
+  max-width: 860px;
+}
+
+@media (max-width: 900px) {
+  .pdf-paystub-party,
+  .pdf-paystub-payline,
+  .pdf-paystub-body {
+    grid-template-columns: 1fr;
+  }
+
+  .pdf-paystub-side {
+    border-left: 0;
+    border-top: 2px solid #111;
+  }
 }
 
 .integration-grid {
