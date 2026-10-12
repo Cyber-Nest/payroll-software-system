@@ -594,6 +594,10 @@ button {
   padding: 16px;
 }
 
+.settings-card:has(.settings-paystub.full-review) {
+  grid-column: 1 / -1;
+}
+
 .settings-card-head {
   align-items: flex-start;
   display: flex;
@@ -800,8 +804,15 @@ button {
 }
 
 .settings-paystub.full-review {
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(11, 47, 103, 0.12);
   display: grid;
   gap: 14px;
+  margin: 0 auto;
+  max-width: 980px;
+  min-height: 760px;
+  padding: 28px;
+  width: 100%;
 }
 
 .settings-paystub.full-review > header {
@@ -854,6 +865,7 @@ button {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  overflow-x: auto;
 }
 
 .settings-paystub.full-review table th {
