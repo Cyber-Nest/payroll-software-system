@@ -8639,13 +8639,40 @@ const employerFormPlaceholders = {
   accountNumber: '123456789',
   taxYear: '2026',
   taxJurisdiction: 'Federal + Provinces',
-  taxDefaultProvince: 'SK',
+  taxDefaultProvince: 'Saskatchewan',
+  taxPayrollType: 'Regular Payroll',
+  taxUseLatestCraTables: true,
+  craTaxTableYear: '2026',
+  craTaxTableProvince: 'Saskatchewan',
+  craTaxTableLastUpdated: 'Jan 1, 2026',
+  taxApplyBpa: true,
+  taxApplyProvincialCredits: true,
+  taxApplyCanadaEmploymentAmount: true,
+  taxUseTd1: true,
+  taxAllowAdditionalWithholding: true,
+  taxEnableQuebecTax: false,
   federalBpa: '16452.00',
   canadaEmploymentAmount: '1501.00',
+  federalAgeAmount: '8790.00',
+  federalPensionIncomeAmount: '2000.00',
+  federalDisabilityAmount: '9428.00',
+  federalCaregiverAmount: '2616.00',
+  provincialBpa: '22125.00',
+  provincialLowIncomeTaxCredit: '428.00',
+  provincialEmploymentAmount: '1463.00',
+  provincialPensionIncomeAmount: '2000.00',
+  provincialDisabilityAmount: '10275.00',
+  provincialCaregiverAmount: '2600.00',
   cppRate: '5.95%',
   cppYmpe: '71300.00',
   eiRate: '1.63%',
   eiMaxInsurableEarnings: '68900.00',
+  qpipEmployeeRate: '0.494%',
+  qpipEmployerRate: '0.692%',
+  qpipAnnualMaximum: '94000.00',
+  qppEmployeeRate: '5.95%',
+  qppEmployerRate: '5.95%',
+  qppAnnualMaximum: '71300.00',
   paystubTemplate: 'Standard',
   paystubTitle: 'Earnings Statement',
   payPeriodLabel: 'Pay Period',
@@ -8660,7 +8687,9 @@ const defaultEmployerForm = {
   ...Object.fromEntries(
     Object.keys(employerFormPlaceholders).map((key) => [
       key,
-      key === 'statePayEnabled' ? false : key === 'statePayHolidays' ? '[]' : ''
+      typeof employerFormPlaceholders[key as keyof typeof employerFormPlaceholders] === 'boolean'
+        ? employerFormPlaceholders[key as keyof typeof employerFormPlaceholders]
+        : key === 'statePayHolidays' ? '[]' : ''
     ])
   ),
   vacationPayRate: '4.00',
@@ -13953,6 +13982,51 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       })
       .catch(() => setPaystubTemplateOptions(['Standard']));
   }, [token]);
+  const taxSettingsPayload = () => ({
+    configuration: {
+      payProvince: form.taxDefaultProvince,
+      craPayrollProgramAccountNumber: form.payrollAccount || form.businessNumber,
+      fiscalYear: form.taxYear,
+      payrollType: form.taxPayrollType,
+      useLatestCraTables: Boolean(form.taxUseLatestCraTables),
+      jurisdiction: form.taxJurisdiction
+    },
+    craTaxTables: {
+      taxYear: form.craTaxTableYear || form.taxYear,
+      province: form.craTaxTableProvince || form.taxDefaultProvince,
+      lastUpdated: form.craTaxTableLastUpdated
+    },
+    additionalOptions: {
+      applyBpa: Boolean(form.taxApplyBpa),
+      applyProvincialCredits: Boolean(form.taxApplyProvincialCredits),
+      applyCanadaEmploymentAmount: Boolean(form.taxApplyCanadaEmploymentAmount),
+      useTd1: Boolean(form.taxUseTd1),
+      allowAdditionalWithholding: Boolean(form.taxAllowAdditionalWithholding),
+      enableQuebecTax: Boolean(form.taxEnableQuebecTax)
+    },
+    federal: {
+      bpa: form.federalBpa,
+      canadaEmploymentAmount: form.canadaEmploymentAmount,
+      ageAmount: form.federalAgeAmount,
+      pensionIncomeAmount: form.federalPensionIncomeAmount,
+      disabilityAmount: form.federalDisabilityAmount,
+      caregiverAmount: form.federalCaregiverAmount
+    },
+    provincial: {
+      bpa: form.provincialBpa,
+      lowIncomeTaxCredit: form.provincialLowIncomeTaxCredit,
+      employmentAmount: form.provincialEmploymentAmount,
+      pensionIncomeAmount: form.provincialPensionIncomeAmount,
+      disabilityAmount: form.provincialDisabilityAmount,
+      caregiverAmount: form.provincialCaregiverAmount
+    },
+    cppEiQpip: [
+      { item: 'CPP', employeeRate: form.cppRate, employerRate: form.cppRate, annualMaximum: form.cppYmpe },
+      { item: 'EI', employeeRate: form.eiRate, employerRate: '2.32%', annualMaximum: form.eiMaxInsurableEarnings },
+      { item: 'QPIP (QC)', employeeRate: form.qpipEmployeeRate, employerRate: form.qpipEmployerRate, annualMaximum: form.qpipAnnualMaximum },
+      { item: 'QPP (QC)', employeeRate: form.qppEmployeeRate, employerRate: form.qppEmployerRate, annualMaximum: form.qppAnnualMaximum }
+    ]
+  });
   async function save(status: 'draft' | 'pending_activation' = 'pending_activation') {
     setError('');
     try {
@@ -14005,21 +14079,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             }
           },
           settings: {
-            taxes: {
-              configuration: {
-                fiscalYear: form.taxYear,
-                jurisdiction: form.taxJurisdiction,
-                payProvince: form.taxDefaultProvince
-              },
-              federal: {
-                bpa: form.federalBpa,
-                canadaEmploymentAmount: form.canadaEmploymentAmount
-              },
-              cppEiQpip: [
-                { item: 'CPP', employeeRate: form.cppRate, employerRate: form.cppRate, annualMaximum: form.cppYmpe },
-                { item: 'EI', employeeRate: form.eiRate, employerRate: '', annualMaximum: form.eiMaxInsurableEarnings }
-              ]
-            },
+            taxes: taxSettingsPayload(),
             paystubs: {
               template: form.paystubTemplate,
               title: form.paystubTitle,
@@ -14103,10 +14163,15 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       const employerSettings = detail.settings || {};
       const taxSettings = (employerSettings.taxes as Record<string, any> | undefined) || {};
       const taxConfig = (taxSettings.configuration as Record<string, any> | undefined) || {};
+      const craTaxTables = (taxSettings.craTaxTables as Record<string, any> | undefined) || {};
+      const additionalTaxOptions = (taxSettings.additionalOptions as Record<string, any> | undefined) || {};
       const federalTax = (taxSettings.federal as Record<string, any> | undefined) || {};
+      const provincialTax = (taxSettings.provincial as Record<string, any> | undefined) || {};
       const statutoryRows = (taxSettings.cppEiQpip as Array<Record<string, any>> | undefined) || [];
       const cppRow = statutoryRows.find((row) => String(row.item).toUpperCase() === 'CPP') || {};
       const eiRow = statutoryRows.find((row) => String(row.item).toUpperCase() === 'EI') || {};
+      const qpipRow = statutoryRows.find((row) => String(row.item).toUpperCase().includes('QPIP')) || {};
+      const qppRow = statutoryRows.find((row) => String(row.item).toUpperCase().includes('QPP')) || {};
       const paystubSettings = (employerSettings.paystubs as Record<string, any> | undefined) || {};
       const provinceName =
         provinceNamesByCode[String(detail.address.province || '').toUpperCase()] ||
@@ -14162,13 +14227,40 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         accountNumber: String(detail.banking.accountNumber || ''),
         taxYear: String(taxConfig.fiscalYear || '2026'),
         taxJurisdiction: String(taxConfig.jurisdiction || 'Federal + Provinces'),
-        taxDefaultProvince: String(taxConfig.payProvince || 'SK'),
+        taxDefaultProvince: provinceNamesByCode[String(taxConfig.payProvince || '').toUpperCase()] || String(taxConfig.payProvince || 'Saskatchewan'),
+        taxPayrollType: String(taxConfig.payrollType || 'Regular Payroll'),
+        taxUseLatestCraTables: taxConfig.useLatestCraTables !== false,
+        craTaxTableYear: String(craTaxTables.taxYear || taxConfig.fiscalYear || '2026'),
+        craTaxTableProvince: provinceNamesByCode[String(craTaxTables.province || '').toUpperCase()] || String(craTaxTables.province || taxConfig.payProvince || 'Saskatchewan'),
+        craTaxTableLastUpdated: String(craTaxTables.lastUpdated || 'Jan 1, 2026'),
+        taxApplyBpa: additionalTaxOptions.applyBpa !== false,
+        taxApplyProvincialCredits: additionalTaxOptions.applyProvincialCredits !== false,
+        taxApplyCanadaEmploymentAmount: additionalTaxOptions.applyCanadaEmploymentAmount !== false,
+        taxUseTd1: additionalTaxOptions.useTd1 !== false,
+        taxAllowAdditionalWithholding: additionalTaxOptions.allowAdditionalWithholding !== false,
+        taxEnableQuebecTax: Boolean(additionalTaxOptions.enableQuebecTax),
         federalBpa: String(federalTax.bpa || '16452.00'),
         canadaEmploymentAmount: String(federalTax.canadaEmploymentAmount || '1501.00'),
+        federalAgeAmount: String(federalTax.ageAmount || '8790.00'),
+        federalPensionIncomeAmount: String(federalTax.pensionIncomeAmount || '2000.00'),
+        federalDisabilityAmount: String(federalTax.disabilityAmount || '9428.00'),
+        federalCaregiverAmount: String(federalTax.caregiverAmount || '2616.00'),
+        provincialBpa: String(provincialTax.bpa || '22125.00'),
+        provincialLowIncomeTaxCredit: String(provincialTax.lowIncomeTaxCredit || '428.00'),
+        provincialEmploymentAmount: String(provincialTax.employmentAmount || '1463.00'),
+        provincialPensionIncomeAmount: String(provincialTax.pensionIncomeAmount || '2000.00'),
+        provincialDisabilityAmount: String(provincialTax.disabilityAmount || '10275.00'),
+        provincialCaregiverAmount: String(provincialTax.caregiverAmount || '2600.00'),
         cppRate: String(cppRow.employeeRate || '5.95%'),
         cppYmpe: String(cppRow.annualMaximum || '71300.00'),
         eiRate: String(eiRow.employeeRate || '1.63%'),
         eiMaxInsurableEarnings: String(eiRow.annualMaximum || '68900.00'),
+        qpipEmployeeRate: String(qpipRow.employeeRate || '0.494%'),
+        qpipEmployerRate: String(qpipRow.employerRate || '0.692%'),
+        qpipAnnualMaximum: String(qpipRow.annualMaximum || '94000.00'),
+        qppEmployeeRate: String(qppRow.employeeRate || '5.95%'),
+        qppEmployerRate: String(qppRow.employerRate || '5.95%'),
+        qppAnnualMaximum: String(qppRow.annualMaximum || '71300.00'),
         paystubTemplate: String(paystubSettings.template || 'Standard'),
         paystubTitle: String(paystubSettings.title || 'Earnings Statement'),
         payPeriodLabel: String(paystubSettings.payPeriodLabel || 'Pay Period'),
@@ -14242,21 +14334,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
               }
             },
             settings: {
-              taxes: {
-                configuration: {
-                  fiscalYear: form.taxYear,
-                  jurisdiction: form.taxJurisdiction,
-                  payProvince: form.taxDefaultProvince
-                },
-                federal: {
-                  bpa: form.federalBpa,
-                  canadaEmploymentAmount: form.canadaEmploymentAmount
-                },
-                cppEiQpip: [
-                  { item: 'CPP', employeeRate: form.cppRate, employerRate: form.cppRate, annualMaximum: form.cppYmpe },
-                  { item: 'EI', employeeRate: form.eiRate, employerRate: '', annualMaximum: form.eiMaxInsurableEarnings }
-                ]
-              },
+              taxes: taxSettingsPayload(),
               paystubs: {
                 template: form.paystubTemplate,
                 title: form.paystubTitle,
@@ -14375,6 +14453,19 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         placeholder={String(employerFormPlaceholders[key] || '')}
         onChange={(event) => update(key, event.target.value)}
       />
+    </label>
+  );
+  const formToggle = (key: keyof typeof defaultEmployerForm, label: string) => (
+    <label className="settings-toggle">
+      <span>{label}</span>
+      <button
+        type="button"
+        className={form[key] ? 'on' : ''}
+        onClick={() => update(key, !form[key])}
+      >
+        <i />
+      </button>
+      <b>{form[key] ? 'Yes' : 'No'}</b>
     </label>
   );
   const stepBody = [
@@ -14504,6 +14595,72 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           onChange={(value) => update('paystubTemplate', value)}
           options={paystubTemplateOptions.includes(form.paystubTemplate) ? paystubTemplateOptions : [form.paystubTemplate, ...paystubTemplateOptions]}
         />
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>Tax Configuration</h3>
+        <div className="wizard-fields four">
+          <AdminSelect label="Pay Province *" value={form.taxDefaultProvince} onChange={(value) => update('taxDefaultProvince', value)} options={canadaProvinceOptions.includes(form.taxDefaultProvince) ? canadaProvinceOptions : [form.taxDefaultProvince, ...canadaProvinceOptions]} />
+          {field('payrollAccount', 'CRA Payroll Program Account Number (RP)')}
+          <AdminSelect label="Fiscal Year" value={form.taxYear} onChange={(value) => update('taxYear', value)} options={['2025', '2026']} />
+          <AdminSelect label="Payroll Type" value={form.taxPayrollType} onChange={(value) => update('taxPayrollType', value)} options={['Regular Payroll', 'Bonus Payroll', 'Commission Payroll', 'Special Payroll']} />
+          {formToggle('taxUseLatestCraTables', 'Use CRA latest tax tables automatically')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>CRA Tax Tables</h3>
+        <div className="wizard-fields four">
+          <AdminSelect label="Tax Year *" value={form.craTaxTableYear} onChange={(value) => update('craTaxTableYear', value)} options={['2025', '2026']} />
+          <AdminSelect label="Province *" value={form.craTaxTableProvince} onChange={(value) => update('craTaxTableProvince', value)} options={canadaProvinceOptions.includes(form.craTaxTableProvince) ? canadaProvinceOptions : [form.craTaxTableProvince, ...canadaProvinceOptions]} />
+          {field('craTaxTableLastUpdated', 'Last Updated')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>Additional Tax Options</h3>
+        <div className="wizard-fields three">
+          {formToggle('taxApplyBpa', 'Apply Basic Personal Amount (BPA)')}
+          {formToggle('taxApplyProvincialCredits', 'Apply Provincial Credits')}
+          {formToggle('taxApplyCanadaEmploymentAmount', 'Apply Canada Employment Amount')}
+          {formToggle('taxUseTd1', 'Use TD1 information for calculations')}
+          {formToggle('taxAllowAdditionalWithholding', 'Allow additional tax withholding')}
+          {formToggle('taxEnableQuebecTax', 'Enable Quebec Tax (QPP/QPIP)')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>Federal Tax Settings</h3>
+        <div className="wizard-fields three">
+          {field('federalBpa', 'Basic Personal Amount (BPA)')}
+          {field('canadaEmploymentAmount', 'Canada Employment Amount')}
+          {field('federalAgeAmount', 'Age Amount (65+)')}
+          {field('federalPensionIncomeAmount', 'Pension Income Amount')}
+          {field('federalDisabilityAmount', 'Disability Amount')}
+          {field('federalCaregiverAmount', 'Caregiver Amount')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>Provincial Tax Settings</h3>
+        <div className="wizard-fields three">
+          {field('provincialBpa', 'Provincial BPA')}
+          {field('provincialLowIncomeTaxCredit', 'Low Income Tax Credit')}
+          {field('provincialEmploymentAmount', 'Employment Amount')}
+          {field('provincialPensionIncomeAmount', 'Pension Income Amount')}
+          {field('provincialDisabilityAmount', 'Disability Amount')}
+          {field('provincialCaregiverAmount', 'Caregiver Amount')}
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>CPP, EI and QPIP Settings</h3>
+        <div className="wizard-fields three">
+          {field('cppRate', 'CPP Employee / Employer Rate')}
+          {field('cppYmpe', 'CPP Annual Maximum')}
+          {field('eiRate', 'EI Employee Rate')}
+          {field('eiMaxInsurableEarnings', 'EI Annual Maximum')}
+          {field('qpipEmployeeRate', 'QPIP Employee Rate')}
+          {field('qpipEmployerRate', 'QPIP Employer Rate')}
+          {field('qpipAnnualMaximum', 'QPIP Annual Maximum')}
+          {field('qppEmployeeRate', 'QPP Employee Rate')}
+          {field('qppEmployerRate', 'QPP Employer Rate')}
+          {field('qppAnnualMaximum', 'QPP Annual Maximum')}
         </div>
       </div>
       <div className="check-grid">
