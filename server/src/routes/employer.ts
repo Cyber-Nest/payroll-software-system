@@ -59,6 +59,7 @@ import { calculateStatutoryDeductions } from '../services/taxEngine.service';
 import { env } from '../config/env';
 
 const router = Router();
+const PAY_PERIOD_NUMBERING_YEARLY_RESET = 'Yearly reset (starts at 1 every January)';
 
 function settingDefaults(company?: InstanceType<typeof Company>) {
   const province = company?.address?.province || 'SK';
@@ -85,7 +86,7 @@ function settingDefaults(company?: InstanceType<typeof Company>) {
       yearEnd: { taxYearEnd: 'December 31', generateT4Automatically: true, generateRoeAutomatically: true }
     },
     payroll: {
-      paySchedule: { payFrequency: company?.payrollConfiguration?.payFrequency || 'Bi-Weekly', firstPayPeriodStartDate: '2025-01-01', payPeriodLength: '2 Weeks', payDay: 'Friday', payPeriodNumbering: 'Continuous (1, 2, 3...)', currentPayPeriod: 'Apr 1, 2025 - Apr 15, 2025 (#24)' },
+      paySchedule: { payFrequency: company?.payrollConfiguration?.payFrequency || 'Bi-Weekly', firstPayPeriodStartDate: '2025-01-01', payPeriodLength: '2 Weeks', payDay: 'Friday', payPeriodNumbering: PAY_PERIOD_NUMBERING_YEARLY_RESET, currentPayPeriod: 'Apr 1, 2025 - Apr 15, 2025 (#24)' },
       calculation: { workHoursPerWeek: 40, dailyHours: 8, overtimeDaily: 8, overtimeWeekly: 40, doubleTimeAfter: 12, statutoryHolidayPay: 'As per Province Rules' },
       rounding: { hours: 'Nearest 0.25 hour', amounts: 'Nearest $0.01', minimumPayPerDay: 0, minimumPayPerPeriod: '0.00', roundOvertimeSeparately: true, roundTotalEarnings: true, applyRoundingToDeductions: false },
       payOptions: { defaultPaymentMethod: 'Direct Deposit', directDepositProvider: 'Manual / Bank Upload', allowMultipleBankAccounts: true, requireBankAccountForNewEmployees: true, generatePaystubsAutomatically: true, sendPaystubByEmail: true, allowManualPayroll: false, requireApprovalBeforeProcessing: true },
@@ -105,7 +106,7 @@ function settingDefaults(company?: InstanceType<typeof Company>) {
       ]
     },
     timeAttendance: { defaults: { startTime: '9:00 AM', endTime: '5:00 PM', autoDeductBreak: 30, earlyClockIn: 10, lateClockOut: 10, managerApprovalForOt: true, trackGps: false, employeeEditTime: false } },
-    paystubs: { template: 'Standard (Detailed)', title: 'Earnings Statement', payPeriodLabel: 'Pay Period', regularHourLabel: 'Regular Hours', overtimeHourLabel: 'Overtime Hours', doubleTimeHourLabel: 'Double Time Hours', rateDisplayFormat: 'Show $ per hour', showPayGroup: true, showDepartment: true, showJobTitle: true, showLocation: true, showEmployeeSin: false, maskSin: true, showHireDate: true, showAccruals: true, message: 'Thank you for your hard work!', disclaimer: 'This pay statement is for information purposes only. Please contact HR if you have any questions.', delivery: { availableInPortal: true, emailAutomatically: true, passwordProtectPdf: false, allowDownload: true, keepYears: '7 Years' } },
+    paystubs: { template: 'Standard', title: 'Earnings Statement', payPeriodLabel: 'Pay Period', regularHourLabel: 'Regular Hours', overtimeHourLabel: 'Overtime Hours', doubleTimeHourLabel: 'Double Time Hours', rateDisplayFormat: 'Show $ per hour', showPayGroup: true, showDepartment: true, showJobTitle: true, showLocation: true, showEmployeeSin: false, maskSin: true, showHireDate: true, showAccruals: true, message: 'Thank you for your hard work!', disclaimer: 'This pay statement is for information purposes only. Please contact HR if you have any questions.', delivery: { availableInPortal: true, emailAutomatically: true, passwordProtectPdf: false, allowDownload: true, keepYears: '7 Years' } },
     payment: { methods: { defaultPaymentMethod: 'Direct Deposit', allowMultiplePaymentMethods: true, allowManualPayment: true, allowPaycard: false }, directDeposit: { timing: 'Same Day (on pay date)', fileFormat: 'EFT (Canadian NACHA) - .txt', uploadMethod: 'Manual Upload to Bank Portal', requirePreNote: true, allowForeignBankAccounts: true }, schedule: { day: 'Friday', time: '10:00 AM', daysBeforePayDate: 2, sendFileAutomatically: false, sendConfirmationEmail: true, includeZeroNetPay: false }, bank: { bankName: company?.banking?.bankName || 'Royal Bank of Canada (RBC)', accountHolderName: legalName, transitNumber: company?.banking?.transitNumber || '', institutionNumber: company?.banking?.institutionNumber || '', accountNumber: company?.banking?.accountNumber || '' }, notifications: { employeeConfirmations: true, adminConfirmations: true, failedPaymentAlerts: true, includePaystub: true, message: 'Your payroll has been processed. Please find your paystub attached.' }, security: { managerApproval: false, adminApproval: true, minimumApprovers: 1, editAfterApproval: false, lockAfterProcessing: true, twoFactor: true } },
     governmentFilings: { cra: { remittanceFrequency: 'Monthly (Regular)', nextRemittanceDueDate: '2025-05-15', remittanceMethod: 'EFT (My Business Account)', bankAccount: 'RBC Operating Account', generatePd7a: true, autofillFromPayrollRuns: true, validateBeforeSubmission: true }, provincial: { province, remittanceFrequency: 'Monthly', nextRemittanceDueDate: '2025-05-15', remittanceMethod: 'EFT (eTax Services)', generateProvincialReturn: true, autofillFromPayrollRuns: true }, yearEnd: { taxYear: '2025', filingMethod: 'CRA Web Forms / EFILE', autoGenerateT4: true, autoGenerateT4A: false, includeRl1: false, includeT4Summary: true, electronicFiling: true, createReleve1: false }, notifications: { dueReminder: true, daysBefore: 5, success: true, errors: true, summary: true, yearEnd: true, email: 'admin@abcsolutions.ca', recipients: 'hr@abcsolutions.ca, finance@abcsolutions.ca' }, advanced: { includeZeroAmountSlips: true, useYtdTotals: true, enableTestFiling: true, logActivities: true, retainYears: '7 Years', defaultContact: 'Company Admin' } },
     integrations: { api: { apiKey: '••••••••••••••••', apiSecret: '••••••••••••••••' }, webhooks: { enabled: true, url: '', events: ['Payroll Completed', 'Employee Added', 'Government Filing Submitted'] } },
@@ -121,6 +122,21 @@ function mergeSettings(defaults: Record<string, unknown>, saved?: Record<string,
       : value;
   }
   return output;
+}
+
+function normalizeEmployerSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  const payroll = (settings.payroll || {}) as Record<string, unknown>;
+  const paySchedule = (payroll.paySchedule || {}) as Record<string, unknown>;
+  return {
+    ...settings,
+    payroll: {
+      ...payroll,
+      paySchedule: {
+        ...paySchedule,
+        payPeriodNumbering: PAY_PERIOD_NUMBERING_YEARLY_RESET
+      }
+    }
+  };
 }
 
 function companyModuleDefaults(company: InstanceType<typeof Company>, employees: IEmployee[]) {
@@ -657,7 +673,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
     PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1)
   ]);
   if (!company) return res.status(404).json({ message: 'Company not found' });
-  const settings = mergeSettings(settingDefaults(company), company.settings || {});
+  const settings = normalizeEmployerSettings(mergeSettings(settingDefaults(company), company.settings || {}));
   const roleCounts = new Map<string, number>();
   users.forEach((user) => roleCounts.set(normalizeRole(user.role), (roleCounts.get(normalizeRole(user.role)) || 0) + 1));
   const roles = roleNames
@@ -734,7 +750,7 @@ router.put('/settings', authenticate, requirePermission('users.manage'), async (
   if (!parsed.success) return res.status(400).json({ message: 'Invalid settings payload', issues: parsed.error.issues });
   const company = await Company.findById(companyId);
   if (!company) return res.status(404).json({ message: 'Company not found' });
-  company.settings = mergeSettings(company.settings || {}, parsed.data.settings);
+  company.settings = normalizeEmployerSettings(mergeSettings(company.settings || {}, parsed.data.settings));
   const general = (company.settings.general as Record<string, unknown> | undefined)?.companyInformation as Record<string, unknown> | undefined;
   const payment = (company.settings.payment as Record<string, unknown> | undefined)?.bank as Record<string, unknown> | undefined;
   const payroll = (company.settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
@@ -750,7 +766,7 @@ router.put('/settings', authenticate, requirePermission('users.manage'), async (
   if (payroll) company.payrollConfiguration = { ...(company.payrollConfiguration || {}), payFrequency: payroll.payFrequency };
   await company.save();
   await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Settings updated' } });
-  res.json({ settings: mergeSettings(settingDefaults(company), company.settings || {}) });
+  res.json({ settings: normalizeEmployerSettings(mergeSettings(settingDefaults(company), company.settings || {})) });
 });
 
 router.get('/company-module', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
@@ -821,6 +837,63 @@ router.put('/company-module', authenticate, requirePermission('users.manage'), a
   await company.save();
   await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Company module updated' } });
   res.json({ companyModule: mergeSettings(companyModuleDefaults(company, []), (company.settings.companyModule || {}) as Record<string, unknown>) });
+});
+
+const companyModuleSectionMap: Record<string, string> = {
+  locations: 'locations',
+  departments: 'departments',
+  'job-positions': 'jobPositions',
+  'pay-schedules': 'paySchedules',
+  'pay-rates': 'payRates',
+  holidays: 'holidays',
+  accruals: 'accruals',
+  'bank-accounts': 'bankAccounts'
+};
+
+router.put('/company-module/:section/:id', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const section = String(req.params.section);
+  const key = companyModuleSectionMap[section];
+  if (!key) return res.status(400).json({ message: 'Unknown company section' });
+  const parsed = z.object({ record: z.record(z.string(), z.unknown()) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid company record', issues: parsed.error.issues });
+  const company = await Company.findById(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const employees = await Employee.find({ companyId }).sort({ employeeNumber: 1 });
+  const currentModule = mergeSettings(companyModuleDefaults(company, employees), (company.settings?.companyModule || {}) as Record<string, unknown>);
+  const rows = Array.isArray(currentModule[key]) ? (currentModule[key] as Array<Record<string, unknown>>) : [];
+  const nextRows = rows.some((row) => String(row.id) === req.params.id)
+    ? rows.map((row) => String(row.id) === req.params.id ? { ...row, ...parsed.data.record, id: req.params.id } : row)
+    : [...rows, { ...parsed.data.record, id: req.params.id }];
+  company.settings = {
+    ...(company.settings || {}),
+    companyModule: { ...((company.settings?.companyModule || {}) as Record<string, unknown>), [key]: nextRows }
+  };
+  await company.save();
+  await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Company module row updated', section: key, id: req.params.id } });
+  res.json({ record: nextRows.find((row) => String(row.id) === req.params.id), companyModule: mergeSettings(companyModuleDefaults(company, employees), (company.settings.companyModule || {}) as Record<string, unknown>) });
+});
+
+router.delete('/company-module/:section/:id', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const section = String(req.params.section);
+  const key = companyModuleSectionMap[section];
+  if (!key) return res.status(400).json({ message: 'Unknown company section' });
+  const company = await Company.findById(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const employees = await Employee.find({ companyId }).sort({ employeeNumber: 1 });
+  const currentModule = mergeSettings(companyModuleDefaults(company, employees), (company.settings?.companyModule || {}) as Record<string, unknown>);
+  const rows = Array.isArray(currentModule[key]) ? (currentModule[key] as Array<Record<string, unknown>>) : [];
+  const nextRows = rows.filter((row) => String(row.id) !== req.params.id).map((row, index) => ({ ...row, index: index + 1 }));
+  company.settings = {
+    ...(company.settings || {}),
+    companyModule: { ...((company.settings?.companyModule || {}) as Record<string, unknown>), [key]: nextRows }
+  };
+  await company.save();
+  await AuditLog.create({ userId: req.employerContext?.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { action: 'Company module row deleted', section: key, id: req.params.id } });
+  res.json({ deleted: true, companyModule: mergeSettings(companyModuleDefaults(company, employees), (company.settings.companyModule || {}) as Record<string, unknown>) });
 });
 
 router.get('/documents', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
@@ -2951,6 +3024,36 @@ router.put(
     await run.save();
     await auditPayroll(req, run, 'draft_updated');
     res.json({ run: serializePayrollRun(run) });
+  }
+);
+
+router.delete(
+  '/payroll-runs/:id',
+  authenticate,
+  requirePermission('payroll.prepare'),
+  async (req: AuthRequest, res) => {
+    const run = await loadPayrollRun(req, res);
+    if (!run) return;
+    if (!['draft', 'reversed'].includes(run.status)) {
+      return res.status(409).json({ message: `Cannot delete a ${run.status} payroll run` });
+    }
+    const statementIds = run.lines.map((line) => line.statementId).filter(Boolean);
+    if (statementIds.length) {
+      return res.status(409).json({ message: 'Cannot delete a payroll run with generated paystubs' });
+    }
+    await PayrollCarryForward.deleteMany({
+      companyId: run.companyId,
+      sourcePayrollRunId: run._id,
+      status: 'pending'
+    });
+    await PayrollRun.deleteOne({ _id: run._id, companyId: run.companyId });
+    await AuditLog.create({
+      userId: req.employerContext?.employerUserId,
+      companyId: run.companyId,
+      eventType: 'PAYROLL_UPDATED',
+      metadata: { action: 'payroll_run_deleted', payrollRunId: String(run._id), status: run.status }
+    });
+    res.json({ deleted: true, id: req.params.id });
   }
 );
 

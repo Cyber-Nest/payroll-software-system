@@ -799,6 +799,78 @@ button {
   margin: 12px 0 4px;
 }
 
+.settings-paystub.full-review {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-paystub.full-review > header {
+  align-items: center;
+  border-bottom: 1px solid #dce8f5;
+  display: flex;
+  gap: 18px;
+  padding-bottom: 12px;
+}
+
+.settings-paystub.full-review > header h3 {
+  margin: 0;
+}
+
+.settings-paystub.full-review > header p {
+  color: #48617f;
+  margin: 4px 0 0;
+}
+
+.paystub-review-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.paystub-review-grid dl {
+  background: #f7fbff;
+  border: 1px solid #dce8f5;
+  border-radius: 6px;
+  display: grid;
+  gap: 6px 12px;
+  grid-template-columns: 120px 1fr;
+  margin: 0;
+  padding: 12px;
+}
+
+.paystub-review-grid dt {
+  color: #48617f;
+  font-size: 12px;
+}
+
+.paystub-review-grid dd {
+  color: #10243f;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.paystub-review-tables {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+}
+
+.settings-paystub.full-review table th {
+  background: #eaf4ff;
+  color: #00349f;
+}
+
+.settings-paystub.full-review table tfoot th {
+  background: #f4f8fd;
+  color: #10243f;
+}
+
+.settings-paystub.full-review.compact .paystub-review-tables,
+.settings-paystub.full-review.compact .paystub-review-grid {
+  grid-template-columns: 1fr;
+}
+
 .integration-grid {
   display: grid;
   gap: 12px;
