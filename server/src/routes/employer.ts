@@ -138,6 +138,65 @@ function normalizeEmployerSettings(settings: Record<string, unknown>): Record<st
   };
 }
 
+function parseCivilDate(value: unknown): Date | undefined {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return undefined;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+}
+
+function addDays(value: Date, days: number): Date {
+  const next = new Date(value);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function addMonths(value: Date, months: number): Date {
+  const next = new Date(value);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+}
+
+function payPeriodLengthDays(frequency: unknown): number {
+  const normalized = String(frequency || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (normalized === 'weekly') return 7;
+  if (normalized === 'monthly') return 0;
+  return 14;
+}
+
+function calculatedPayPeriodOptions(paySchedule: Record<string, unknown>, today = new Date()): { current: string; options: string[] } {
+  const frequency = paySchedule.payFrequency || 'Bi-Weekly';
+  const year = today.getUTCFullYear();
+  const configuredStart = parseCivilDate(paySchedule.firstPayPeriodStartDate);
+  const yearStart = new Date(Date.UTC(year, configuredStart ? configuredStart.getUTCMonth() : 0, configuredStart ? configuredStart.getUTCDate() : 1));
+  const start = yearStart.getUTCFullYear() === year ? yearStart : new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year, 11, 31));
+  const days = payPeriodLengthDays(frequency);
+  const periods: Array<{ label: string; start: Date; end: Date; number: number }> = [];
+  let cursor = start;
+  let number = 1;
+  while (cursor <= yearEnd && number <= 60) {
+    const periodStart = cursor;
+    const periodEnd = days
+      ? addDays(periodStart, days - 1)
+      : addDays(addMonths(periodStart, 1), -1);
+    const cappedEnd = periodEnd > yearEnd ? yearEnd : periodEnd;
+    periods.push({
+      label: `${dateLabel(periodStart)} - ${dateLabel(cappedEnd)} (#${number})`,
+      start: periodStart,
+      end: cappedEnd,
+      number
+    });
+    cursor = days ? addDays(periodStart, days) : addMonths(periodStart, 1);
+    number += 1;
+  }
+  const currentPeriod = periods.find((period) => today >= period.start && today <= period.end) || periods[0];
+  const current = currentPeriod ? `Running Pay Period: ${currentPeriod.label}` : '';
+  return {
+    current,
+    options: Array.from(new Set([current, ...periods.map((period) => period.label)].filter(Boolean)))
+  };
+}
+
 function companyModuleDefaults(company: InstanceType<typeof Company>, employees: IEmployee[]) {
   const province = company.address?.province || 'SK';
   const city = company.address?.city || 'Yorkton';
@@ -663,27 +722,19 @@ router.delete(
 router.get('/settings', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
-  const [company, users, employees, deductions, filings, paystubs, payrollRuns] = await Promise.all([
+  const [company, users, employees, deductions, filings, paystubs] = await Promise.all([
     Company.findById(companyId),
     EmployerUser.find({ $or: [{ companyId }, { companyIds: companyId }] }).sort({ name: 1 }),
     Employee.find({ companyId }).sort({ employeeNumber: 1 }).limit(20),
     DeductionType.find({ $or: [{ employerId: companyId }, { employerId: { $exists: false } }] }).sort({ mandatory: -1, name: 1 }),
     GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }).limit(12),
-    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1),
-    PayrollRun.find({ companyId }).sort({ payDate: -1, createdAt: -1 }).limit(12)
+    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1)
   ]);
   if (!company) return res.status(404).json({ message: 'Company not found' });
   const settings = normalizeEmployerSettings(mergeSettings(settingDefaults(company), company.settings || {}));
   const paySchedule = (settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
-  const savedCurrentPayPeriod = typeof paySchedule?.currentPayPeriod === 'string' ? paySchedule.currentPayPeriod : '';
-  const runningRun = payrollRuns.find((run) => ['draft', 'in_review', 'approved'].includes(run.status)) || payrollRuns[0];
-  const runningIndex = runningRun ? payrollRuns.findIndex((run) => String(run._id) === String(runningRun._id)) : -1;
-  const runningPayPeriod = runningRun ? `${dateLabel(runningRun.periodStart)} - ${dateLabel(runningRun.periodEnd)} (#${runningIndex >= 0 ? payrollRuns.length - runningIndex : 1})` : savedCurrentPayPeriod;
-  const payPeriodOptions = Array.from(new Set([
-    runningPayPeriod ? `Running Pay Period: ${runningPayPeriod}` : '',
-    ...payrollRuns.map((run, index) => `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} (#${payrollRuns.length - index})`),
-    savedCurrentPayPeriod
-  ].filter(Boolean)));
+  const calculatedPayPeriods = calculatedPayPeriodOptions(paySchedule || {});
+  if (paySchedule && calculatedPayPeriods.current) paySchedule.currentPayPeriod = calculatedPayPeriods.current;
   const roleCounts = new Map<string, number>();
   users.forEach((user) => roleCounts.set(normalizeRole(user.role), (roleCounts.get(normalizeRole(user.role)) || 0) + 1));
   const roles = roleNames
@@ -750,7 +801,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       referenceNumber: filing.reference || filing.confirmationNumber || ''
     })),
     samplePaystub: paystubs[0] ? { id: String(paystubs[0]._id), payDate: paystubs[0].payDate, netPay: safeFormatMoney(paystubs[0].netPay), grossPay: safeFormatMoney(paystubs[0].grossPay) } : undefined,
-    payPeriodOptions
+    payPeriodOptions: calculatedPayPeriods.options
   });
 });
 
