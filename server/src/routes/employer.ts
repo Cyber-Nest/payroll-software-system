@@ -663,16 +663,27 @@ router.delete(
 router.get('/settings', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
-  const [company, users, employees, deductions, filings, paystubs] = await Promise.all([
+  const [company, users, employees, deductions, filings, paystubs, payrollRuns] = await Promise.all([
     Company.findById(companyId),
     EmployerUser.find({ $or: [{ companyId }, { companyIds: companyId }] }).sort({ name: 1 }),
     Employee.find({ companyId }).sort({ employeeNumber: 1 }).limit(20),
     DeductionType.find({ $or: [{ employerId: companyId }, { employerId: { $exists: false } }] }).sort({ mandatory: -1, name: 1 }),
     GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }).limit(12),
-    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1)
+    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1),
+    PayrollRun.find({ companyId }).sort({ payDate: -1, createdAt: -1 }).limit(12)
   ]);
   if (!company) return res.status(404).json({ message: 'Company not found' });
   const settings = normalizeEmployerSettings(mergeSettings(settingDefaults(company), company.settings || {}));
+  const paySchedule = (settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
+  const savedCurrentPayPeriod = typeof paySchedule?.currentPayPeriod === 'string' ? paySchedule.currentPayPeriod : '';
+  const runningRun = payrollRuns.find((run) => ['draft', 'in_review', 'approved'].includes(run.status)) || payrollRuns[0];
+  const runningIndex = runningRun ? payrollRuns.findIndex((run) => String(run._id) === String(runningRun._id)) : -1;
+  const runningPayPeriod = runningRun ? `${dateLabel(runningRun.periodStart)} - ${dateLabel(runningRun.periodEnd)} (#${runningIndex >= 0 ? payrollRuns.length - runningIndex : 1})` : savedCurrentPayPeriod;
+  const payPeriodOptions = Array.from(new Set([
+    runningPayPeriod ? `Running Pay Period: ${runningPayPeriod}` : '',
+    ...payrollRuns.map((run, index) => `${dateLabel(run.periodStart)} - ${dateLabel(run.periodEnd)} (#${payrollRuns.length - index})`),
+    savedCurrentPayPeriod
+  ].filter(Boolean)));
   const roleCounts = new Map<string, number>();
   users.forEach((user) => roleCounts.set(normalizeRole(user.role), (roleCounts.get(normalizeRole(user.role)) || 0) + 1));
   const roles = roleNames
@@ -738,7 +749,8 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       status: filing.status,
       referenceNumber: filing.reference || filing.confirmationNumber || ''
     })),
-    samplePaystub: paystubs[0] ? { id: String(paystubs[0]._id), payDate: paystubs[0].payDate, netPay: safeFormatMoney(paystubs[0].netPay), grossPay: safeFormatMoney(paystubs[0].grossPay) } : undefined
+    samplePaystub: paystubs[0] ? { id: String(paystubs[0]._id), payDate: paystubs[0].payDate, netPay: safeFormatMoney(paystubs[0].netPay), grossPay: safeFormatMoney(paystubs[0].grossPay) } : undefined,
+    payPeriodOptions
   });
 });
 
