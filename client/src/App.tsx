@@ -451,6 +451,12 @@ type EmployerGovernmentLiabilitiesReport = {
   summary: { employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; outstandingLiability: number; hours: number; grossPay: number; deductions: number; netPay: number; employerCosts: number };
   rows: Array<{ index: number; rowKey: string; runId: string; employeeName: string; employeeNumber: string; department: string; payGroup: string; hours: number; grossPay: number; deductions: number; netPay: number; employerCosts: number; payPeriod: string; payDate: string; remittancePeriod: string; remittanceDueDate: string; employeeCpp: number; employeeEi: number; incomeTax: number; employerCpp: number; employerEi: number; totalLiability: number; outstandingLiability: number; status: string }>;
 };
+type EmployerT4SummaryReport = {
+  year: number;
+  metrics: { employees: number; statements: number; employmentIncome: string; deductions: string };
+  summary: { pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number };
+  rows: Array<{ index: number; employeeName: string; employeeNumber: string; sin: string; department: string; pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number; payStatements: number; lastPayDate: string }>;
+};
 type EmployerHistoryReport = {
   metrics: { totalEmployees: number; fullTime: number; partTime: number; currentlyActive: number; onLeave: number; totalPositionChanges: number; averageTenure: number; asOf: string };
   filters: { employees: string[]; departments: string[]; employmentTypes: string[]; payGroups: string[]; statuses: string[] };
@@ -2699,6 +2705,7 @@ function OldEmployerDashboard({
     'Employee Details Report',
     'Deductions Report',
     'Government Liabilities Report',
+    'T4 Summary Report',
     'Employee History Report'
   ];
   const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
@@ -6822,6 +6829,7 @@ function EmployerDashboard({
     'Employee Details Report',
     'Deductions Report',
     'Government Liabilities Report',
+    'T4 Summary Report',
     'Employee History Report'
   ];
   const max = Math.max(1, ...(data?.chart.map((point) => point.amount) || []));
@@ -7116,6 +7124,7 @@ function EmployerDashboard({
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
         onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
+        onOpenT4Summary={() => setAdminPage('T4 Summary Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
     ) : ['All Reports', 'Tax & Compliance', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'].includes(adminPage) ? (
@@ -7128,6 +7137,7 @@ function EmployerDashboard({
         onOpenEmployees={() => setAdminPage('Employee Reports')}
         onOpenDeductions={() => setAdminPage('Deductions Report')}
         onOpenGovernmentLiabilities={() => setAdminPage('Government Liabilities Report')}
+        onOpenT4Summary={() => setAdminPage('T4 Summary Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
     ) : adminPage === 'Payroll Reports' ? (
@@ -7142,6 +7152,8 @@ function EmployerDashboard({
       <EmployerDeductionsReportPage token={token} onBack={() => setAdminPage('Employee Reports')} />
     ) : adminPage === 'Government Liabilities Report' ? (
       <EmployerGovernmentLiabilitiesReportPage token={token} onBack={() => setAdminPage('Reports')} />
+    ) : adminPage === 'T4 Summary Report' ? (
+      <EmployerT4SummaryReportPage token={token} onBack={() => setAdminPage('Reports')} />
     ) : adminPage === 'Employee History Report' ? (
       <EmployerHistoryReportPage token={token} onBack={() => setAdminPage('Employee Reports')} />
     ) : adminPage === 'Employee Reports' ? (
@@ -7241,6 +7253,7 @@ function EmployerReportsPage({
   onOpenEmployees,
   onOpenDeductions,
   onOpenGovernmentLiabilities,
+  onOpenT4Summary,
   onOpenHistory
 }: {
   token: string;
@@ -7251,6 +7264,7 @@ function EmployerReportsPage({
   onOpenEmployees: () => void;
   onOpenDeductions: () => void;
   onOpenGovernmentLiabilities: () => void;
+  onOpenT4Summary: () => void;
   onOpenHistory: () => void;
 }) {
   const [data, setData] = useState<EmployerReportsData>();
@@ -7321,7 +7335,7 @@ function EmployerReportsPage({
             <header><span>{group.title.charAt(0)}</span><div><h2>{group.title}</h2><p>{group.description}</p></div></header>
             {group.reports.slice(0, 4).map((report) => (
               <button
-                className="report-row"
+                className={`report-row ${report.name === 'T4 Summary Report' ? 't4-summary-row' : ''}`}
                 key={report.name}
                 onClick={() => {
                   if (group.title === 'Payroll Reports') onOpenPayroll();
@@ -7330,6 +7344,7 @@ function EmployerReportsPage({
                   if (report.name === 'Employee Earnings Report') onOpenEarnings();
                   if (report.name === 'Employee Deduction Report') onOpenDeductions();
                   if (report.name === 'Government Liabilities Report') onOpenGovernmentLiabilities();
+                  if (report.name === 'T4 Summary Report') onOpenT4Summary();
                   if (report.name === 'Employee Profile Audit') onOpenHistory();
                 }}
               >
@@ -8161,6 +8176,101 @@ function EmployerDeductionsReportPage({ token, onBack }: { token: string; onBack
           <aside className="payroll-report-options"><h2><span>gear</span>Report Options</h2><label>Report Type<select defaultValue="Deductions Report"><option>Deductions Report</option></select></label><label>Pay Period<select value={data.summary.payPeriod} onChange={() => undefined}><option>{data.summary.payPeriod}</option></select></label><b>Include in Report</b>{['CPP', 'EI', 'Income Tax (Federal)', 'Income Tax (Provincial)', 'Other Deductions', 'Total Deductions'].map((item) => <label className="report-check" key={item}><input type="checkbox" defaultChecked />{item}</label>)}<label>Sort By<select defaultValue="Employee Name (A - Z)"><option>Employee Name (A - Z)</option></select></label><button type="button">Generate Report</button></aside>
         </div>
       </>}
+    </section>
+  );
+}
+
+function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack: () => void }) {
+  const [data, setData] = useState<EmployerT4SummaryReport>();
+  const [error, setError] = useState('');
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  useEffect(() => {
+    api<EmployerT4SummaryReport>(`/employer/reports/t4-summary?year=${encodeURIComponent(year)}`, token)
+      .then((result) => {
+        setData(result);
+        setError('');
+      })
+      .catch(() => {
+        setData(undefined);
+        setError('Unable to load T4 summary data from the database.');
+      });
+  }, [token, year]);
+  const moneyValue = (value: number | undefined) => `$${(value || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const yearOptions = Array.from(new Set([String(new Date().getFullYear()), String(new Date().getFullYear() - 1), String(data?.year || year)]));
+  return (
+    <section className="payroll-reports-page">
+      <button type="button" className="report-back" onClick={onBack}>Back to Reports</button>
+      {error && <p className="report-empty">{error}</p>}
+      {!data && !error && <p className="report-empty">Loading T4 summary...</p>}
+      {data && (
+        <section className="payroll-report-main">
+          <header>
+            <div>
+              <h2>T4 Summary Report</h2>
+              <p>Year to date summary for T4 filing.</p>
+            </div>
+            <div className="report-export">
+              <label className="compact-report-filter">Tax Year<select value={year} onChange={(event) => setYear(event.target.value)}>{yearOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <ReportExportButtons title={`T4 Summary Report ${data.year}`} />
+            </div>
+          </header>
+          <div className="payroll-summary-strip">
+            <article><strong>{data.metrics.employees}</strong><span>Employees</span></article>
+            <article><strong>{data.metrics.statements}</strong><span>Pay Statements</span></article>
+            <article><strong>{data.metrics.employmentIncome}</strong><span>Employment Income</span></article>
+            <article><strong>{data.metrics.deductions}</strong><span>CPP, EI & Tax</span></article>
+          </div>
+          <div className="payroll-report-table-wrap">
+            <table className="payroll-report-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Employee</th>
+                  <th>Employee #</th>
+                  <th>SIN</th>
+                  <th>Employment Income</th>
+                  <th>CPP</th>
+                  <th>EI</th>
+                  <th>Income Tax</th>
+                  <th>Net Pay</th>
+                  <th>Statements</th>
+                  <th>Last Pay Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row) => (
+                  <tr key={`${row.employeeNumber}-${row.index}`}>
+                    <td>{row.index}</td>
+                    <td>{row.employeeName}</td>
+                    <td>{row.employeeNumber || '-'}</td>
+                    <td>{row.sin || '-'}</td>
+                    <td>{moneyValue(row.employmentIncome)}</td>
+                    <td>{moneyValue(row.cpp)}</td>
+                    <td>{moneyValue(row.ei)}</td>
+                    <td>{moneyValue(row.incomeTax)}</td>
+                    <td>{moneyValue(row.netPay)}</td>
+                    <td>{row.payStatements}</td>
+                    <td>{row.lastPayDate || '-'}</td>
+                  </tr>
+                ))}
+                {!data.rows.length && <tr><td colSpan={11}>No T4 summary data found for {data.year}.</td></tr>}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>Totals</td>
+                  <td>{moneyValue(data.summary.employmentIncome)}</td>
+                  <td>{moneyValue(data.summary.cpp)}</td>
+                  <td>{moneyValue(data.summary.ei)}</td>
+                  <td>{moneyValue(data.summary.incomeTax)}</td>
+                  <td>{moneyValue(data.summary.netPay)}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      )}
     </section>
   );
 }

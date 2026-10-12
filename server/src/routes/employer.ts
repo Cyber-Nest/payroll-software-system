@@ -1532,6 +1532,120 @@ router.get(
   }
 );
 
+router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const requestedYear = Number(req.query.year);
+  const currentYear = Number.isFinite(requestedYear) && requestedYear > 1900
+    ? requestedYear
+    : new Date().getFullYear();
+  const [employees, statements] = await Promise.all([
+    Employee.find({ companyId }).select('legalFirstName legalLastName employeeNumber sinEncrypted occupation adminProfile.employment'),
+    PayStatement.find({
+      companyId,
+      payPeriodYear: currentYear,
+      supersededByStatementId: { $exists: false }
+    }).sort({ payDate: 1, _id: 1 })
+  ]);
+  const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  const deductionAmount = (statement: InstanceType<typeof PayStatement>, codes: string[]) =>
+    statement.deductions
+      .filter((line) => codes.includes(String(line.code || '').toUpperCase()))
+      .reduce((sum, line) => sum + safeMoneyToNumber(line.amount), 0);
+  const rowsByEmployee = new Map<string, {
+    employeeName: string;
+    employeeNumber: string;
+    sin: string;
+    department: string;
+    pensionableEarnings: number;
+    insurableEarnings: number;
+    employmentIncome: number;
+    cpp: number;
+    ei: number;
+    incomeTax: number;
+    netPay: number;
+    payStatements: number;
+    lastPayDate: string;
+  }>();
+  statements.forEach((statement) => {
+    const employeeId = String(statement.employeeId);
+    const employee = employeeById.get(employeeId);
+    const grossPay = safeMoneyToNumber(
+      statement.grossPay || statement.grossEarnings.find((line) => String(line.code || '').toUpperCase() === 'TOTAL')?.amount || 0
+    );
+    const existing = rowsByEmployee.get(employeeId) || {
+      employeeName: employee ? `${employee.legalFirstName} ${employee.legalLastName}`.trim() : 'Unknown employee',
+      employeeNumber: employee?.employeeNumber || '',
+      sin: employee?.sinEncrypted ? 'On file' : '',
+      department: String(employee?.adminProfile?.employment?.department || employee?.occupation || ''),
+      pensionableEarnings: 0,
+      insurableEarnings: 0,
+      employmentIncome: 0,
+      cpp: 0,
+      ei: 0,
+      incomeTax: 0,
+      netPay: 0,
+      payStatements: 0,
+      lastPayDate: ''
+    };
+    const cpp = deductionAmount(statement, ['CPP', 'CPP2']);
+    const ei = deductionAmount(statement, ['EI']);
+    const incomeTax = deductionAmount(statement, ['FTAX', 'PTAX']);
+    existing.pensionableEarnings += grossPay;
+    existing.insurableEarnings += grossPay;
+    existing.employmentIncome += grossPay;
+    existing.cpp += cpp;
+    existing.ei += ei;
+    existing.incomeTax += incomeTax;
+    existing.netPay += safeMoneyToNumber(statement.netPay);
+    existing.payStatements += 1;
+    existing.lastPayDate = dateLabel(statement.payDate);
+    rowsByEmployee.set(employeeId, existing);
+  });
+  const rows = Array.from(rowsByEmployee.values()).map((row, index) => ({
+    index: index + 1,
+    ...row,
+    pensionableEarnings: Number(row.pensionableEarnings.toFixed(2)),
+    insurableEarnings: Number(row.insurableEarnings.toFixed(2)),
+    employmentIncome: Number(row.employmentIncome.toFixed(2)),
+    cpp: Number(row.cpp.toFixed(2)),
+    ei: Number(row.ei.toFixed(2)),
+    incomeTax: Number(row.incomeTax.toFixed(2)),
+    netPay: Number(row.netPay.toFixed(2))
+  }));
+  const totals = rows.reduce(
+    (sum, row) => ({
+      pensionableEarnings: sum.pensionableEarnings + row.pensionableEarnings,
+      insurableEarnings: sum.insurableEarnings + row.insurableEarnings,
+      employmentIncome: sum.employmentIncome + row.employmentIncome,
+      cpp: sum.cpp + row.cpp,
+      ei: sum.ei + row.ei,
+      incomeTax: sum.incomeTax + row.incomeTax,
+      netPay: sum.netPay + row.netPay
+    }),
+    { pensionableEarnings: 0, insurableEarnings: 0, employmentIncome: 0, cpp: 0, ei: 0, incomeTax: 0, netPay: 0 }
+  );
+  res.json({
+    year: currentYear,
+    metrics: {
+      employees: rows.length,
+      statements: statements.length,
+      employmentIncome: safeFormatMoney(totals.employmentIncome),
+      deductions: safeFormatMoney(totals.cpp + totals.ei + totals.incomeTax)
+    },
+    summary: {
+      pensionableEarnings: Number(totals.pensionableEarnings.toFixed(2)),
+      insurableEarnings: Number(totals.insurableEarnings.toFixed(2)),
+      employmentIncome: Number(totals.employmentIncome.toFixed(2)),
+      cpp: Number(totals.cpp.toFixed(2)),
+      ei: Number(totals.ei.toFixed(2)),
+      incomeTax: Number(totals.incomeTax.toFixed(2)),
+      netPay: Number(totals.netPay.toFixed(2))
+    },
+    rows
+  });
+});
+
 router.get('/reports/government-liabilities', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;

@@ -2310,6 +2310,38 @@ button {
   justify-self: end;
 }
 
+.report-row.t4-summary-row {
+  border: 1px solid #d6e7ff;
+  border-radius: 6px;
+  box-shadow: 0 1px 0 rgba(8, 45, 116, 0.04);
+  margin: 8px 0;
+  min-height: 72px;
+}
+
+.report-row.t4-summary-row .report-doc {
+  background: #eef7ff;
+  border-color: #b9dcff;
+  color: #0753c8;
+  font-weight: 700;
+}
+
+.compact-report-filter {
+  align-items: center;
+  color: #486078;
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.compact-report-filter select {
+  border: 1px solid #d3dde9;
+  border-radius: 6px;
+  color: #0b2f67;
+  font: inherit;
+  padding: 8px 10px;
+}
+
 .report-view {
   align-items: center;
   background: #fff;
