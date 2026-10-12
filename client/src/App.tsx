@@ -483,6 +483,38 @@ type SuperAdminDashboard = {
     createdAt: string;
   }>;
 };
+type PaystubTemplateItem = {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  status: string;
+  isSystem: boolean;
+  layout: string;
+  title: string;
+  payPeriodLabel: string;
+  regularHourLabel: string;
+  overtimeHourLabel: string;
+  doubleTimeHourLabel: string;
+  rateDisplayFormat: string;
+  showPayGroup: boolean;
+  showDepartment: boolean;
+  showJobTitle: boolean;
+  showLocation: boolean;
+  showEmployeeSin: boolean;
+  maskSin: boolean;
+  showHireDate: boolean;
+  showAccruals: boolean;
+  message: string;
+  disclaimer: string;
+  delivery: {
+    availableInPortal: boolean;
+    emailAutomatically: boolean;
+    passwordProtectPdf: boolean;
+    allowDownload: boolean;
+    keepYears: string;
+  };
+};
 
 type AccessUser = {
   id: string;
@@ -13563,6 +13595,233 @@ function SuperAdminPaystubTemplate() {
   );
 }
 
+const defaultPaystubTemplateForm = {
+  name: '',
+  code: '',
+  description: '',
+  status: 'active',
+  layout: 'standard',
+  title: 'Earnings Statement',
+  payPeriodLabel: 'Pay Period',
+  regularHourLabel: 'Regular Hours',
+  overtimeHourLabel: 'Overtime Hours',
+  doubleTimeHourLabel: 'Double Time Hours',
+  rateDisplayFormat: 'Show $ per hour',
+  showPayGroup: true,
+  showDepartment: true,
+  showJobTitle: true,
+  showLocation: true,
+  showEmployeeSin: false,
+  maskSin: true,
+  showHireDate: true,
+  showAccruals: true,
+  message: 'Thank you for your hard work!',
+  disclaimer: 'This pay statement is for information purposes only. Please contact HR if you have any questions.',
+  delivery: {
+    availableInPortal: true,
+    emailAutomatically: true,
+    passwordProtectPdf: false,
+    allowDownload: true,
+    keepYears: '7 Years'
+  }
+};
+
+function SuperAdminPaystubTemplatesManager({ token }: { token: string }) {
+  const [templates, setTemplates] = useState<PaystubTemplateItem[]>([]);
+  const [form, setForm] = useState(defaultPaystubTemplateForm);
+  const [editingId, setEditingId] = useState('');
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const selected = templates.find((item) => item.id === editingId);
+  const load = () => {
+    setLoading(true);
+    api<{ templates: PaystubTemplateItem[] }>('/super-admin/paystub-templates', token)
+      .then((result) => setTemplates(result.templates))
+      .catch(() => setError('Could not load paystub templates.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, [token]);
+  const update = (key: keyof typeof defaultPaystubTemplateForm, value: string | boolean) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const updateDelivery = (key: keyof typeof defaultPaystubTemplateForm.delivery, value: string | boolean) =>
+    setForm((current) => ({ ...current, delivery: { ...current.delivery, [key]: value } }));
+  const edit = (template: PaystubTemplateItem) => {
+    setEditingId(template.id);
+    setForm({
+      name: template.name,
+      code: template.code,
+      description: template.description,
+      status: template.status,
+      layout: template.layout,
+      title: template.title,
+      payPeriodLabel: template.payPeriodLabel,
+      regularHourLabel: template.regularHourLabel,
+      overtimeHourLabel: template.overtimeHourLabel,
+      doubleTimeHourLabel: template.doubleTimeHourLabel,
+      rateDisplayFormat: template.rateDisplayFormat,
+      showPayGroup: template.showPayGroup,
+      showDepartment: template.showDepartment,
+      showJobTitle: template.showJobTitle,
+      showLocation: template.showLocation,
+      showEmployeeSin: template.showEmployeeSin,
+      maskSin: template.maskSin,
+      showHireDate: template.showHireDate,
+      showAccruals: template.showAccruals,
+      message: template.message,
+      disclaimer: template.disclaimer,
+      delivery: template.delivery
+    });
+    setNotice('');
+    setError('');
+  };
+  const reset = () => {
+    setEditingId('');
+    setForm(defaultPaystubTemplateForm);
+    setNotice('');
+    setError('');
+  };
+  const field = (key: keyof typeof defaultPaystubTemplateForm, label: string, options?: string[]) => (
+    <label>
+      {label}
+      {options ? (
+        <select value={String(form[key])} onChange={(event) => update(key, event.target.value)}>
+          {options.map((option) => <option key={option}>{option}</option>)}
+        </select>
+      ) : (
+        <input
+          value={String(form[key])}
+          disabled={key === 'code' && Boolean(selected?.isSystem)}
+          onChange={(event) => update(key, event.target.value)}
+        />
+      )}
+    </label>
+  );
+  const toggle = (key: keyof typeof defaultPaystubTemplateForm, label: string) => (
+    <label className="settings-toggle">
+      <span>{label}</span>
+      <button type="button" className={form[key] ? 'on' : ''} onClick={() => update(key, !form[key])}>
+        <i />
+      </button>
+      <b>{form[key] ? 'Yes' : 'No'}</b>
+    </label>
+  );
+  const deliveryToggle = (key: keyof typeof defaultPaystubTemplateForm.delivery, label: string) => (
+    <label className="settings-toggle">
+      <span>{label}</span>
+      <button type="button" className={form.delivery[key] ? 'on' : ''} onClick={() => updateDelivery(key, !form.delivery[key])}>
+        <i />
+      </button>
+      <b>{form.delivery[key] ? 'Yes' : 'No'}</b>
+    </label>
+  );
+  async function saveTemplate() {
+    setNotice('');
+    setError('');
+    try {
+      const payload = {
+        ...form,
+        code: form.code || form.name.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase()
+      };
+      const result = await api<{ template: PaystubTemplateItem }>(
+        editingId ? `/super-admin/paystub-templates/${editingId}` : '/super-admin/paystub-templates',
+        token,
+        { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(payload) }
+      );
+      setTemplates((current) =>
+        editingId
+          ? current.map((item) => (item.id === editingId ? result.template : item))
+          : [...current, result.template].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setNotice(`${result.template.name} template saved.`);
+      edit(result.template);
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Could not save paystub template.'));
+    }
+  }
+  async function deleteTemplate(template: PaystubTemplateItem) {
+    if (!window.confirm(`Delete ${template.name} paystub template?`)) return;
+    try {
+      await api<{ deleted: boolean }>(`/super-admin/paystub-templates/${template.id}`, token, { method: 'DELETE' });
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+      if (editingId === template.id) reset();
+      setNotice(`${template.name} template deleted.`);
+    } catch (error) {
+      setError(apiErrorMessage(error, 'Could not delete paystub template.'));
+    }
+  }
+  return (
+    <section className="module-page">
+      <div className="employee-head">
+        <div>
+          <h1>Paystub Templates</h1>
+          <p>Create platform paystub templates and assign them to employers from Add/Edit Employer.</p>
+        </div>
+        <button className="run-payroll" onClick={reset}>Add Template</button>
+      </div>
+      {notice && <div className="success-note"><b>{notice}</b></div>}
+      {error && <p className="error">{error}</p>}
+      <section className="admin-panel">
+        <table>
+          <thead><tr><th>Template</th><th>Code</th><th>Layout</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {templates.map((template) => (
+              <tr key={template.id}>
+                <td><b>{template.name}</b><small>{template.description || (template.isSystem ? 'System standard template' : '-')}</small></td>
+                <td>{template.code}</td>
+                <td>{template.layout}</td>
+                <td><span className="status paid">{template.status}</span></td>
+                <td className="table-actions">
+                  <button type="button" onClick={() => edit(template)}>Edit</button>
+                  <button type="button" disabled={template.isSystem} onClick={() => deleteTemplate(template)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+            {!templates.length && <tr><td colSpan={5}>{loading ? 'Loading templates...' : 'No paystub templates found.'}</td></tr>}
+          </tbody>
+        </table>
+      </section>
+      <section className="settings-card wide">
+        <header className="settings-card-head">
+          <div>
+            <h2><span>▤</span>{editingId ? `Edit ${form.name || 'Template'}` : 'Add Paystub Template'}</h2>
+            <p>Configure labels, visible employee details, delivery settings and default notes.</p>
+          </div>
+          <button className="run-payroll" onClick={saveTemplate}>Save Template</button>
+        </header>
+        <div className="settings-fields two">
+          {field('name', 'Template Name *')}
+          {field('code', 'Template Code *')}
+          {field('description', 'Description')}
+          {field('status', 'Status', ['active', 'inactive'])}
+          {field('layout', 'Layout', ['standard', 'compact'])}
+          {field('title', 'Paystub Title')}
+          {field('payPeriodLabel', 'Pay Period Label')}
+          {field('regularHourLabel', 'Hour Label (Regular)')}
+          {field('overtimeHourLabel', 'Hour Label (Overtime)')}
+          {field('doubleTimeHourLabel', 'Hour Label (Double Time)')}
+          {field('rateDisplayFormat', 'Rate Display Format', ['Show $ per hour'])}
+          {field('message', 'Default Message')}
+          {field('disclaimer', 'Disclaimer / Legal Text')}
+          {toggle('showPayGroup', 'Show Pay Group')}
+          {toggle('showDepartment', 'Show Department')}
+          {toggle('showJobTitle', 'Show Job Title')}
+          {toggle('showLocation', 'Show Location')}
+          {toggle('showEmployeeSin', 'Show Employee SIN')}
+          {toggle('maskSin', 'Mask SIN')}
+          {toggle('showHireDate', 'Show Hire Date')}
+          {toggle('showAccruals', 'Show Accruals Section')}
+          {deliveryToggle('availableInPortal', 'Available in Employee Portal')}
+          {deliveryToggle('emailAutomatically', 'Email Automatically')}
+          {deliveryToggle('passwordProtectPdf', 'Password Protect PDF')}
+          {deliveryToggle('allowDownload', 'Allow Download')}
+          <label>Keep Paystubs For<input value={form.delivery.keepYears} onChange={(event) => updateDelivery('keepYears', event.target.value)} /></label>
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function SuperAdminTaxConfig() {
   const [config, setConfig] = useState({
     taxYear: '2026',
@@ -13644,6 +13903,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const [savingEmployer, setSavingEmployer] = useState(false);
   const [employerNotice, setEmployerNotice] = useState('');
   const [resendingEmployerId, setResendingEmployerId] = useState('');
+  const [paystubTemplateOptions, setPaystubTemplateOptions] = useState(['Standard']);
   const nav = [
     { label: 'Dashboard' },
     { label: 'Employers' },
@@ -13658,6 +13918,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     { label: 'Reports' },
     { label: 'Compliance & Tax' },
     { label: 'Deduction Types' },
+    { label: 'Paystub Templates' },
     { label: 'Year End (T4)' },
     { label: 'ROE' },
     { label: 'Notifications' },
@@ -13682,6 +13943,16 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       .then(setData)
       .catch(() => setData(undefined));
   }, [token, result]);
+  useEffect(() => {
+    api<{ templates: PaystubTemplateItem[] }>('/super-admin/paystub-templates', token)
+      .then((result) => {
+        const activeNames = result.templates
+          .filter((template) => template.status === 'active')
+          .map((template) => template.name);
+        setPaystubTemplateOptions(activeNames.length ? activeNames : ['Standard']);
+      })
+      .catch(() => setPaystubTemplateOptions(['Standard']));
+  }, [token]);
   async function save(status: 'draft' | 'pending_activation' = 'pending_activation') {
     setError('');
     try {
@@ -14231,7 +14502,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           label="Paystub Template"
           value={form.paystubTemplate}
           onChange={(value) => update('paystubTemplate', value)}
-          options={['Standard', 'Compact']}
+          options={paystubTemplateOptions.includes(form.paystubTemplate) ? paystubTemplateOptions : [form.paystubTemplate, ...paystubTemplateOptions]}
         />
         </div>
       </div>
@@ -14666,6 +14937,8 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <SuperAdminNotifications token={token} />
           ) : page === 'Deduction Types' ? (
             <SuperAdminDeductionTypes token={token} />
+          ) : page === 'Paystub Templates' ? (
+            <SuperAdminPaystubTemplatesManager token={token} />
           ) : page === 'Year End (T4)' ? (
             <SuperAdminT4 token={token} />
           ) : page === 'ROE' ? (

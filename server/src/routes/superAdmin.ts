@@ -13,6 +13,7 @@ import { TaxFormDocument } from '../models/TaxFormDocument';
 import { RoeDocument } from '../models/RoeDocument';
 import { PlatformNotification } from '../models/PlatformNotification';
 import { DeductionType } from '../models/DeductionType';
+import { PaystubTemplate } from '../models/PaystubTemplate';
 import { SuperAdmin } from '../models/SuperAdmin';
 import { permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
 import { authenticate, AuthRequest, requirePermission, signSuperAdminToken } from '../middleware/auth';
@@ -72,6 +73,179 @@ function serializeDeductionType(item: InstanceType<typeof DeductionType>) {
     updatedAt: item.updatedAt
   };
 }
+
+const standardPaystubTemplate = {
+  name: 'Standard',
+  code: 'STANDARD',
+  description: 'Default Payhours paystub template used for generated earnings statements.',
+  status: 'active' as const,
+  isSystem: true,
+  layout: 'standard' as const,
+  title: 'Earnings Statement',
+  payPeriodLabel: 'Pay Period',
+  regularHourLabel: 'Regular Hours',
+  overtimeHourLabel: 'Overtime Hours',
+  doubleTimeHourLabel: 'Double Time Hours',
+  rateDisplayFormat: 'Show $ per hour',
+  showPayGroup: true,
+  showDepartment: true,
+  showJobTitle: true,
+  showLocation: true,
+  showEmployeeSin: false,
+  maskSin: true,
+  showHireDate: true,
+  showAccruals: true,
+  message: 'Thank you for your hard work!',
+  disclaimer: 'This pay statement is for information purposes only. Please contact HR if you have any questions.',
+  delivery: {
+    availableInPortal: true,
+    emailAutomatically: true,
+    passwordProtectPdf: false,
+    allowDownload: true,
+    keepYears: '7 Years'
+  }
+};
+
+async function ensurePaystubTemplates() {
+  await PaystubTemplate.findOneAndUpdate(
+    { code: standardPaystubTemplate.code },
+    { $setOnInsert: standardPaystubTemplate },
+    { upsert: true }
+  );
+}
+
+function serializePaystubTemplate(template: InstanceType<typeof PaystubTemplate>) {
+  return {
+    id: String(template._id),
+    name: template.name,
+    code: template.code,
+    description: template.description || '',
+    status: template.status,
+    isSystem: template.isSystem,
+    layout: template.layout,
+    title: template.title,
+    payPeriodLabel: template.payPeriodLabel,
+    regularHourLabel: template.regularHourLabel,
+    overtimeHourLabel: template.overtimeHourLabel,
+    doubleTimeHourLabel: template.doubleTimeHourLabel,
+    rateDisplayFormat: template.rateDisplayFormat,
+    showPayGroup: template.showPayGroup,
+    showDepartment: template.showDepartment,
+    showJobTitle: template.showJobTitle,
+    showLocation: template.showLocation,
+    showEmployeeSin: template.showEmployeeSin,
+    maskSin: template.maskSin,
+    showHireDate: template.showHireDate,
+    showAccruals: template.showAccruals,
+    message: template.message || '',
+    disclaimer: template.disclaimer || '',
+    delivery: template.delivery,
+    updatedAt: template.updatedAt
+  };
+}
+
+const paystubTemplateSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  code: z.string().trim().min(2).max(30).regex(/^[a-zA-Z0-9_-]+$/),
+  description: z.string().trim().max(300).optional(),
+  status: z.enum(['active', 'inactive']).default('active'),
+  layout: z.enum(['standard', 'compact']).default('standard'),
+  title: z.string().trim().min(2).max(80),
+  payPeriodLabel: z.string().trim().min(1).max(60),
+  regularHourLabel: z.string().trim().min(1).max(60),
+  overtimeHourLabel: z.string().trim().min(1).max(60),
+  doubleTimeHourLabel: z.string().trim().min(1).max(60),
+  rateDisplayFormat: z.string().trim().min(1).max(60),
+  showPayGroup: z.boolean().default(true),
+  showDepartment: z.boolean().default(true),
+  showJobTitle: z.boolean().default(true),
+  showLocation: z.boolean().default(true),
+  showEmployeeSin: z.boolean().default(false),
+  maskSin: z.boolean().default(true),
+  showHireDate: z.boolean().default(true),
+  showAccruals: z.boolean().default(true),
+  message: z.string().trim().max(500).optional(),
+  disclaimer: z.string().trim().max(1000).optional(),
+  delivery: z.object({
+    availableInPortal: z.boolean().default(true),
+    emailAutomatically: z.boolean().default(true),
+    passwordProtectPdf: z.boolean().default(false),
+    allowDownload: z.boolean().default(true),
+    keepYears: z.string().trim().min(1).max(30).default('7 Years')
+  })
+});
+
+router.get('/paystub-templates', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  await ensurePaystubTemplates();
+  const templates = await PaystubTemplate.find().sort({ isSystem: -1, name: 1 });
+  res.json({ templates: templates.map(serializePaystubTemplate) });
+});
+
+router.post('/paystub-templates', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const parsed = paystubTemplateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid paystub template', issues: parsed.error.issues });
+  try {
+    const template = await PaystubTemplate.create({
+      ...parsed.data,
+      code: parsed.data.code.toUpperCase(),
+      isSystem: false,
+      createdBy: req.superAdminContext!.superAdminId
+    });
+    await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'PAYSTUB_TEMPLATE_CREATED', metadata: { templateId: template._id, code: template.code } });
+    res.status(201).json({ template: serializePaystubTemplate(template) });
+  } catch (error: unknown) {
+    if (typeof error === 'object' && error && 'code' in error && (error as { code?: number }).code === 11000) {
+      return res.status(409).json({ message: 'Template code already exists.' });
+    }
+    throw error;
+  }
+});
+
+router.put('/paystub-templates/:id', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const parsed = paystubTemplateSchema.partial({ code: true }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid paystub template', issues: parsed.error.issues });
+  const template = await PaystubTemplate.findById(req.params.id);
+  if (!template) return res.status(404).json({ message: 'Template not found' });
+  const data = parsed.data;
+  if (data.name !== undefined) template.name = data.name;
+  if (!template.isSystem && data.code !== undefined) template.code = data.code.toUpperCase();
+  if (data.description !== undefined) template.description = data.description;
+  if (data.status !== undefined) template.status = data.status;
+  if (data.layout !== undefined) template.layout = data.layout;
+  if (data.title !== undefined) template.title = data.title;
+  if (data.payPeriodLabel !== undefined) template.payPeriodLabel = data.payPeriodLabel;
+  if (data.regularHourLabel !== undefined) template.regularHourLabel = data.regularHourLabel;
+  if (data.overtimeHourLabel !== undefined) template.overtimeHourLabel = data.overtimeHourLabel;
+  if (data.doubleTimeHourLabel !== undefined) template.doubleTimeHourLabel = data.doubleTimeHourLabel;
+  if (data.rateDisplayFormat !== undefined) template.rateDisplayFormat = data.rateDisplayFormat;
+  if (data.showPayGroup !== undefined) template.showPayGroup = data.showPayGroup;
+  if (data.showDepartment !== undefined) template.showDepartment = data.showDepartment;
+  if (data.showJobTitle !== undefined) template.showJobTitle = data.showJobTitle;
+  if (data.showLocation !== undefined) template.showLocation = data.showLocation;
+  if (data.showEmployeeSin !== undefined) template.showEmployeeSin = data.showEmployeeSin;
+  if (data.maskSin !== undefined) template.maskSin = data.maskSin;
+  if (data.showHireDate !== undefined) template.showHireDate = data.showHireDate;
+  if (data.showAccruals !== undefined) template.showAccruals = data.showAccruals;
+  if (data.message !== undefined) template.message = data.message;
+  if (data.disclaimer !== undefined) template.disclaimer = data.disclaimer;
+  if (data.delivery !== undefined) template.delivery = data.delivery;
+  await template.save();
+  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'PAYSTUB_TEMPLATE_UPDATED', metadata: { templateId: template._id, code: template.code } });
+  res.json({ template: serializePaystubTemplate(template) });
+});
+
+router.delete('/paystub-templates/:id', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const template = await PaystubTemplate.findById(req.params.id);
+  if (!template) return res.status(404).json({ message: 'Template not found' });
+  if (template.isSystem) return res.status(400).json({ message: 'Standard template cannot be deleted.' });
+  await PaystubTemplate.deleteOne({ _id: template._id });
+  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'PAYSTUB_TEMPLATE_DELETED', metadata: { templateId: template._id, code: template.code } });
+  res.json({ deleted: true, templateId: req.params.id });
+});
 
 router.get('/deduction-types', authenticate, requirePermission('tax.manage'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
