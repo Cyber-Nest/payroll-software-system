@@ -684,6 +684,23 @@ button {
   padding: 7px 12px;
 }
 
+.settings-page input:disabled,
+.settings-page select:disabled,
+.settings-page textarea:disabled {
+  background: #eef3f8;
+  border-color: #d6e0eb;
+  color: #52647a;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.settings-page button:disabled {
+  background: #edf2f7;
+  border-color: #d6e0eb;
+  color: #718096;
+  cursor: not-allowed;
+}
+
 .settings-readonly-note {
   color: #315276;
   font-size: 13px;
@@ -724,6 +741,13 @@ button {
 
 .settings-toggle button.on {
   background: #20b875;
+  justify-content: flex-end;
+}
+
+.settings-toggle button:disabled,
+.settings-toggle button.on:disabled {
+  background: #b8c4d0;
+  cursor: not-allowed;
   justify-content: flex-end;
 }
 
