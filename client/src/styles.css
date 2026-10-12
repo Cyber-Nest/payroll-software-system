@@ -886,12 +886,23 @@ button {
 }
 
 .settings-paystub-pdf-frame {
+  align-items: center;
   background: #edf3f9;
   border: 1px solid #c9d8e8;
   border-radius: 6px;
+  display: grid;
   min-height: 780px;
   overflow: hidden;
+  place-items: stretch;
   width: 100%;
+}
+
+.settings-paystub-pdf-frame p {
+  align-self: center;
+  color: #315276;
+  font-weight: 700;
+  justify-self: center;
+  margin: 0;
 }
 
 .settings-paystub-pdf-frame iframe {

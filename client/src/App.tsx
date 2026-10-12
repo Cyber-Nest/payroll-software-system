@@ -6381,6 +6381,7 @@ function EmployerSettingsPage({ token }: { token: string }) {
   const [settings, setSettings] = useState<Record<string, any>>({});
   const [activeTab, setActiveTab] = useState('General');
   const [message, setMessage] = useState('');
+  const [paystubPreviewUrl, setPaystubPreviewUrl] = useState('');
   const [roleDraft, setRoleDraft] = useState({
     name: '',
     fullForm: '',
@@ -6396,6 +6397,33 @@ function EmployerSettingsPage({ token }: { token: string }) {
       })
       .catch(() => setMessage('Unable to load settings from the database.'));
   }, [token]);
+  useEffect(() => {
+    if (!data?.samplePaystub?.id) {
+      setPaystubPreviewUrl('');
+      return;
+    }
+    let objectUrl = '';
+    let cancelled = false;
+    fetch(`${apiBase}/employer/paystubs/${data.samplePaystub.id}/download`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('Could not load paystub preview');
+        return response.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPaystubPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPaystubPreviewUrl('');
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [data?.samplePaystub?.id, token]);
   function value<T = any>(path: string, fallback: T = '' as T): T {
     return path.split('.').reduce<any>((object, key) => object?.[key], settings) ?? fallback;
   }
@@ -6462,7 +6490,11 @@ function EmployerSettingsPage({ token }: { token: string }) {
   const sampleEmployee = data.employees[0];
   const paystubPdfPreview = data.samplePaystub?.id ? (
     <div className="settings-paystub-pdf-frame">
-      <iframe title="Paystub PDF preview" src={`${apiBase}/employer/paystubs/${data.samplePaystub.id}/download?token=${encodeURIComponent(token)}`} />
+      {paystubPreviewUrl ? (
+        <iframe title="Paystub PDF preview" src={paystubPreviewUrl} />
+      ) : (
+        <p>Loading paystub PDF preview...</p>
+      )}
     </div>
   ) : (
     <article className={`settings-paystub-pdf ${String(value('paystubs.template', 'Standard')).toLowerCase()}`}>
