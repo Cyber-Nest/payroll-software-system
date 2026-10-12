@@ -812,7 +812,12 @@ router.put('/settings', authenticate, requirePermission('users.manage'), async (
   if (!parsed.success) return res.status(400).json({ message: 'Invalid settings payload', issues: parsed.error.issues });
   const company = await Company.findById(companyId);
   if (!company) return res.status(404).json({ message: 'Company not found' });
-  company.settings = normalizeEmployerSettings(mergeSettings(company.settings || {}, parsed.data.settings));
+  const existingSettings = company.settings || {};
+  const existingTaxes = (existingSettings.taxes as Record<string, unknown> | undefined) || (settingDefaults(company).taxes as Record<string, unknown>);
+  company.settings = normalizeEmployerSettings(mergeSettings(existingSettings, {
+    ...parsed.data.settings,
+    taxes: existingTaxes
+  }));
   const general = (company.settings.general as Record<string, unknown> | undefined)?.companyInformation as Record<string, unknown> | undefined;
   const payment = (company.settings.payment as Record<string, unknown> | undefined)?.bank as Record<string, unknown> | undefined;
   const payroll = (company.settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
