@@ -12,6 +12,7 @@ import { PayStatement } from '../models/PayStatement';
 import { payslipPdf, payslipsPdf, PayslipPdfData, roePdf, t4sPdf, T4PdfData } from '../utils/pdf';
 import { isInPayStatementYtd } from '../utils/payStatementYtd';
 import { DeductionType } from '../models/DeductionType';
+import { PaystubTemplate } from '../models/PaystubTemplate';
 import { TaxFormDocument } from '../models/TaxFormDocument';
 import { RoeDocument } from '../models/RoeDocument';
 import { PayrollRun } from '../models/PayrollRun';
@@ -722,13 +723,14 @@ router.delete(
 router.get('/settings', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
-  const [company, users, employees, deductions, filings, paystubs] = await Promise.all([
+  const [company, users, employees, deductions, filings, paystubs, paystubTemplates] = await Promise.all([
     Company.findById(companyId),
     EmployerUser.find({ $or: [{ companyId }, { companyIds: companyId }] }).sort({ name: 1 }),
     Employee.find({ companyId }).sort({ employeeNumber: 1 }).limit(20),
     DeductionType.find({ $or: [{ employerId: companyId }, { employerId: { $exists: false } }] }).sort({ mandatory: -1, name: 1 }),
     GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }).limit(12),
-    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1)
+    PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1),
+    PaystubTemplate.find({ status: 'active' }).sort({ isSystem: -1, name: 1 })
   ]);
   if (!company) return res.status(404).json({ message: 'Company not found' });
   const settings = normalizeEmployerSettings(mergeSettings(settingDefaults(company), company.settings || {}));
@@ -801,7 +803,8 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       referenceNumber: filing.reference || filing.confirmationNumber || ''
     })),
     samplePaystub: paystubs[0] ? { id: String(paystubs[0]._id), payDate: paystubs[0].payDate, netPay: safeFormatMoney(paystubs[0].netPay), grossPay: safeFormatMoney(paystubs[0].grossPay) } : undefined,
-    payPeriodOptions: calculatedPayPeriods.options
+    payPeriodOptions: calculatedPayPeriods.options,
+    paystubTemplates: paystubTemplates.map((template) => template.name)
   });
 });
 
