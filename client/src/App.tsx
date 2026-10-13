@@ -9063,7 +9063,9 @@ function SuperAdminAccess({
   const [step, setStep] = useState(1);
   const [accessRefresh, setAccessRefresh] = useState(0);
   const [editingAccessUser, setEditingAccessUser] = useState(false);
+  const [creatingAccessUser, setCreatingAccessUser] = useState(false);
   const [accessUserDraft, setAccessUserDraft] = useState<Partial<AccessUser>>({});
+  const [accessUserNotice, setAccessUserNotice] = useState('');
   const [editingRole, setEditingRole] = useState(false);
   const [roleDraft, setRoleDraft] = useState<Partial<AccessRoleItem>>({});
   const [accessUserSearch, setAccessUserSearch] = useState('');
@@ -9094,6 +9096,13 @@ function SuperAdminAccess({
   const activeActivity =
     access.activityLogs.find((log) => log.id === selectedActivity) || access.activityLogs[0];
   const accessRoleOptions = Array.from(new Set(access.users.map((user) => user.role).filter(Boolean))).sort();
+  const platformRoleOptions = Array.from(
+    new Set([
+      'CyberNest Super Admin',
+      ...access.roles.filter((role) => role.status === 'Active').map((role) => role.name),
+      ...access.users.filter((user) => user.employer === 'Payhours Inc.').map((user) => user.role)
+    ])
+  ).sort();
   const filteredAccessUsers = access.users.filter((user) => {
     const matchesSearch =
       !accessUserSearch.trim() ||
@@ -9142,11 +9151,56 @@ function SuperAdminAccess({
     setSelectedUser(user.id);
     setAccessUserDraft(user);
     setEditingAccessUser(true);
+    setCreatingAccessUser(false);
+    setAccessUserNotice('');
+  }
+  function startCreateAccessUser() {
+    setAccessUserDraft({
+      name: '',
+      email: '',
+      role: platformRoleOptions[0] || 'CyberNest Super Admin',
+      employer: 'Payhours Inc.',
+      status: 'Active',
+      phone: '',
+      department: 'Platform Administration'
+    });
+    setEditingAccessUser(true);
+    setCreatingAccessUser(true);
+    setAccessUserNotice('');
   }
   function updateAccessUserDraft(key: keyof AccessUser, value: string) {
     setAccessUserDraft((current) => ({ ...current, [key]: value }));
   }
   async function saveAccessUser() {
+    if (creatingAccessUser) {
+      const response = await api<{ user: AccessUser; temporaryPassword?: string }>(
+        '/super-admin/access/users',
+        token,
+        { method: 'POST', body: JSON.stringify(accessUserDraft) }
+      );
+      setAccess(
+        (current) =>
+          current && {
+            ...current,
+            users: [response.user, ...current.users],
+            metrics: {
+              ...current.metrics,
+              totalUsers: current.metrics.totalUsers + 1,
+              activeUsers: response.user.status === 'Active' ? current.metrics.activeUsers + 1 : current.metrics.activeUsers,
+              inactiveUsers: response.user.status === 'Inactive' ? current.metrics.inactiveUsers + 1 : current.metrics.inactiveUsers
+            }
+          }
+      );
+      setSelectedUser(response.user.id);
+      setCreatingAccessUser(false);
+      setEditingAccessUser(false);
+      setAccessUserNotice(
+        response.temporaryPassword
+          ? `User created. Temporary password: ${response.temporaryPassword}`
+          : 'User created.'
+      );
+      return;
+    }
     const response = await api<{ user: AccessUser }>(
       `/super-admin/access/users/${encodeURIComponent(activeUser.id)}`,
       token,
@@ -9178,6 +9232,28 @@ function SuperAdminAccess({
   }
   function updateRoleDraft(key: keyof AccessRoleItem, value: string) {
     setRoleDraft((current) => ({ ...current, [key]: value }));
+  }
+  function roleDraftPermissions() {
+    return roleDraft.permissions || activeRole.permissions || {};
+  }
+  function updateRolePermission(moduleName: string, permission: string, checked: boolean) {
+    setRoleDraft((current) => {
+      const permissions = { ...(current.permissions || activeRole.permissions || {}) };
+      const currentPermissions = permissions[moduleName] || [];
+      permissions[moduleName] = checked
+        ? Array.from(new Set([...currentPermissions, permission]))
+        : currentPermissions.filter((item) => item !== permission);
+      if (!permissions[moduleName].length) delete permissions[moduleName];
+      return { ...current, permissions };
+    });
+  }
+  function updateRoleModule(moduleName: string, modulePermissions: string[], checked: boolean) {
+    setRoleDraft((current) => {
+      const permissions = { ...(current.permissions || activeRole.permissions || {}) };
+      if (checked) permissions[moduleName] = modulePermissions;
+      else delete permissions[moduleName];
+      return { ...current, permissions };
+    });
   }
   async function saveExistingRole() {
     const response = await api<{ role: AccessRoleItem }>(
@@ -9533,8 +9609,10 @@ function SuperAdminAccess({
           </div>
           <div className="head-actions">
             <ExportMenu onExport={exportUsers} />
+            <button className="run-payroll" onClick={startCreateAccessUser}>Add User</button>
           </div>
         </div>
+        {accessUserNotice && <div className="success-note"><b>{accessUserNotice}</b></div>}
         {accessTabs}
         <div className="metric-grid five">
           <AccessMetric
@@ -9689,20 +9767,20 @@ function SuperAdminAccess({
           </section>
           {activeUser && (
             <aside className="access-detail">
-              <button className="close-button" onClick={() => setEditingAccessUser(false)}>
+              <button className="close-button" onClick={() => { setEditingAccessUser(false); setCreatingAccessUser(false); }}>
                 x
               </button>
               <div className="big-avatar">
-                {activeUser.name
+                {(creatingAccessUser ? accessUserDraft.name || 'New User' : activeUser.name)
                   .split(' ')
                   .map((part) => part[0])
                   .join('')
                   .slice(0, 2)}
               </div>
-              <h2>{activeUser.name}</h2>
-              <p>{activeUser.email}</p>
-              <Pill tone={activeUser.role.includes('Super Admin') ? 'purple' : 'blue'}>
-                {activeUser.role}
+              <h2>{creatingAccessUser ? 'Add User' : activeUser.name}</h2>
+              <p>{creatingAccessUser ? 'Create a Payhours Super Admin user.' : activeUser.email}</p>
+              <Pill tone={(creatingAccessUser ? accessUserDraft.role || '' : activeUser.role).includes('Super Admin') ? 'purple' : 'blue'}>
+                {creatingAccessUser ? accessUserDraft.role || 'CyberNest Super Admin' : activeUser.role}
               </Pill>
               {editingAccessUser ? (
                 <div className="edit-details-stack">
@@ -9722,13 +9800,12 @@ function SuperAdminAccess({
                   </label>
                   <label>
                     Role
-                    <input
+                    <select
                       value={accessUserDraft.role || ''}
-                      disabled={
-                        activeUser.role === 'Employee' || activeUser.role.includes('Super Admin')
-                      }
                       onChange={(event) => updateAccessUserDraft('role', event.target.value)}
-                    />
+                    >
+                      {platformRoleOptions.map((role) => <option key={role}>{role}</option>)}
+                    </select>
                   </label>
                   <label>
                     Phone
@@ -9755,9 +9832,9 @@ function SuperAdminAccess({
                     </select>
                   </label>
                   <div className="side-actions">
-                    <button onClick={() => setEditingAccessUser(false)}>Cancel</button>
+                    <button onClick={() => { setEditingAccessUser(false); setCreatingAccessUser(false); }}>Cancel</button>
                     <button className="run-payroll" onClick={saveAccessUser}>
-                      Save User
+                      {creatingAccessUser ? 'Create User' : 'Save User'}
                     </button>
                   </div>
                 </div>
@@ -9960,6 +10037,36 @@ function SuperAdminAccess({
                     onChange={(event) => updateRoleDraft('description', event.target.value)}
                   />
                 </label>
+                <div className="role-permission-editor">
+                  <h3>Permissions</h3>
+                  {access.modules.map((module) => {
+                    const selected = roleDraftPermissions()[module.name] || [];
+                    return (
+                      <article key={module.name}>
+                        <label className="wizard-check">
+                          <input
+                            type="checkbox"
+                            checked={selected.length === module.permissions.length}
+                            onChange={(event) => updateRoleModule(module.name, module.permissions, event.target.checked)}
+                          />
+                          <span><b>{module.name}</b><small>{module.caption}</small></span>
+                        </label>
+                        <div>
+                          {module.permissions.map((permission) => (
+                            <label key={permission}>
+                              <input
+                                type="checkbox"
+                                checked={selected.includes(permission)}
+                                onChange={(event) => updateRolePermission(module.name, permission, event.target.checked)}
+                              />
+                              {permission}
+                            </label>
+                          ))}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
                 <div className="side-actions">
                   <button onClick={() => setEditingRole(false)}>Cancel</button>
                   <button className="run-payroll" onClick={saveExistingRole}>

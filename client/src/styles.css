@@ -1191,6 +1191,41 @@ button {
   color: #000;
 }
 
+.role-permission-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.role-permission-editor h3 {
+  color: #003db8;
+  font-size: 16px;
+  margin: 4px 0 0;
+}
+
+.role-permission-editor article {
+  border: 1px solid #d5e4f5;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.role-permission-editor article > div {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.role-permission-editor article > div label {
+  align-items: center;
+  color: #07347a;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  margin: 0;
+}
+
 @media (max-width: 900px) {
   .paystub-template-builder {
     grid-template-columns: 1fr;

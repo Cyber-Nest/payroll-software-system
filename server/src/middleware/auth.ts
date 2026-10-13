@@ -6,6 +6,7 @@ import { Employee } from '../models/Employee';
 import { EmployerUser } from '../models/EmployerUser';
 import { SuperAdmin } from '../models/SuperAdmin';
 import { User } from '../models/User';
+import { AccessRole } from '../models/AccessRole';
 import { Permission, permissionsForRole } from '../security/rbac';
 
 export interface AuthRequest extends Request {
@@ -27,6 +28,23 @@ export function signSuperAdminToken(superAdminId: string): string {
   return jwt.sign({ sub: superAdminId, portal: 'super-admin' }, env.jwtSecret, { expiresIn: '8h' });
 }
 
+function permissionsFromAccessRole(rolePermissions: Record<string, string[]>): Permission[] {
+  const granted = new Set<Permission>();
+  const add = (...permissions: Permission[]) => permissions.forEach((permission) => granted.add(permission));
+  Object.entries(rolePermissions).forEach(([moduleName, permissions]) => {
+    if (!permissions.length) return;
+    if (moduleName === 'Users & Access') add('users.manage', 'audit.view');
+    if (moduleName === 'Employees') add('employee.view', 'employee.create', 'employee.edit', 'employee.sin.view', 'employee.compensation.view');
+    if (moduleName === 'Payroll') add('payroll.view', 'payroll.prepare', 'payroll.approve', 'payroll.reverse');
+    if (moduleName === 'Compliance & Tax') add('tax.view', 'tax.manage');
+    if (moduleName === 'Reports') add('reports.view', 'reports.export');
+    if (moduleName === 'System Administration') add('audit.view', 'bulletins.manage', 'users.manage');
+    if (moduleName === 'Employers' || moduleName === 'Settings') add('users.manage');
+    if (moduleName === 'Billing & Subscriptions') add('reports.view');
+  });
+  return Array.from(granted);
+}
+
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
@@ -45,7 +63,13 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         return;
       }
       req.user = { id: payload.sub };
-      req.superAdminContext = { superAdminId: payload.sub, role: 'CyberNest Super Admin', permissions: permissionsForRole('CyberNest Super Admin') };
+      const role = superAdmin.role || 'CyberNest Super Admin';
+      const customRole = await AccessRole.findOne({ name: role, status: 'Active' });
+      req.superAdminContext = {
+        superAdminId: payload.sub,
+        role,
+        permissions: customRole ? permissionsFromAccessRole(customRole.permissions) : permissionsForRole(role)
+      };
       next();
       return;
     }

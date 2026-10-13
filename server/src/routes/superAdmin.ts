@@ -820,13 +820,13 @@ router.get('/access', authenticate, requirePermission('users.manage'), async (re
       id: `superAdmin:${String(admin._id)}`,
       name: admin.name,
       email: admin.email,
-      role: 'CyberNest Super Admin',
+      role: admin.role || 'CyberNest Super Admin',
       employer: 'Payhours Inc.',
       status: admin.isActive ? 'Active' : 'Inactive',
       lastLogin: formatDateTime(admin.lastLoginAt),
       createdDate: formatDate(admin.createdAt),
-      phone: '-',
-      department: 'Platform Administration',
+      phone: admin.phone || '-',
+      department: admin.department || 'Platform Administration',
       timeZone: 'Mountain Time (MT)',
       twoFactor: 'Not configured',
       loginMethod: 'Email & Password'
@@ -906,6 +906,59 @@ const updateAccessUserSchema = z.object({
   status: z.enum(['Active', 'Inactive']).optional()
 });
 
+const createAccessUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  role: z.string().min(2).default('CyberNest Super Admin'),
+  phone: z.string().optional(),
+  department: z.string().optional(),
+  status: z.enum(['Active', 'Inactive']).default('Active')
+});
+
+function serializeSuperAdminAccessUser(user: InstanceType<typeof SuperAdmin>) {
+  return {
+    id: `superAdmin:${String(user._id)}`,
+    name: user.name,
+    email: user.email,
+    role: user.role || 'CyberNest Super Admin',
+    employer: 'Payhours Inc.',
+    status: user.isActive ? 'Active' : 'Inactive',
+    lastLogin: formatDateTime(user.lastLoginAt),
+    createdDate: formatDate(user.createdAt),
+    phone: user.phone || '-',
+    department: user.department || 'Platform Administration',
+    timeZone: 'Mountain Time (MT)',
+    twoFactor: 'Not configured',
+    loginMethod: 'Email & Password'
+  };
+}
+
+router.post('/access/users', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const parsed = createAccessUserSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid user details', issues: parsed.error.issues });
+  const data = parsed.data;
+  const email = data.email.toLowerCase();
+  const existing = await SuperAdmin.findOne({ email });
+  if (existing) return res.status(409).json({ message: 'A Super Admin user already exists with that email.' });
+  const temporaryPassword = generateTemporaryPassword();
+  const user = await SuperAdmin.create({
+    name: data.name,
+    email,
+    role: data.role,
+    phone: data.phone || '',
+    department: data.department || 'Platform Administration',
+    passwordHash: await hashPassword(temporaryPassword),
+    isActive: data.status === 'Active'
+  });
+  await auditEvent(req, {
+    userId: req.superAdminContext!.superAdminId,
+    eventType: 'USER_UPDATED',
+    metadata: { action: `Created platform user ${user.email}`, module: 'Users & Access', role: user.role }
+  });
+  res.status(201).json({ user: serializeSuperAdminAccessUser(user), temporaryPassword });
+});
+
 router.put('/access/users/:userKey', authenticate, requirePermission('users.manage'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const parsed = updateAccessUserSchema.safeParse(req.body);
@@ -918,10 +971,13 @@ router.put('/access/users/:userKey', authenticate, requirePermission('users.mana
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (data.name !== undefined) user.name = data.name;
     if (data.email !== undefined) user.email = data.email.toLowerCase();
+    if (data.role !== undefined) user.role = data.role;
+    if (data.phone !== undefined) user.phone = data.phone;
+    if (data.department !== undefined) user.department = data.department;
     if (data.status !== undefined) user.isActive = data.status === 'Active';
     await user.save();
     await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'USER_UPDATED', metadata: { action: `Updated platform user ${user.email}`, module: 'Users & Access' } });
-    return res.json({ user: { id: `superAdmin:${String(user._id)}`, name: user.name, email: user.email, role: 'CyberNest Super Admin', employer: 'Payhours Inc.', status: user.isActive ? 'Active' : 'Inactive', lastLogin: formatDateTime(user.lastLoginAt), createdDate: formatDate(user.createdAt), phone: '-', department: data.department || 'Platform Administration', timeZone: 'Mountain Time (MT)', twoFactor: 'Not configured', loginMethod: 'Email & Password' } });
+    return res.json({ user: serializeSuperAdminAccessUser(user) });
   }
 
   if (kind === 'employer') {
