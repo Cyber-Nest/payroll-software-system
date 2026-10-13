@@ -723,13 +723,19 @@ router.delete(
 router.get('/settings', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
-  const [company, users, employees, deductions, filings, paystubs, paystubTemplates] = await Promise.all([
+  const settingsYearStart = new Date(new Date().getFullYear(), 0, 1);
+  const [company, users, employees, deductionTypes, filings, paystubs, payStatements, paystubTemplates] = await Promise.all([
     Company.findById(companyId),
     EmployerUser.find({ $or: [{ companyId }, { companyIds: companyId }] }).sort({ name: 1 }),
-    Employee.find({ companyId }).sort({ employeeNumber: 1 }).limit(20),
+    Employee.find({ companyId }).sort({ employeeNumber: 1 }),
     DeductionType.find({ $or: [{ employerId: companyId }, { employerId: { $exists: false } }] }).sort({ mandatory: -1, name: 1 }),
     GovernmentFiling.find({ companyId }).sort({ dueDate: -1 }).limit(12),
     PayStatement.find({ companyId, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(1),
+    PayStatement.find({
+      companyId,
+      supersededByStatementId: { $exists: false },
+      payDate: { $gte: settingsYearStart }
+    }).sort({ payDate: -1 }),
     PaystubTemplate.find({ status: 'active' }).sort({ isSystem: -1, name: 1 })
   ]);
   if (!company) return res.status(404).json({ message: 'Company not found' });
@@ -750,6 +756,73 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       status: 'Active',
       permissions: rolePermissions[role]
     }));
+  const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  const deductionYtd = new Map<string, number>();
+  payStatements.forEach((statement) => {
+    statement.deductions
+      .filter((line) => String(line.code || '').toUpperCase() !== 'TOTAL')
+      .forEach((line) => {
+        const amount = moneyToNumber(line.amount || 0);
+        if (!amount) return;
+        const key = `${String(statement.employeeId)}::${String(line.code || line.description || 'DED')}`;
+        deductionYtd.set(key, (deductionYtd.get(key) || 0) + amount);
+      });
+  });
+  const deductionRows = payStatements.flatMap((statement) => {
+    const employee = employeeById.get(String(statement.employeeId));
+    return statement.deductions
+      .filter((line) => String(line.code || '').toUpperCase() !== 'TOTAL' && moneyToNumber(line.amount || 0) !== 0)
+      .map((line, index) => {
+        const code = String(line.code || 'DED');
+        const key = `${String(statement.employeeId)}::${code}`;
+        return {
+          id: `${String(statement._id)}-${code}-${index}`,
+          employeeId: String(statement.employeeId),
+          employeeNumber: employee?.employeeNumber || '-',
+          employeeName: employee ? employeeDisplayName(employee) : 'Unknown Employee',
+          deductionCode: code,
+          deductionName: String(line.description || code),
+          currentAmount: safeFormatMoney(line.amount),
+          yearToDate: safeFormatMoney(deductionYtd.get(key) || 0),
+          payDate: statement.payDate,
+          status: true
+        };
+      });
+  });
+  const benefitLabels: Array<[string, string, string]> = [
+    ['extendedHealthCare', 'Extended Health Care', 'Health'],
+    ['dentalCare', 'Dental Care', 'Health'],
+    ['groupLifeInsurance', 'Group Life Insurance', 'Insurance'],
+    ['accidentalDeath', 'Accidental Death & Dismemberment', 'Insurance'],
+    ['employeeAssistance', 'Employee Assistance Program', 'Wellness'],
+    ['rrspContribution', 'RRSP Contribution', 'Retirement'],
+    ['unionDues', 'Union Dues', 'Deduction'],
+    ['healthSpendingAccount', 'Health Spending Account', 'Health'],
+    ['parking', 'Parking', 'Taxable Benefit']
+  ];
+  const benefitRows = employees.flatMap((employee) => {
+    const benefits = employee.adminProfile?.benefits || {};
+    return benefitLabels
+      .map(([key, name, type]) => {
+        const rawValue = benefits[key];
+        const value = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+        const active = Boolean(value.trim()) && !['not enrolled', 'none', 'no', '0'].includes(value.trim().toLowerCase());
+        return {
+          id: `${String(employee._id)}-${key}`,
+          employeeId: String(employee._id),
+          employeeNumber: employee.employeeNumber,
+          employeeName: employeeDisplayName(employee),
+          benefitName: name,
+          type,
+          coverageOrValue: value || 'Not Enrolled',
+          enrollmentDate: String(benefits.benefitsEnrollmentDate || ''),
+          deductionStartDate: String(benefits.deductionsStartDate || ''),
+          status: active
+        };
+      })
+      .filter((row) => row.status || row.coverageOrValue !== 'Not Enrolled');
+  });
+
   res.json({
     settings,
     company: {
@@ -777,7 +850,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       department: employee.adminProfile?.employment?.department || 'Operations',
       jobTitle: employee.occupation || employee.adminProfile?.employment?.jobTitle || ''
     })),
-    deductions: deductions.map((item, index) => ({
+    deductionTypes: deductionTypes.map((item, index) => ({
       id: String(item._id),
       index: index + 1,
       name: item.name,
@@ -788,11 +861,8 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       taxable: item.includeInCraReports ? 'Yes' : 'No',
       status: item.status === 'active'
     })),
-    benefits: ((settings.deductionsBenefits as Record<string, unknown> | undefined)?.benefits as unknown[]) || [
-      { name: 'Extended Health Care', type: 'Health', calculationMethod: 'Employer Paid', defaultValue: '$100.00/month', appliesTo: 'Selected', taxable: 'No', status: true },
-      { name: 'Dental Care', type: 'Health', calculationMethod: 'Employer Paid', defaultValue: '$75.00/month', appliesTo: 'Selected', taxable: 'No', status: true },
-      { name: 'RRSP Contribution', type: 'Retirement', calculationMethod: 'Percentage', defaultValue: '3%', appliesTo: 'Selected', taxable: 'Yes', status: true }
-    ],
+    deductions: deductionRows,
+    benefits: benefitRows,
     filings: filings.map((filing) => ({
       id: String(filing._id),
       filingType: filing.title || filing.type,
