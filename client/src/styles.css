@@ -1130,7 +1130,80 @@ button {
   max-width: 860px;
 }
 
+.paystub-template-builder {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(360px, 0.82fr) minmax(520px, 1fr);
+}
+
+.paystub-template-preview-panel {
+  background: #f4f8fd;
+  border: 1px solid #cbdcf0;
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.paystub-template-preview-panel > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paystub-template-preview-panel > header h2 {
+  color: #003db8;
+  font-size: 18px;
+  margin: 0;
+}
+
+.paystub-template-preview-panel > header p {
+  color: #315276;
+  margin: 0;
+  text-align: right;
+}
+
+.super-admin-template-preview {
+  box-shadow: none;
+  min-height: 620px;
+  min-width: 920px;
+  padding-bottom: 44px;
+}
+
+.super-admin-template-preview.compact {
+  min-width: 760px;
+}
+
+.template-preview-footer {
+  border: 2px solid #111;
+  border-top: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+  padding: 10px 12px;
+}
+
+.template-preview-footer b,
+.template-preview-footer span {
+  color: #000;
+}
+
 @media (max-width: 900px) {
+  .paystub-template-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .paystub-template-preview-panel > header {
+    display: grid;
+  }
+
+  .paystub-template-preview-panel > header p {
+    text-align: left;
+  }
+
   .pdf-paystub-party,
   .pdf-paystub-payline,
   .pdf-paystub-body {

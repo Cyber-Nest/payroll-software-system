@@ -13820,6 +13820,85 @@ function SuperAdminPaystubTemplatesManager({ token }: { token: string }) {
       setError(apiErrorMessage(error, 'Could not delete paystub template.'));
     }
   }
+  const sampleSin = form.maskSin ? 'XXX XXX 789' : '123 456 789';
+  const templatePreview = (
+    <article className={`settings-paystub-pdf super-admin-template-preview ${form.layout}`}>
+      <header>
+        <div><Logo word="Payhours" /></div>
+        <h3>{form.title || 'EARNINGS STATEMENT'}</h3>
+      </header>
+      <section className="pdf-paystub-party">
+        <div>
+          <small>Employer</small>
+          <b>Manitoba Test</b>
+          <span>123 Main Street</span>
+          <span>Winnipeg, Manitoba, T2P 1J9</span>
+        </div>
+        <div>
+          <b>Anil Sharma</b>
+          <span>Employee code: E011</span>
+          {form.showEmployeeSin && <span>SIN: {sampleSin}</span>}
+          {form.showPayGroup && <span>Pay frequency: Biweekly</span>}
+          {form.showDepartment && <span>Department: Operations</span>}
+          {form.showJobTitle && <span>Job title: Restaurant Manager</span>}
+          {form.showLocation && <span>Location: Winnipeg - Main Branch</span>}
+          {form.showHireDate && <span>Hire date: 2025-04-15</span>}
+        </div>
+      </section>
+      <section className="pdf-paystub-payline">
+        <div><b>PAY DATE:</b><span>2026-07-15</span></div>
+        <div><b>NET PAY</b><strong><span>$</span>1595.28</strong><b>YEAR TO DATE</b><strong><span>$</span>1595.28</strong></div>
+      </section>
+      <section className="pdf-paystub-body">
+        <div className="pdf-paystub-earnings">
+          <h4><span>Gross Earnings</span><em>$</em><strong>2059.20</strong></h4>
+          <table>
+            <thead><tr><th>Description</th><th>Current<br />Hours/Units</th><th>YTD<br />Hours/Units</th><th>Rate</th><th>Current<br />Earnings</th><th>YTD<br />Earnings</th></tr></thead>
+            <tbody>
+              <tr><td>{form.regularHourLabel || 'Regular Hours'}</td><td>88.00</td><td>88.00</td><td>22.50</td><td>1980.00</td><td>1980.00</td></tr>
+              <tr><td>{form.overtimeHourLabel || 'Overtime Hours'}</td><td>4.00</td><td>4.00</td><td>33.75</td><td>135.00</td><td>135.00</td></tr>
+              <tr><td>{form.doubleTimeHourLabel || 'Double Time Hours'}</td><td>0.00</td><td>0.00</td><td>45.00</td><td>0.00</td><td>0.00</td></tr>
+              <tr><td>Vacation pay</td><td></td><td></td><td></td><td>79.20</td><td>79.20</td></tr>
+              <tr className="total"><td>Total gross pay</td><td></td><td></td><td></td><td>2059.20</td><td>2059.20</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="pdf-paystub-side">
+          <div className="pdf-paystub-deductions">
+            <h4><span>Deductions</span><em>$</em><strong>463.92</strong></h4>
+            <table>
+              <thead><tr><th>Description</th><th>Current</th><th>YTD</th></tr></thead>
+              <tbody>
+                <tr><td>CPP</td><td>114.51</td><td>114.51</td></tr>
+                <tr><td>EI</td><td>33.56</td><td>33.56</td></tr>
+                <tr><td>Federal tax</td><td>315.85</td><td>315.85</td></tr>
+                <tr className="total"><td>Total deductions</td><td>463.92</td><td>463.92</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="pdf-paystub-info">
+            <h4>Additional Statement Information</h4>
+            <p>
+              {form.payPeriodLabel || 'Pay Period'}: 2026-07-01 to 2026-07-14<br />
+              Period Number: 14<br />
+              Payroll Number: PR000<br />
+              Employee Number: E011<br />
+              Deposit Account: XX [hidden]<br />
+              Province of Employment: Manitoba<br />
+              {form.showAccruals && <>Vacation Accrual: 4.00%<br /></>}
+              Payslip Revision: 1
+            </p>
+          </div>
+        </div>
+      </section>
+      {(form.message || form.disclaimer) && (
+        <footer className="template-preview-footer">
+          {form.message && <b>{form.message}</b>}
+          {form.disclaimer && <span>{form.disclaimer}</span>}
+        </footer>
+      )}
+    </article>
+  );
   return (
     <section className="module-page">
       <div className="employee-head">
@@ -13859,6 +13938,7 @@ function SuperAdminPaystubTemplatesManager({ token }: { token: string }) {
           </div>
           <button className="run-payroll" onClick={saveTemplate}>Save Template</button>
         </header>
+        <div className="paystub-template-builder">
         <div className="settings-fields two">
           {field('name', 'Template Name *')}
           {field('code', 'Template Code *')}
@@ -13886,6 +13966,14 @@ function SuperAdminPaystubTemplatesManager({ token }: { token: string }) {
           {deliveryToggle('passwordProtectPdf', 'Password Protect PDF')}
           {deliveryToggle('allowDownload', 'Allow Download')}
           <label>Keep Paystubs For<input value={form.delivery.keepYears} onChange={(event) => updateDelivery('keepYears', event.target.value)} /></label>
+        </div>
+        <aside className="paystub-template-preview-panel">
+          <header>
+            <h2>Live Preview</h2>
+            <p>Sample earnings statement using this template.</p>
+          </header>
+          {templatePreview}
+        </aside>
         </div>
       </section>
     </section>
