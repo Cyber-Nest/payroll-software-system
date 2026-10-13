@@ -2501,6 +2501,7 @@ function payrollReadyProfile(
       ...profile.employment,
       employmentStatus: valueOrDefault(profile.employment, 'employmentStatus', 'Active'),
       employmentType: valueOrDefault(profile.employment, 'employmentType', 'Full-Time'),
+      role: valueOrDefault(profile.employment, 'role', 'Employee'),
       provinceOfEmployment: valueOrDefault(
         profile.employment,
         'provinceOfEmployment',

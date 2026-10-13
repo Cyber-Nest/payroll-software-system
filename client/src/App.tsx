@@ -2927,6 +2927,7 @@ const suggestedAdminProfile: AdminProfile = {
   employment: {
     employmentStatus: 'Active',
     employmentType: 'Full-Time',
+    role: 'Employee',
     hireDate: '2025-04-15',
     originalHireDate: '2025-04-15',
     jobTitle: 'Restaurant Manager',
@@ -3012,6 +3013,7 @@ function blankAdminProfile(profile: AdminProfile): AdminProfile {
 }
 
 const emptyAdminProfile: AdminProfile = blankAdminProfile(suggestedAdminProfile);
+emptyAdminProfile.employment.role = 'Employee';
 
 function cloneAdminProfile(profile: AdminProfile): AdminProfile {
   return {
@@ -3022,6 +3024,16 @@ function cloneAdminProfile(profile: AdminProfile): AdminProfile {
     vacation: { ...profile.vacation },
     benefits: { ...profile.benefits },
     banking: { ...profile.banking }
+  };
+}
+
+function withDefaultEmployeeRole(profile: AdminProfile): AdminProfile {
+  return {
+    ...profile,
+    employment: {
+      ...profile.employment,
+      role: profile.employment.role || 'Employee'
+    }
   };
 }
 
@@ -3078,6 +3090,7 @@ function profileForEmployee(employee?: EmployeeProfile): AdminProfile {
       ...emptyAdminProfile.employment,
       ...(employment || {}),
       employeeNumber: profileText(profile, 'employment', 'employeeNumber', employee.employeeNumber || ''),
+      role: profileText(profile, 'employment', 'role', emptyAdminProfile.employment.role),
       jobTitle: profileText(profile, 'employment', 'jobTitle', employee.occupation || ''),
       hireDate: profileText(profile, 'employment', 'hireDate', dateInputValue(employee.startDate)),
       originalHireDate: profileText(
@@ -3340,7 +3353,7 @@ function AddEmployee({
   );
   const [step, setStep] = useState(() => savedDraft?.step || 1);
   const [profile, setProfile] = useState<AdminProfile>(
-    () => savedDraft?.profile || profileForEmployee(employee)
+    () => withDefaultEmployeeRole(savedDraft?.profile || profileForEmployee(employee))
   );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -3374,6 +3387,7 @@ function AddEmployee({
     2: [
       ['employment', 'employmentStatus', 'Employment Status'],
       ['employment', 'employmentType', 'Employment Type'],
+      ['employment', 'role', 'Role'],
       ['employment', 'hireDate', 'Hire Date'],
       ['employment', 'jobTitle', 'Job Title'],
       ['employment', 'department', 'Department'],
@@ -3588,6 +3602,21 @@ function AddEmployee({
           error={fieldErrors[errorKey('employment', 'employmentType')]}
           onChange={(next) => updateField('employment', 'employmentType', next)}
           options={['Full-Time', 'Part-Time', 'Casual']}
+        />
+        <AdminSelect
+          label="Role *"
+          value={v('employment', 'role')}
+          error={fieldErrors[errorKey('employment', 'role')]}
+          onChange={(next) => updateField('employment', 'role', next)}
+          options={[
+            'Employee',
+            'Manager',
+            'Supervisor',
+            'Payroll Admin',
+            'Payroll Approver',
+            'HR Admin',
+            'Accountant'
+          ]}
         />
         {input('employment', 'hireDate', 'Hire Date *')}
         {input('employment', 'originalHireDate', 'Original Hire Date')}
@@ -4077,6 +4106,7 @@ function AddEmployee({
       [
         ['Employee ID', v('employment', 'employeeNumber')],
         ['Position', v('employment', 'jobTitle')],
+        ['Role', v('employment', 'role')],
         ['Department', v('employment', 'department')],
         ['Employment Type', v('employment', 'employmentType')],
         ['Start Date', v('employment', 'hireDate')],
