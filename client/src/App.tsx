@@ -8714,6 +8714,9 @@ const employerFormPlaceholders = {
   overtimeHourLabel: 'Overtime Hours',
   doubleTimeHourLabel: 'Double Time Hours',
   rateDisplayFormat: 'Show $ per hour',
+  t4Format: 'Payslip Summary',
+  t4SummaryFormat: 'All T4 Summary',
+  t4GenerationSource: 'Employer Module',
   plan: 'Standard',
   billingFrequency: 'Monthly'
 };
@@ -13460,43 +13463,17 @@ function SuperAdminT4({ token }: { token: string }) {
   const selectedYear = year && years.includes(Number(year)) ? year : String(years[0] || '');
   const eligibleEmployees = companyEmployees.filter((employee) => employee.years.includes(Number(selectedYear)));
 
-  async function generate() {
-    if (!companyId || !selectedYear) return;
-    setGenerating(true);
-    setNotice('');
-    try {
-      const response = await fetch(`${apiBase}/super-admin/t4/generate`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId, year: Number(selectedYear), employeeId })
-      });
-      if (!response.ok) {
-        const detail = await response.json().catch(() => undefined);
-        throw new Error(detail?.message || 'T4 generation failed.');
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `T4-${selectedYear}-${employeeId === 'all' ? 'all-employees' : eligibleEmployees.find((employee) => employee.id === employeeId)?.employeeNumber || 'employee'}.pdf`;
-      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-      setNotice(`${employeeId === 'all' ? eligibleEmployees.length : 1} T4 form${employeeId === 'all' && eligibleEmployees.length !== 1 ? 's' : ''} generated.`);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'T4 generation failed.');
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   return <section className="sa-deduction-page">
-    <header className="employee-head"><div><h1>Year End (T4)</h1><p>Generate T4 slips for completed calendar years from finalized payroll records.</p></div></header>
+    <header className="employee-head"><div><h1>Year End (T4)</h1><p>Configure and review T4 availability. T4 generation is completed from the Employer module.</p></div></header>
     {notice && <p className="success-note"><b>{notice}</b></p>}
     <section className="admin-panel t4-generator">
       <div className="t4-generator-fields super-admin-t4-fields">
         <label>Employer<select value={companyId} onChange={(event) => { setCompanyId(event.target.value); setYear(''); setEmployeeId('all'); }}>{employers.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.customerId})</option>)}</select></label>
         <label>Year<select value={selectedYear} onChange={(event) => { setYear(event.target.value); setEmployeeId('all'); }}>{years.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        <label>Employee Name<select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={!eligibleEmployees.length}><option value="all">All employees</option>{eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} ({employee.employeeNumber})</option>)}</select></label>
-        <button disabled={!companyId || !selectedYear || !eligibleEmployees.length || generating} onClick={generate}>{generating ? 'Generating...' : 'Generate T4'}</button>
+        <label>Employee Scope<select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={!eligibleEmployees.length}><option value="all">All employees</option>{eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} ({employee.employeeNumber})</option>)}</select></label>
+        <button disabled>Generate from Employer</button>
       </div>
+      <p>T4 format is set in Super Admin Add/Edit Employer. Employers generate T4 slips from Government Filings using payslip summary data. T4 Summary represents all T4 slips for the employer.</p>
       {!years.length ? <p>T4 generation becomes available after December has ended for a year with finalized payslips.</p> : !eligibleEmployees.length && <p>No employees with payslips are available for this employer and year.</p>}
     </section>
   </section>;
@@ -14123,6 +14100,16 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
               overtimeHourLabel: form.overtimeHourLabel,
               doubleTimeHourLabel: form.doubleTimeHourLabel,
               rateDisplayFormat: form.rateDisplayFormat
+            },
+            governmentFilings: {
+              yearEnd: {
+                taxYear: form.taxYear,
+                t4Format: form.t4Format,
+                t4SummaryFormat: form.t4SummaryFormat,
+                t4GenerationSource: form.t4GenerationSource,
+                autoGenerateT4: true,
+                includeT4Summary: true
+              }
             }
           },
           banking: {
@@ -14208,6 +14195,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       const qpipRow = statutoryRows.find((row) => String(row.item).toUpperCase().includes('QPIP')) || {};
       const qppRow = statutoryRows.find((row) => String(row.item).toUpperCase().includes('QPP')) || {};
       const paystubSettings = (employerSettings.paystubs as Record<string, any> | undefined) || {};
+      const yearEndSettings = ((employerSettings.governmentFilings as Record<string, any> | undefined)?.yearEnd as Record<string, any> | undefined) || {};
       const provinceName =
         provinceNamesByCode[String(detail.address.province || '').toUpperCase()] ||
         detail.address.province ||
@@ -14306,6 +14294,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         overtimeHourLabel: String(paystubSettings.overtimeHourLabel || 'Overtime Hours'),
         doubleTimeHourLabel: String(paystubSettings.doubleTimeHourLabel || 'Double Time Hours'),
         rateDisplayFormat: String(paystubSettings.rateDisplayFormat || 'Show $ per hour'),
+        t4Format: String(yearEndSettings.t4Format || 'Payslip Summary'),
+        t4SummaryFormat: String(yearEndSettings.t4SummaryFormat || 'All T4 Summary'),
+        t4GenerationSource: String(yearEndSettings.t4GenerationSource || 'Employer Module'),
         plan: detail.subscription.plan || employer.plan || 'Standard',
         billingFrequency: detail.subscription.billingFrequency || 'Monthly'
       });
@@ -14382,6 +14373,16 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
                 overtimeHourLabel: form.overtimeHourLabel,
                 doubleTimeHourLabel: form.doubleTimeHourLabel,
                 rateDisplayFormat: form.rateDisplayFormat
+              },
+              governmentFilings: {
+                yearEnd: {
+                  taxYear: form.taxYear,
+                  t4Format: form.t4Format,
+                  t4SummaryFormat: form.t4SummaryFormat,
+                  t4GenerationSource: form.t4GenerationSource,
+                  autoGenerateT4: true,
+                  includeT4Summary: true
+                }
               }
             },
             banking: {
@@ -14634,6 +14635,14 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           onChange={(value) => update('paystubTemplate', value)}
           options={paystubTemplateOptions.includes(form.paystubTemplate) ? paystubTemplateOptions : [form.paystubTemplate, ...paystubTemplateOptions]}
         />
+        </div>
+      </div>
+      <div className="sa-section">
+        <h3>T4 & Year-End Format</h3>
+        <div className="wizard-fields three">
+          <AdminSelect label="T4 Format" value={form.t4Format} onChange={(value) => update('t4Format', value)} options={['Payslip Summary']} />
+          <AdminSelect label="T4 Summary Format" value={form.t4SummaryFormat} onChange={(value) => update('t4SummaryFormat', value)} options={['All T4 Summary']} />
+          <AdminSelect label="T4 Generation Source" value={form.t4GenerationSource} onChange={(value) => update('t4GenerationSource', value)} options={['Employer Module']} />
         </div>
       </div>
       <div className="sa-section">

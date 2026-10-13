@@ -4283,10 +4283,10 @@ router.get('/government-filings/:id/view', authenticate, requirePermission('payr
   if (!filing) return res.status(404).json({ message: 'Filing not found' });
 
   if (filing.type === 'T4_SLIPS') {
-    const documents = await TaxFormDocument.find({ companyId, taxYear: filing.year, formType: 'T4' });
-    if (!documents.length) return res.status(404).json({ message: 'No generated T4 slips are available for this year.' });
-    const employees = await Employee.find({ companyId, _id: { $in: documents.map((item) => item.employeeId) } });
-    const statements = await PayStatement.find({ companyId, payPeriodYear: filing.year, employeeId: { $in: documents.map((item) => item.employeeId) }, supersededByStatementId: { $exists: false } });
+    const statements = await PayStatement.find({ companyId, payPeriodYear: filing.year, supersededByStatementId: { $exists: false } });
+    if (!statements.length) return res.status(404).json({ message: 'No finalized payslip summary records are available for this T4 year.' });
+    const employeeIds = [...new Set(statements.map((item) => String(item.employeeId)))];
+    const employees = await Employee.find({ companyId, _id: { $in: employeeIds } });
     const company = await Company.findById(companyId);
     const forms: T4PdfData[] = employees.map((employee) => {
       const employeeStatements = statements.filter((item) => String(item.employeeId) === String(employee._id));
@@ -4305,6 +4305,11 @@ router.get('/government-filings/:id/view', authenticate, requirePermission('payr
         incomeTax: deduction('TAX', 'FTAX', 'PTAX'), cppContributions: deduction('CPP'), eiPremiums: deduction('EI')
       };
     });
+    await Promise.all(employees.map((employee) => TaxFormDocument.findOneAndUpdate(
+      { employeeId: employee._id, companyId, taxYear: filing.year, formType: 'T4' },
+      { employeeId: employee._id, companyId, taxYear: filing.year, formType: 'T4', generatedAt: new Date() },
+      { upsert: true }
+    )));
     return res.type('application/pdf').setHeader('Content-Disposition', `inline; filename="T4-${filing.year}.pdf"`).send(t4sPdf(forms));
   }
 
