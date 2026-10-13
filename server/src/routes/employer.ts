@@ -191,7 +191,7 @@ function calculatedPayPeriodOptions(paySchedule: Record<string, unknown>, today 
     number += 1;
   }
   const currentPeriod = periods.find((period) => today >= period.start && today <= period.end) || periods[0];
-  const current = currentPeriod ? `Running Pay Period: ${currentPeriod.label}` : '';
+  const current = currentPeriod ? currentPeriod.label : '';
   return {
     current,
     options: Array.from(new Set([current, ...periods.map((period) => period.label)].filter(Boolean)))
