@@ -1639,6 +1639,12 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
     }),
     { pensionableEarnings: 0, insurableEarnings: 0, employmentIncome: 0, cpp: 0, ei: 0, incomeTax: 0, netPay: 0 }
   );
+  const employerCpp = totals.cpp;
+  const employerEi = totals.ei * 1.4;
+  const totalDeductions = totals.cpp + totals.ei + totals.incomeTax;
+  const totalPayable = totalDeductions + employerCpp + employerEi;
+  const remittances = 0;
+  const balanceDue = totalPayable - remittances;
   const craPayroll = (company.craPayroll || {}) as Record<string, unknown>;
   const settings = (company.settings || {}) as Record<string, unknown>;
   const taxSettings = (settings.taxes || {}) as Record<string, unknown>;
@@ -1672,7 +1678,7 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
       employees: employeeIds.size,
       statements: statements.length,
       employmentIncome: safeFormatMoney(totals.employmentIncome),
-      deductions: safeFormatMoney(totals.cpp + totals.ei + totals.incomeTax)
+      deductions: safeFormatMoney(totalDeductions)
     },
     summary: {
       pensionableEarnings: Number(totals.pensionableEarnings.toFixed(2)),
@@ -1681,7 +1687,13 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
       cpp: Number(totals.cpp.toFixed(2)),
       ei: Number(totals.ei.toFixed(2)),
       incomeTax: Number(totals.incomeTax.toFixed(2)),
-      netPay: Number(totals.netPay.toFixed(2))
+      netPay: Number(totals.netPay.toFixed(2)),
+      employerCpp: Number(employerCpp.toFixed(2)),
+      employerEi: Number(employerEi.toFixed(2)),
+      totalDeductions: Number(totalDeductions.toFixed(2)),
+      totalPayable: Number(totalPayable.toFixed(2)),
+      remittances: Number(remittances.toFixed(2)),
+      balanceDue: Number(balanceDue.toFixed(2))
     }
   });
 });

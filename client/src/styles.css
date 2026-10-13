@@ -2797,6 +2797,162 @@ button {
   font-size: 12px;
 }
 
+.t4-summary-form {
+  background: #fff;
+  border: 2px solid #1d1d1d;
+  color: #111;
+  display: grid;
+  gap: 0;
+  margin: 18px auto 0;
+  max-width: 980px;
+}
+
+.t4-form-top {
+  align-items: stretch;
+  border-bottom: 2px solid #1d1d1d;
+  display: grid;
+  grid-template-columns: 1.2fr 1.5fr 120px;
+}
+
+.t4-form-top > div {
+  border-right: 1px solid #1d1d1d;
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  padding: 10px 12px;
+}
+
+.t4-form-top > div:last-child {
+  border-right: 0;
+  justify-items: center;
+}
+
+.t4-form-top b {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.t4-form-top span,
+.t4-form-title p,
+.t4-employer-grid span,
+.t4-employer-grid dt,
+.t4-box p,
+.t4-summary-footer span {
+  color: #222;
+  font-size: 12px;
+}
+
+.t4-form-title {
+  border-bottom: 1px solid #1d1d1d;
+  padding: 10px 12px;
+}
+
+.t4-form-title h3 {
+  color: #111;
+  font-size: 20px;
+  margin: 0 0 2px;
+}
+
+.t4-employer-grid {
+  border-bottom: 1px solid #1d1d1d;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.t4-employer-grid section {
+  border-right: 1px solid #1d1d1d;
+  display: grid;
+  gap: 5px;
+  min-height: 170px;
+  padding: 12px;
+}
+
+.t4-employer-grid section:last-child {
+  border-right: 0;
+}
+
+.t4-employer-grid h4 {
+  color: #111;
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+.t4-employer-grid b,
+.t4-employer-grid dd {
+  color: #111;
+}
+
+.t4-employer-grid dl {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 170px 1fr;
+  margin: 0;
+}
+
+.t4-employer-grid dt,
+.t4-employer-grid dd {
+  border-top: 1px solid #d2d2d2;
+  margin: 0;
+  padding: 7px 0;
+}
+
+.t4-box-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.t4-box {
+  border-bottom: 1px solid #1d1d1d;
+  border-right: 1px solid #1d1d1d;
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 10px 12px;
+}
+
+.t4-box:nth-child(3n) {
+  border-right: 0;
+}
+
+.t4-box span {
+  background: #111;
+  color: #fff;
+  display: inline-grid;
+  font-size: 11px;
+  font-weight: 800;
+  height: 22px;
+  place-items: center;
+  width: 34px;
+}
+
+.t4-box strong {
+  align-self: end;
+  color: #111;
+  font-size: 17px;
+  justify-self: end;
+}
+
+.t4-summary-footer {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.t4-summary-footer > div {
+  border-right: 1px solid #1d1d1d;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.t4-summary-footer > div:last-child {
+  border-right: 0;
+}
+
+.t4-summary-footer strong {
+  color: #111;
+  font-size: 16px;
+}
+
 .payroll-report-table-wrap {
   overflow-x: auto;
 }

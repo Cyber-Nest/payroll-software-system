@@ -467,7 +467,7 @@ type EmployerT4SummaryReport = {
     remittanceFrequency: string;
   };
   metrics: { employees: number; statements: number; employmentIncome: string; deductions: string };
-  summary: { pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number };
+  summary: { pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number; employerCpp: number; employerEi: number; totalDeductions: number; totalPayable: number; remittances: number; balanceDue: number };
 };
 type EmployerHistoryReport = {
   metrics: { totalEmployees: number; fullTime: number; partTime: number; currentlyActive: number; onLeave: number; totalPositionChanges: number; averageTenure: number; asOf: string };
@@ -8353,59 +8353,72 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
               <ReportExportButtons title={`T4 Summary Report ${data.year}`} />
             </div>
           </header>
-          <div className="payroll-summary-strip">
-            <article><strong>{data.metrics.employees}</strong><span>Employees</span></article>
-            <article><strong>{data.metrics.statements}</strong><span>Pay Statements</span></article>
-            <article><strong>{data.metrics.employmentIncome}</strong><span>Employment Income</span></article>
-            <article><strong>{data.metrics.deductions}</strong><span>CPP, EI & Tax</span></article>
-          </div>
-          <div className="review-grid">
-            <article>
-              <h3>Employer Details</h3>
-              <p><span>Legal Name</span><b>{data.employer.legalName || '-'}</b></p>
-              <p><span>Operating Name</span><b>{data.employer.operatingName || '-'}</b></p>
-              <p><span>Customer Code</span><b>{data.employer.customerId || '-'}</b></p>
-              <p><span>Business Number</span><b>{data.employer.businessNumber || '-'}</b></p>
-            </article>
-            <article>
-              <h3>CRA Account</h3>
-              <p><span>Payroll Program Account</span><b>{data.employer.payrollProgramAccountNumber || '-'}</b></p>
-              <p><span>Remittance Frequency</span><b>{data.employer.remittanceFrequency || '-'}</b></p>
-              <p><span>Filing Type</span><b>{data.employer.filingType}</b></p>
-              <p><span>Tax Year End</span><b>{data.employer.taxYearEnd}</b></p>
-            </article>
-            <article>
-              <h3>Address</h3>
-              <p><span>Province</span><b>{data.employer.province || '-'}</b></p>
-              <p><span>Mailing Address</span><b>{data.employer.address?.join(', ') || '-'}</b></p>
-              <p><span>Contact Phone</span><b>{data.employer.contactPhone || '-'}</b></p>
-            </article>
-          </div>
-          <div className="payroll-report-table-wrap">
-            <table className="payroll-report-table">
-              <thead>
-                <tr>
-                  <th>Summary Item</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Pensionable Earnings</td><td>{moneyValue(data.summary.pensionableEarnings)}</td></tr>
-                <tr><td>Insurable Earnings</td><td>{moneyValue(data.summary.insurableEarnings)}</td></tr>
-                <tr><td>Employment Income</td><td>{moneyValue(data.summary.employmentIncome)}</td></tr>
-                <tr><td>CPP Contributions</td><td>{moneyValue(data.summary.cpp)}</td></tr>
-                <tr><td>EI Premiums</td><td>{moneyValue(data.summary.ei)}</td></tr>
-                <tr><td>Income Tax Deducted</td><td>{moneyValue(data.summary.incomeTax)}</td></tr>
-                <tr><td>Net Pay Issued</td><td>{moneyValue(data.summary.netPay)}</td></tr>
-                {!data.metrics.statements && <tr><td colSpan={2}>No T4 summary data found for {data.year}.</td></tr>}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td>Total Deductions</td>
-                  <td>{moneyValue(data.summary.cpp + data.summary.ei + data.summary.incomeTax)}</td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="t4-summary-form">
+            <div className="t4-form-top">
+              <div>
+                <strong>Canada Revenue Agency</strong>
+                <span>Agence du revenu du Canada</span>
+              </div>
+              <div>
+                <b>T4SUM</b>
+                <span>Summary of Remuneration Paid</span>
+              </div>
+              <div>
+                <span>Year</span>
+                <strong>{data.year}</strong>
+              </div>
+            </div>
+            <div className="t4-form-title">
+              <h3>Summary Information</h3>
+              <p>Employer copy generated from finalized payroll records.</p>
+            </div>
+            <div className="t4-employer-grid">
+              <section>
+                <h4>Employer's name and address</h4>
+                <b>{data.employer.legalName || '-'}</b>
+                <span>{data.employer.operatingName || data.employer.legalName || '-'}</span>
+                {(data.employer.address || []).map((line) => <span key={line}>{line}</span>)}
+                <span>{data.employer.contactPhone || ''}</span>
+              </section>
+              <section>
+                <h4>Employer information</h4>
+                <dl>
+                  <dt>Employer code</dt><dd>{data.employer.customerId || '-'}</dd>
+                  <dt>Business number</dt><dd>{data.employer.businessNumber || '-'}</dd>
+                  <dt>Payroll account number</dt><dd>{data.employer.payrollProgramAccountNumber || '-'}</dd>
+                  <dt>Province</dt><dd>{data.employer.province || '-'}</dd>
+                  <dt>Remitter type</dt><dd>{data.employer.remittanceFrequency || '-'}</dd>
+                </dl>
+              </section>
+            </div>
+            <div className="t4-box-grid">
+              {[
+                ['14', 'Employment income', data.summary.employmentIncome],
+                ['16', "Employee's CPP contributions", data.summary.cpp],
+                ['18', "Employee's EI premiums", data.summary.ei],
+                ['22', 'Income tax deducted', data.summary.incomeTax],
+                ['26', 'CPP/QPP pensionable earnings', data.summary.pensionableEarnings],
+                ['24', 'EI insurable earnings', data.summary.insurableEarnings],
+                ['27', "Employer's CPP contributions", data.summary.employerCpp],
+                ['19', "Employer's EI premiums", data.summary.employerEi],
+                ['80', 'Total deductions reported', data.summary.totalDeductions],
+                ['82', 'Minus remittances', data.summary.remittances],
+                ['84', 'Overpayment', Math.max(0, -data.summary.balanceDue)],
+                ['86', 'Balance due', Math.max(0, data.summary.balanceDue)]
+              ].map(([box, label, amount]) => (
+                <div className="t4-box" key={String(box)}>
+                  <span>{box}</span>
+                  <p>{label}</p>
+                  <strong>{moneyValue(Number(amount))}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="t4-summary-footer">
+              <div><span>Number of T4 slips filed</span><strong>{data.metrics.employees}</strong></div>
+              <div><span>Pay statements included</span><strong>{data.metrics.statements}</strong></div>
+              <div><span>Total payable</span><strong>{moneyValue(data.summary.totalPayable)}</strong></div>
+            </div>
+            {!data.metrics.statements && <p className="report-empty">No T4 summary data found for {data.year}.</p>}
           </div>
         </section>
       )}
