@@ -1610,96 +1610,66 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
   const currentYear = Number.isFinite(requestedYear) && requestedYear > 1900
     ? requestedYear
     : new Date().getFullYear();
-  const [employees, statements] = await Promise.all([
-    Employee.find({ companyId }).select('legalFirstName legalLastName employeeNumber sinEncrypted occupation adminProfile.employment'),
+  const [company, statements] = await Promise.all([
+    Company.findById(companyId),
     PayStatement.find({
       companyId,
       payPeriodYear: currentYear,
       supersededByStatementId: { $exists: false }
     }).sort({ payDate: 1, _id: 1 })
   ]);
-  const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  if (!company) return res.status(404).json({ message: 'Company not found' });
   const deductionAmount = (statement: InstanceType<typeof PayStatement>, codes: string[]) =>
     statement.deductions
       .filter((line) => codes.includes(String(line.code || '').toUpperCase()))
       .reduce((sum, line) => sum + safeMoneyToNumber(line.amount), 0);
-  const rowsByEmployee = new Map<string, {
-    employeeName: string;
-    employeeNumber: string;
-    sin: string;
-    department: string;
-    pensionableEarnings: number;
-    insurableEarnings: number;
-    employmentIncome: number;
-    cpp: number;
-    ei: number;
-    incomeTax: number;
-    netPay: number;
-    payStatements: number;
-    lastPayDate: string;
-  }>();
+  const employeeIds = new Set<string>();
   statements.forEach((statement) => {
-    const employeeId = String(statement.employeeId);
-    const employee = employeeById.get(employeeId);
-    const grossPay = safeMoneyToNumber(
-      statement.grossPay || statement.grossEarnings.find((line) => String(line.code || '').toUpperCase() === 'TOTAL')?.amount || 0
-    );
-    const existing = rowsByEmployee.get(employeeId) || {
-      employeeName: employee ? `${employee.legalFirstName} ${employee.legalLastName}`.trim() : 'Unknown employee',
-      employeeNumber: employee?.employeeNumber || '',
-      sin: employee?.sinEncrypted ? 'On file' : '',
-      department: String(employee?.adminProfile?.employment?.department || employee?.occupation || ''),
-      pensionableEarnings: 0,
-      insurableEarnings: 0,
-      employmentIncome: 0,
-      cpp: 0,
-      ei: 0,
-      incomeTax: 0,
-      netPay: 0,
-      payStatements: 0,
-      lastPayDate: ''
-    };
-    const cpp = deductionAmount(statement, ['CPP', 'CPP2']);
-    const ei = deductionAmount(statement, ['EI']);
-    const incomeTax = deductionAmount(statement, ['FTAX', 'PTAX']);
-    existing.pensionableEarnings += grossPay;
-    existing.insurableEarnings += grossPay;
-    existing.employmentIncome += grossPay;
-    existing.cpp += cpp;
-    existing.ei += ei;
-    existing.incomeTax += incomeTax;
-    existing.netPay += safeMoneyToNumber(statement.netPay);
-    existing.payStatements += 1;
-    existing.lastPayDate = dateLabel(statement.payDate);
-    rowsByEmployee.set(employeeId, existing);
+    employeeIds.add(String(statement.employeeId));
   });
-  const rows = Array.from(rowsByEmployee.values()).map((row, index) => ({
-    index: index + 1,
-    ...row,
-    pensionableEarnings: Number(row.pensionableEarnings.toFixed(2)),
-    insurableEarnings: Number(row.insurableEarnings.toFixed(2)),
-    employmentIncome: Number(row.employmentIncome.toFixed(2)),
-    cpp: Number(row.cpp.toFixed(2)),
-    ei: Number(row.ei.toFixed(2)),
-    incomeTax: Number(row.incomeTax.toFixed(2)),
-    netPay: Number(row.netPay.toFixed(2))
-  }));
-  const totals = rows.reduce(
+  const totals = statements.reduce(
     (sum, row) => ({
-      pensionableEarnings: sum.pensionableEarnings + row.pensionableEarnings,
-      insurableEarnings: sum.insurableEarnings + row.insurableEarnings,
-      employmentIncome: sum.employmentIncome + row.employmentIncome,
-      cpp: sum.cpp + row.cpp,
-      ei: sum.ei + row.ei,
-      incomeTax: sum.incomeTax + row.incomeTax,
-      netPay: sum.netPay + row.netPay
+      pensionableEarnings: sum.pensionableEarnings + safeMoneyToNumber(row.grossPay || row.grossEarnings.find((line) => String(line.code || '').toUpperCase() === 'TOTAL')?.amount || 0),
+      insurableEarnings: sum.insurableEarnings + safeMoneyToNumber(row.grossPay || row.grossEarnings.find((line) => String(line.code || '').toUpperCase() === 'TOTAL')?.amount || 0),
+      employmentIncome: sum.employmentIncome + safeMoneyToNumber(row.grossPay || row.grossEarnings.find((line) => String(line.code || '').toUpperCase() === 'TOTAL')?.amount || 0),
+      cpp: sum.cpp + deductionAmount(row, ['CPP', 'CPP2']),
+      ei: sum.ei + deductionAmount(row, ['EI']),
+      incomeTax: sum.incomeTax + deductionAmount(row, ['FTAX', 'PTAX']),
+      netPay: sum.netPay + safeMoneyToNumber(row.netPay)
     }),
     { pensionableEarnings: 0, insurableEarnings: 0, employmentIncome: 0, cpp: 0, ei: 0, incomeTax: 0, netPay: 0 }
   );
+  const craPayroll = (company.craPayroll || {}) as Record<string, unknown>;
+  const settings = (company.settings || {}) as Record<string, unknown>;
+  const taxSettings = (settings.taxes || {}) as Record<string, unknown>;
+  const taxConfiguration = (taxSettings.configuration || {}) as Record<string, unknown>;
+  const rpAccount = String(
+    taxConfiguration.craPayrollProgramAccountNumber ||
+    craPayroll.payrollAccount ||
+    craPayroll.programAccountNumber ||
+    `${company.businessNumber || ''}RP${String(craPayroll.accountSuffix || '0001')}`
+  );
   res.json({
     year: currentYear,
+    employer: {
+      legalName: company.legalName,
+      operatingName: company.operatingName || company.legalName,
+      customerId: company.customerId,
+      businessNumber: company.businessNumber || '',
+      payrollProgramAccountNumber: rpAccount,
+      address: [
+        company.address?.street,
+        company.address?.line2,
+        [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', ')
+      ].filter(Boolean),
+      province: company.address?.province || String(taxConfiguration.payProvince || ''),
+      contactPhone: company.customerCarePhone || '',
+      taxYearEnd: 'December 31',
+      filingType: 'T4 Summary',
+      remittanceFrequency: String(craPayroll.remittanceFrequency || craPayroll.frequency || '')
+    },
     metrics: {
-      employees: rows.length,
+      employees: employeeIds.size,
       statements: statements.length,
       employmentIncome: safeFormatMoney(totals.employmentIncome),
       deductions: safeFormatMoney(totals.cpp + totals.ei + totals.incomeTax)
@@ -1712,8 +1682,7 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
       ei: Number(totals.ei.toFixed(2)),
       incomeTax: Number(totals.incomeTax.toFixed(2)),
       netPay: Number(totals.netPay.toFixed(2))
-    },
-    rows
+    }
   });
 });
 

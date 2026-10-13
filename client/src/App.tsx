@@ -453,9 +453,21 @@ type EmployerGovernmentLiabilitiesReport = {
 };
 type EmployerT4SummaryReport = {
   year: number;
+  employer: {
+    legalName: string;
+    operatingName: string;
+    customerId: string;
+    businessNumber: string;
+    payrollProgramAccountNumber: string;
+    address: string[];
+    province: string;
+    contactPhone: string;
+    taxYearEnd: string;
+    filingType: string;
+    remittanceFrequency: string;
+  };
   metrics: { employees: number; statements: number; employmentIncome: string; deductions: string };
   summary: { pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number };
-  rows: Array<{ index: number; employeeName: string; employeeNumber: string; sin: string; department: string; pensionableEarnings: number; insurableEarnings: number; employmentIncome: number; cpp: number; ei: number; incomeTax: number; netPay: number; payStatements: number; lastPayDate: string }>;
 };
 type EmployerHistoryReport = {
   metrics: { totalEmployees: number; fullTime: number; partTime: number; currentlyActive: number; onLeave: number; totalPositionChanges: number; averageTenure: number; asOf: string };
@@ -8347,51 +8359,50 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
             <article><strong>{data.metrics.employmentIncome}</strong><span>Employment Income</span></article>
             <article><strong>{data.metrics.deductions}</strong><span>CPP, EI & Tax</span></article>
           </div>
+          <div className="review-grid">
+            <article>
+              <h3>Employer Details</h3>
+              <p><span>Legal Name</span><b>{data.employer.legalName || '-'}</b></p>
+              <p><span>Operating Name</span><b>{data.employer.operatingName || '-'}</b></p>
+              <p><span>Customer Code</span><b>{data.employer.customerId || '-'}</b></p>
+              <p><span>Business Number</span><b>{data.employer.businessNumber || '-'}</b></p>
+            </article>
+            <article>
+              <h3>CRA Account</h3>
+              <p><span>Payroll Program Account</span><b>{data.employer.payrollProgramAccountNumber || '-'}</b></p>
+              <p><span>Remittance Frequency</span><b>{data.employer.remittanceFrequency || '-'}</b></p>
+              <p><span>Filing Type</span><b>{data.employer.filingType}</b></p>
+              <p><span>Tax Year End</span><b>{data.employer.taxYearEnd}</b></p>
+            </article>
+            <article>
+              <h3>Address</h3>
+              <p><span>Province</span><b>{data.employer.province || '-'}</b></p>
+              <p><span>Mailing Address</span><b>{data.employer.address?.join(', ') || '-'}</b></p>
+              <p><span>Contact Phone</span><b>{data.employer.contactPhone || '-'}</b></p>
+            </article>
+          </div>
           <div className="payroll-report-table-wrap">
             <table className="payroll-report-table">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Employee</th>
-                  <th>Employee #</th>
-                  <th>SIN</th>
-                  <th>Employment Income</th>
-                  <th>CPP</th>
-                  <th>EI</th>
-                  <th>Income Tax</th>
-                  <th>Net Pay</th>
-                  <th>Statements</th>
-                  <th>Last Pay Date</th>
+                  <th>Summary Item</th>
+                  <th>Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row) => (
-                  <tr key={`${row.employeeNumber}-${row.index}`}>
-                    <td>{row.index}</td>
-                    <td>{row.employeeName}</td>
-                    <td>{row.employeeNumber || '-'}</td>
-                    <td>{row.sin || '-'}</td>
-                    <td>{moneyValue(row.employmentIncome)}</td>
-                    <td>{moneyValue(row.cpp)}</td>
-                    <td>{moneyValue(row.ei)}</td>
-                    <td>{moneyValue(row.incomeTax)}</td>
-                    <td>{moneyValue(row.netPay)}</td>
-                    <td>{row.payStatements}</td>
-                    <td>{row.lastPayDate || '-'}</td>
-                  </tr>
-                ))}
-                {!data.rows.length && <tr><td colSpan={11}>No T4 summary data found for {data.year}.</td></tr>}
+                <tr><td>Pensionable Earnings</td><td>{moneyValue(data.summary.pensionableEarnings)}</td></tr>
+                <tr><td>Insurable Earnings</td><td>{moneyValue(data.summary.insurableEarnings)}</td></tr>
+                <tr><td>Employment Income</td><td>{moneyValue(data.summary.employmentIncome)}</td></tr>
+                <tr><td>CPP Contributions</td><td>{moneyValue(data.summary.cpp)}</td></tr>
+                <tr><td>EI Premiums</td><td>{moneyValue(data.summary.ei)}</td></tr>
+                <tr><td>Income Tax Deducted</td><td>{moneyValue(data.summary.incomeTax)}</td></tr>
+                <tr><td>Net Pay Issued</td><td>{moneyValue(data.summary.netPay)}</td></tr>
+                {!data.metrics.statements && <tr><td colSpan={2}>No T4 summary data found for {data.year}.</td></tr>}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4}>Totals</td>
-                  <td>{moneyValue(data.summary.employmentIncome)}</td>
-                  <td>{moneyValue(data.summary.cpp)}</td>
-                  <td>{moneyValue(data.summary.ei)}</td>
-                  <td>{moneyValue(data.summary.incomeTax)}</td>
-                  <td>{moneyValue(data.summary.netPay)}</td>
-                  <td></td>
-                  <td></td>
+                  <td>Total Deductions</td>
+                  <td>{moneyValue(data.summary.cpp + data.summary.ei + data.summary.incomeTax)}</td>
                 </tr>
               </tfoot>
             </table>
