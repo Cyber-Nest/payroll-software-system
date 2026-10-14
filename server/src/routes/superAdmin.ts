@@ -827,6 +827,7 @@ router.get('/access', authenticate, requirePermission('users.manage'), async (re
       createdDate: formatDate(admin.createdAt),
       phone: admin.phone || '-',
       department: admin.department || 'Platform Administration',
+      permissions: admin.permissions || {},
       timeZone: 'Mountain Time (MT)',
       twoFactor: 'Not configured',
       loginMethod: 'Email & Password'
@@ -903,6 +904,7 @@ const updateAccessUserSchema = z.object({
   role: z.string().optional(),
   phone: z.string().optional(),
   department: z.string().optional(),
+  permissions: z.record(z.string(), z.array(z.string())).optional(),
   status: z.enum(['Active', 'Inactive']).optional()
 });
 
@@ -912,6 +914,7 @@ const createAccessUserSchema = z.object({
   role: z.string().min(2).default('CyberNest Super Admin'),
   phone: z.string().optional(),
   department: z.string().optional(),
+  permissions: z.record(z.string(), z.array(z.string())).default({}),
   status: z.enum(['Active', 'Inactive']).default('Active')
 });
 
@@ -927,6 +930,7 @@ function serializeSuperAdminAccessUser(user: InstanceType<typeof SuperAdmin>) {
     createdDate: formatDate(user.createdAt),
     phone: user.phone || '-',
     department: user.department || 'Platform Administration',
+    permissions: user.permissions || {},
     timeZone: 'Mountain Time (MT)',
     twoFactor: 'Not configured',
     loginMethod: 'Email & Password'
@@ -948,6 +952,7 @@ router.post('/access/users', authenticate, requirePermission('users.manage'), as
     role: data.role,
     phone: data.phone || '',
     department: data.department || 'Platform Administration',
+    permissions: data.permissions || {},
     passwordHash: await hashPassword(temporaryPassword),
     isActive: data.status === 'Active'
   });
@@ -974,6 +979,7 @@ router.put('/access/users/:userKey', authenticate, requirePermission('users.mana
     if (data.role !== undefined) user.role = data.role;
     if (data.phone !== undefined) user.phone = data.phone;
     if (data.department !== undefined) user.department = data.department;
+    if (data.permissions !== undefined) user.permissions = data.permissions;
     if (data.status !== undefined) user.isActive = data.status === 'Active';
     await user.save();
     await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'USER_UPDATED', metadata: { action: `Updated platform user ${user.email}`, module: 'Users & Access' } });

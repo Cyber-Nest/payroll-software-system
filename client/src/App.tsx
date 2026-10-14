@@ -539,6 +539,7 @@ type AccessUser = {
   createdDate: string;
   phone: string;
   department: string;
+  permissions?: Record<string, string[]>;
   timeZone: string;
   twoFactor: string;
   loginMethod: string;
@@ -9131,6 +9132,8 @@ function SuperAdminAccess({
       matchesFilter(user.status, accessStatusFilter, 'All Statuses')
     );
   });
+  const platformAccessUsers = filteredAccessUsers.filter((user) => user.id.startsWith('superAdmin:'));
+  const employerAccessUsers = filteredAccessUsers.filter((user) => !user.id.startsWith('superAdmin:'));
   const filteredActivityLogs = access.activityLogs.filter(
     (log) =>
       !activitySearch.trim() ||
@@ -9178,7 +9181,8 @@ function SuperAdminAccess({
       employer: 'Payhours Inc.',
       status: 'Active',
       phone: '',
-      department: 'Platform Administration'
+      department: 'Platform Administration',
+      permissions: Object.fromEntries((access?.modules || []).map((module) => [module.name, module.permissions]))
     });
     setEditingAccessUser(true);
     setCreatingAccessUser(true);
@@ -9186,6 +9190,25 @@ function SuperAdminAccess({
   }
   function updateAccessUserDraft(key: keyof AccessUser, value: string) {
     setAccessUserDraft((current) => ({ ...current, [key]: value }));
+  }
+  function updateAccessUserPermission(moduleName: string, permission: string, checked: boolean) {
+    setAccessUserDraft((current) => {
+      const permissions = { ...(current.permissions || {}) };
+      const selected = permissions[moduleName] || [];
+      permissions[moduleName] = checked
+        ? Array.from(new Set([...selected, permission]))
+        : selected.filter((item) => item !== permission);
+      if (!permissions[moduleName].length) delete permissions[moduleName];
+      return { ...current, permissions };
+    });
+  }
+  function updateAccessUserModule(moduleName: string, modulePermissions: string[], checked: boolean) {
+    setAccessUserDraft((current) => {
+      const permissions = { ...(current.permissions || {}) };
+      if (checked) permissions[moduleName] = modulePermissions;
+      else delete permissions[moduleName];
+      return { ...current, permissions };
+    });
   }
   async function saveAccessUser() {
     if (creatingAccessUser) {
@@ -9353,6 +9376,87 @@ function SuperAdminAccess({
         </button>
       ))}
     </div>
+  );
+  const renderAccessUsersTable = (users: AccessUser[], emptyMessage: string) => (
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Employer</th>
+          <th>Status</th>
+          <th>Last Login</th>
+          <th>Created Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {users.map((user) => (
+          <tr
+            key={user.id}
+            onClick={() => {
+              setSelectedUser(user.id);
+              setEditingAccessUser(false);
+            }}
+            className={user.id === activeUser.id ? 'selected-row' : ''}
+          >
+            <td>
+              <input type="checkbox" onClick={(event) => event.stopPropagation()} />
+            </td>
+            <td>
+              <span className="avatar-sm">
+                {user.name
+                  .split(' ')
+                  .map((part) => part[0])
+                  .join('')
+                  .slice(0, 2)}
+              </span>
+              {user.name}
+            </td>
+            <td>{user.email}</td>
+            <td>
+              <Pill tone={user.role.includes('Super Admin') ? 'purple' : 'blue'}>
+                {user.role}
+              </Pill>
+            </td>
+            <td>{user.employer}</td>
+            <td>
+              <Pill tone={user.status === 'Active' ? 'green' : 'red'}>{user.status}</Pill>
+            </td>
+            <td>{user.lastLogin}</td>
+            <td>{user.createdDate}</td>
+            <td className="table-actions">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startEditAccessUser(user);
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  deleteAccessUser(user);
+                }}
+              >
+                Delete
+              </button>
+            </td>
+          </tr>
+        ))}
+        {!users.length && (
+          <tr>
+            <td colSpan={9}>{emptyMessage}</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
   if (mode === 'Permission Settings')
     return <PermissionSettingsView access={access} onMode={onMode} />;
@@ -9701,85 +9805,20 @@ function SuperAdminAccess({
                 Clear Filters
               </button>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Employer</th>
-                  <th>Status</th>
-                  <th>Last Login</th>
-                  <th>Created Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAccessUsers.map((user) => (
-                  <tr
-                    key={user.id}
-                    onClick={() => {
-                      setSelectedUser(user.id);
-                      setEditingAccessUser(false);
-                    }}
-                    className={user.id === activeUser.id ? 'selected-row' : ''}
-                  >
-                    <td>
-                      <input type="checkbox" onClick={(event) => event.stopPropagation()} />
-                    </td>
-                    <td>
-                      <span className="avatar-sm">
-                        {user.name
-                          .split(' ')
-                          .map((part) => part[0])
-                          .join('')
-                          .slice(0, 2)}
-                      </span>
-                      {user.name}
-                    </td>
-                    <td>{user.email}</td>
-                    <td>
-                      <Pill tone={user.role.includes('Super Admin') ? 'purple' : 'blue'}>
-                        {user.role}
-                      </Pill>
-                    </td>
-                    <td>{user.employer}</td>
-                    <td>
-                      <Pill tone={user.status === 'Active' ? 'green' : 'red'}>{user.status}</Pill>
-                    </td>
-                    <td>{user.lastLogin}</td>
-                    <td>{user.createdDate}</td>
-                    <td className="table-actions">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          startEditAccessUser(user);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteAccessUser(user);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!filteredAccessUsers.length && (
-                  <tr>
-                    <td colSpan={9}>No users match these filters.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="access-user-section">
+              <div>
+                <h2>Super Admin Users</h2>
+                <p>Payhours staff with access to the super admin console.</p>
+              </div>
+              {renderAccessUsersTable(platformAccessUsers, 'No super admin users match these filters.')}
+            </div>
+            <div className="access-user-section">
+              <div>
+                <h2>Employer Users</h2>
+                <p>Normal employer and employee accounts from customer companies.</p>
+              </div>
+              {renderAccessUsersTable(employerAccessUsers, 'No employer users match these filters.')}
+            </div>
           </section>
           {activeUser && (
             <aside className="access-detail">
@@ -9847,6 +9886,48 @@ function SuperAdminAccess({
                       <option>Inactive</option>
                     </select>
                   </label>
+                  {(creatingAccessUser || activeUser.id.startsWith('superAdmin:')) && (
+                    <div className="user-permission-editor">
+                      <div>
+                        <b>Super Admin Permissions</b>
+                        <small>Choose the modules and actions this user can handle.</small>
+                      </div>
+                      {access.modules.map((module) => {
+                        const selected = accessUserDraft.permissions?.[module.name] || [];
+                        return (
+                          <article key={module.name}>
+                            <label>
+                              <span>
+                                <b>{module.name}</b>
+                                <small>{module.caption}</small>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={selected.length === module.permissions.length}
+                                onChange={(event) =>
+                                  updateAccessUserModule(module.name, module.permissions, event.target.checked)
+                                }
+                              />
+                            </label>
+                            <div className="permission-checks">
+                              {module.permissions.map((permission) => (
+                                <label key={permission}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selected.includes(permission)}
+                                    onChange={(event) =>
+                                      updateAccessUserPermission(module.name, permission, event.target.checked)
+                                    }
+                                  />
+                                  {permission}
+                                </label>
+                              ))}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="side-actions">
                     <button onClick={() => { setEditingAccessUser(false); setCreatingAccessUser(false); }}>Cancel</button>
                     <button className="run-payroll" onClick={saveAccessUser}>
@@ -9877,6 +9958,16 @@ function SuperAdminAccess({
                       </>
                     ))}
                   </dl>
+                  {activeUser.id.startsWith('superAdmin:') && (
+                    <div className="info-card">
+                      <b>Permissions</b>
+                      <span>
+                        {Object.values(activeUser.permissions || {}).flat().length
+                          ? `${Object.keys(activeUser.permissions || {}).length} modules, ${Object.values(activeUser.permissions || {}).flat().length} permissions`
+                          : 'Uses role defaults'}
+                      </span>
+                    </div>
+                  )}
                   <div className="side-actions">
                     <button
                       onClick={() => startEditAccessUser({ ...activeUser, status: 'Active' })}

@@ -6488,6 +6488,61 @@ th {
   min-height: 42px;
   width: 140px;
 }
+.access-user-section {
+  border-top: 1px solid #d8e7f5;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+.access-user-section:first-of-type {
+  border-top: 0;
+}
+.access-user-section > div {
+  padding: 0 16px;
+}
+.access-user-section h2 {
+  margin: 0;
+  padding: 0;
+}
+.access-user-section p {
+  color: #38538f;
+  margin: 4px 0 0;
+}
+.user-permission-editor {
+  border: 1px solid #d8e7f5;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px;
+}
+.user-permission-editor small {
+  color: #38538f;
+  display: block;
+}
+.user-permission-editor article {
+  border-top: 1px solid #edf3fa;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+.user-permission-editor article > label {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.permission-checks {
+  display: grid;
+  gap: 8px;
+}
+.permission-checks label {
+  align-items: center;
+  color: #283b7c;
+  display: flex;
+  gap: 8px;
+}
 .permission-summary {
   margin-top: 18px;
 }
