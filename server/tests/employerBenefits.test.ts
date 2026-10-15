@@ -77,6 +77,25 @@ describe('Employer benefits', () => {
     expect((await response.json() as any).benefit.applicableFrom).toBe('2026-11-01');
     expect(employee.save).toHaveBeenCalled();
   });
+  it('deletes plans only within the current employer', async () => {
+    const remove = jest.spyOn(EmployerBenefit, 'findOneAndDelete').mockResolvedValue({ name: draft.name } as never);
+    expect((await request('/' + benefitId, undefined, 'DELETE')).status).toBe(200);
+    expect(remove).toHaveBeenCalledWith({ _id: benefitId, companyId });
+    remove.mockResolvedValue(null);
+    expect((await request('/' + benefitId, undefined, 'DELETE')).status).toBe(404);
+    expect((await request('/invalid', undefined, 'DELETE')).status).toBe(400);
+  });
+  it('removes only the selected employee benefit and its metadata', async () => {
+    jest.spyOn(Employee, 'findOne').mockResolvedValue({ _id: employeeId, adminProfile: { benefits: { dentalCare: 'Single', parking: 'Included' } } } as never);
+    const update = jest.spyOn(Employee, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+    expect((await request(`/legacy:${employeeId}:dentalCare`, undefined, 'DELETE')).status).toBe(200);
+    expect(update).toHaveBeenCalledWith({ _id: employeeId, companyId }, { $unset: {
+      'adminProfile.benefits.dentalCare': '', 'adminProfile.benefits.benefitDetails.dentalCare': ''
+    } });
+    jest.spyOn(Employee, 'findOne').mockResolvedValue(null);
+    expect((await request(`/legacy:${employeeId}:dentalCare`, undefined, 'DELETE')).status).toBe(404);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Benefit presence', () => {

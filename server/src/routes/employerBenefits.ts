@@ -32,6 +32,29 @@ router.get('/', requirePermission('reports.view'), async (req: AuthRequest, res)
 });
 router.post('/', requirePermission('users.manage'), save);
 router.patch('/:id', requirePermission('users.manage'), save);
+router.delete('/:id', requirePermission('users.manage'), async (req: AuthRequest, res) => {
+  const companyId = req.employerContext!.companyId;
+  const id = String(req.params.id);
+  let name: string;
+  if (id.startsWith('legacy:')) {
+    const [, employeeId, key] = id.split(':');
+    if (!mongoose.isValidObjectId(employeeId) || !benefitFields.some(([field]) => field === key)) return res.status(400).json({ message: 'Invalid employee benefit.' });
+    const employee = await Employee.findOne({ _id: employeeId, companyId });
+    const benefit = employee && employeeBenefitRows([employee]).find((item) => item.id === id);
+    if (!benefit) return res.status(404).json({ message: 'Employee benefit not found.' });
+    name = benefit.name;
+    await Employee.updateOne({ _id: employeeId, companyId }, { $unset: {
+      [`adminProfile.benefits.${key}`]: '', [`adminProfile.benefits.benefitDetails.${key}`]: ''
+    } });
+  } else {
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid benefit ID.' });
+    const benefit = await EmployerBenefit.findOneAndDelete({ _id: id, companyId });
+    if (!benefit) return res.status(404).json({ message: 'Benefit not found for this employer.' });
+    name = benefit.name;
+  }
+  await auditEvent(req, { userId: req.employerContext!.employerUserId, companyId, eventType: 'EMPLOYER_UPDATED', metadata: { module: 'Benefits', action: `Deleted benefit ${name}`, benefitId: id } });
+  res.json({ deleted: true, id });
+});
 async function save(req: AuthRequest, res: import('express').Response) {
   const parsed = benefitSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || 'Enter valid benefit details.' });

@@ -50,6 +50,18 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
     finally { setBusy(false); }
   };
   const legacy = selected?.source === 'employee';
+  const remove = async (item: Benefit) => {
+    if (busy) return;
+    const scope = item.source === 'employee' ? 'this employee' : item.employeeScope === 'all' ? 'all employees covered by this benefit' : 'the selected employees';
+    if (!window.confirm(`Delete "${item.name}" for ${scope}?`)) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await request(`/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+      setBenefits((current) => current.filter((benefit) => benefit.id !== item.id));
+      setMode(undefined); setSelected(undefined); setNotice('Benefit deleted.');
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  };
   const readOnly = mode === 'view';
   const employeeNames = (ids: string[]) => ids.map((id) => {
     const employee = employees.find((item) => item.id === id);
@@ -63,7 +75,7 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
       <div className="settings-table"><table><colgroup>{Array.from({ length: 7 }, (_, index) => <col key={index} style={{ width: `${100 / 7}%` }} />)}</colgroup>
         <thead><tr>{['Benefit', 'Type', 'Coverage / Value', 'Employees', 'Applicable From', 'Status', 'Actions'].map((label) => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>{benefits.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.coverageOrValue}</td><td>{item.employeeScope === 'all' ? 'All employees (including new employees)' : employeeNames(item.employeeIds)}</td><td>{item.applicableFrom || 'Not recorded'}</td><td>{item.status === 'active' ? 'Active' : 'Inactive'}</td>
-          <td><div className="employer-role-actions"><button type="button" onClick={() => open('view', item)}>View</button><button type="button" onClick={() => open('edit', item)}>Edit</button></div></td></tr>)}</tbody>
+          <td><div className="employer-role-actions"><button type="button" disabled={busy} onClick={() => open('view', item)}>View</button><button type="button" disabled={busy} onClick={() => open('edit', item)}>Edit</button><button type="button" className="danger-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div></td></tr>)}</tbody>
       </table></div>
     </section>}
     {mode && <div className="employer-role-backdrop"><section className="employer-role-dialog" role="dialog" aria-modal="true" aria-labelledby="benefit-form-title">
