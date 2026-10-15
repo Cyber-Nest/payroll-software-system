@@ -274,6 +274,7 @@ export function serializePayrollRun(run: IPayrollRun & { _id: unknown }) {
       reimbursement: formatMoney(line.reimbursement || 0),
       preTaxDeductions: formatMoney(line.preTaxDeductions || 0),
       postTaxDeductions: formatMoney(line.postTaxDeductions || 0),
+      customDeductions: (line.customDeductions || []).map((item) => ({ code: item.code, description: item.description, amount: formatMoney(item.amount) })),
       cpp: formatMoney(line.cpp || 0),
       cpp2: formatMoney(line.cpp2 || 0),
       ei: formatMoney(line.ei || 0),

@@ -9900,3 +9900,23 @@ th {
 .employer-role-permissions { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .employer-role-permissions label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .employer-role-dialog dd { margin: 6px 0 16px; overflow-wrap: anywhere; }
+.settings-table table { table-layout: fixed; min-width: 960px; }
+.settings-table th, .settings-table td { width: auto; overflow-wrap: break-word; vertical-align: top; }
+.settings-table .employer-role-actions { min-width: 0; }
+.deduction-setup .settings-table table { min-width: 1120px; }
+.deduction-form-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.deduction-employee-list { display: grid; gap: 10px; max-height: 220px; overflow-y: auto; margin-top: 12px; }
+.deduction-employee-list label { display: flex; gap: 10px; align-items: center; }
+.settings-table td.table-actions { display: table-cell; }
+.settings-table td.table-actions > button { margin: 0 5px 5px 0; }
+.settings-grid.settings-deductions-grid { grid-template-columns: minmax(0, 1fr); }
+.settings-deductions-grid > *, .settings-deduction-reports > .settings-card { min-width: 0; }
+.settings-deductions-grid .settings-table { min-width: 0; max-width: 100%; }
+.settings-deduction-reports { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.settings-deduction-reports > .settings-card { grid-template-rows: auto minmax(0, 1fr); align-content: start; }
+.settings-deduction-reports .settings-table { max-height: 440px; overflow: auto; }
+.settings-deduction-reports .settings-table table { min-width: 760px; }
+.settings-deduction-reports .settings-table th { position: sticky; top: 0; z-index: 1; }
+.settings-deduction-reports .status { white-space: nowrap; }
+.settings-deduction-options { min-width: 0; }
+@media (max-width: 1250px) { .settings-deduction-reports { grid-template-columns: minmax(0, 1fr); } }

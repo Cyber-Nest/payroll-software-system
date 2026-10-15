@@ -41,6 +41,8 @@ import {
 import { normalizeRole } from '../security/rbac';
 import { roleNames } from '../security/rbac';
 import employerRoleRoutes from './employerRoles';
+import employerDeductionRoutes from './employerDeductions';
+import { applicableCustomDeductions } from '../services/customDeductions.service';
 import { employerRoles } from '../services/employerRoles.service';
 import { selectedT4Format } from '../services/t4Format.service';
 import {
@@ -64,6 +66,7 @@ import { env } from '../config/env';
 
 const router = Router();
 router.use('/settings/roles', employerRoleRoutes);
+router.use('/settings/deductions', employerDeductionRoutes);
 const PAY_PERIOD_NUMBERING_YEARLY_RESET = 'Yearly reset (starts at 1 every January)';
 
 function settingDefaults(company?: InstanceType<typeof Company>) {
@@ -2378,7 +2381,7 @@ router.get('/reports/deductions-summary', authenticate, requirePermission('repor
     const ei = moneyToNumber(line.ei);
     const federalTax = moneyToNumber(line.federalTax);
     const provincialTax = moneyToNumber(line.provincialTax);
-    const otherDeductions = moneyToNumber(line.preTaxDeductions) + moneyToNumber(line.postTaxDeductions);
+    const otherDeductions = moneyToNumber(line.preTaxDeductions) + moneyToNumber(line.postTaxDeductions) + moneyToNumber(sumMoney((line.customDeductions || []).map((item) => item.amount)));
     const totalDeductions = moneyToNumber(line.deductionsTotal);
     return {
       index: index + 1,
@@ -2659,7 +2662,8 @@ async function calculateCompanyPayrollLines(
   lines: z.infer<typeof hoursEarningsSchema>['lines'],
   periodStart: Date,
   periodEnd: Date,
-  payFrequency: 'weekly' | 'biweekly' | 'monthly' = 'biweekly'
+  payFrequency: 'weekly' | 'biweekly' | 'monthly' = 'biweekly',
+  payDate: Date = periodEnd
 ) {
   const [company, employees] = await Promise.all([
     Company.findById(companyId).select('address.province payrollConfiguration'),
@@ -2689,14 +2693,14 @@ async function calculateCompanyPayrollLines(
     vacationPolicyForProvince(company?.address?.province).vacationAccrualRate;
   const province = employerPayrollProvince(company?.address?.province);
   const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
+  const deductionRules = await DeductionType.find({ employerId: companyId, kind: 'custom', status: 'active' });
   return lines.map((line) => {
     const employee = employeeById.get(line.employeeId);
     const hourlyRate =
       Number(line.hourlyRate || 0) > 0
         ? line.hourlyRate
         : text(employee?.adminProfile?.compensation?.hourlyRate, '25.00');
-    return (
-    calculatePayrollLine({
+    const calculated = calculatePayrollLine({
       ...line,
       hourlyRate,
       statePayHours: eligibleDates.length ? line.statePayHours : 0,
@@ -2706,8 +2710,12 @@ async function calculateCompanyPayrollLines(
       vacationAccrualRate,
       payFrequency,
       province
-    })
-    );
+    });
+    const customDeductions = applicableCustomDeductions(deductionRules, line.employeeId, payDate, calculated.grossPay, province, payFrequency, String(employee?.adminProfile?.employment?.employmentType || ''));
+    const customTotal = sumMoney(customDeductions.map((item) => item.amount));
+    return { ...calculated, customDeductions,
+      deductionsTotal: decimalToMoney(moneyToDecimal(calculated.deductionsTotal).plus(moneyToDecimal(customTotal))),
+      netPay: decimalToMoney(moneyToDecimal(calculated.netPay).minus(moneyToDecimal(customTotal))) };
   });
 }
 
@@ -3310,7 +3318,8 @@ router.put(
       parsed.data.lines,
       run.periodStart,
       run.periodEnd,
-      run.payFrequency || 'biweekly'
+      run.payFrequency || 'biweekly',
+      run.payDate
     );
     const pendingAdjustments = await PayrollCarryForward.find({
       companyId: run.companyId,
@@ -3518,6 +3527,7 @@ router.post(
               description: 'Other post-tax deductions',
               amount: line.postTaxDeductions
             },
+            ...(line.customDeductions || []),
             { code: 'TOTAL', description: 'Total deductions', amount: line.deductionsTotal }
           ],
           additionalInfo: [
@@ -3671,7 +3681,8 @@ router.put(
       parsed.data.lines,
       run.periodStart,
       run.periodEnd,
-      run.payFrequency || 'biweekly'
+      run.payFrequency || 'biweekly',
+      run.payDate
     );
     const revisedLines = recalculatedLines.map((line) => ({
       ...line,
@@ -3866,6 +3877,7 @@ router.put(
             description: 'Other post-tax deductions',
             amount: line.postTaxDeductions
           },
+          ...(line.customDeductions || []),
           { code: 'TOTAL', description: 'Total deductions', amount: line.deductionsTotal }
         ],
         additionalInfo: [

@@ -17,6 +17,8 @@ export interface IDeductionType {
   employmentType?: string;
   payFrequency?: string;
   employeeScope?: string;
+  employeeIds?: mongoose.Types.ObjectId[];
+  effectivePayDate?: string;
   defaultForNewEmployees?: boolean;
   showOnPaystub?: boolean;
   includeInCraReports?: boolean;
@@ -46,6 +48,8 @@ const deductionTypeSchema = new Schema<IDeductionType>(
     employmentType: { type: String, default: 'all' },
     payFrequency: { type: String, default: 'all' },
     employeeScope: { type: String, default: 'all' },
+    employeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+    effectivePayDate: String,
     defaultForNewEmployees: { type: Boolean, default: false },
     showOnPaystub: { type: Boolean, default: true },
     includeInCraReports: { type: Boolean, default: false },

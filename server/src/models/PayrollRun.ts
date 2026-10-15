@@ -24,6 +24,7 @@ export interface IPayrollRunLine {
   reimbursement: mongoose.Types.Decimal128;
   preTaxDeductions: mongoose.Types.Decimal128;
   postTaxDeductions: mongoose.Types.Decimal128;
+  customDeductions?: Array<{ code: string; description: string; amount: mongoose.Types.Decimal128 }>;
   cpp: mongoose.Types.Decimal128;
   cpp2: mongoose.Types.Decimal128;
   ei: mongoose.Types.Decimal128;
@@ -118,6 +119,7 @@ const payrollRunLineSchema = new Schema<IPayrollRunLine>(
       type: Schema.Types.Decimal128,
       default: () => mongoose.Types.Decimal128.fromString('0.00')
     },
+    customDeductions: [{ _id: false, code: String, description: String, amount: Schema.Types.Decimal128 }],
     cpp: {
       type: Schema.Types.Decimal128,
       default: () => mongoose.Types.Decimal128.fromString('0.00')
