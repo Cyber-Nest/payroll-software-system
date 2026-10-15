@@ -9,7 +9,7 @@ import { Employee, IEmployee } from '../models/Employee';
 import { EmployerUser } from '../models/EmployerUser';
 import { GovernmentFiling, GovernmentFilingType } from '../models/GovernmentFiling';
 import { PayStatement } from '../models/PayStatement';
-import { payslipPdf, payslipsPdf, PayslipPdfData, roePdf, t4sPdf, T4PdfData } from '../utils/pdf';
+import { payslipPdf, payslipsPdf, PayslipPdfData, roePdf, t4sPdf, T4PdfData, t4SummaryPdf } from '../utils/pdf';
 import { isInPayStatementYtd } from '../utils/payStatementYtd';
 import { DeductionType } from '../models/DeductionType';
 import { PaystubTemplate } from '../models/PaystubTemplate';
@@ -1729,7 +1729,7 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
     craPayroll.programAccountNumber ||
     `${company.businessNumber || ''}RP${String(craPayroll.accountSuffix || '0001')}`
   );
-  res.json({
+  const report = {
     year: currentYear,
     employer: {
       legalName: company.legalName,
@@ -1769,7 +1769,12 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
       remittances: Number(remittances.toFixed(2)),
       balanceDue: Number(balanceDue.toFixed(2))
     }
-  });
+  };
+  if (req.query.format === 'pdf') {
+    return res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="T4-Summary-${currentYear}.pdf"`)
+      .setHeader('Cache-Control', 'no-store').send(t4SummaryPdf(report));
+  }
+  res.json(report);
 });
 
 router.get('/reports/government-liabilities', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {

@@ -83,6 +83,26 @@ describe('RBAC route enforcement', () => {
     return signToken(userId, employeeId, companyId);
   }
 
+  it('downloads the same selected-year T4 Summary data as a PDF attachment', async () => {
+    jest.spyOn(Company, 'findById').mockResolvedValue({ legalName: 'Summary Test Ltd.', customerId: 'PH123', businessNumber: '123456789', address: { province: 'MB' } } as never);
+    const amount = (value: string) => mongoose.Types.Decimal128.fromString(value);
+    jest.spyOn(PayStatement, 'find').mockReturnValue({ sort: jest.fn().mockResolvedValue([
+      { employeeId, grossPay: amount('12542.40'), grossEarnings: [], netPay: amount('9700.00'), deductions: [
+        { code: 'CPP', amount: amount('698.20') }, { code: 'EI', amount: amount('204.42') }, { code: 'FTAX', amount: amount('1939.95') }
+      ] }
+    ]) } as never);
+    const response = await request('/employer/reports/t4-summary?year=2025&format=pdf', employerToken('Company Owner'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/pdf');
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="T4-Summary-2025.pdf"');
+    const pdf = Buffer.from(await response.arrayBuffer()).toString('latin1');
+    expect(pdf).toContain('%PDF-1.4'); expect(pdf).toContain('T4SUM'); expect(pdf).toContain('2025');
+    expect(pdf).toContain('Summary Test Ltd.'); expect(pdf).toContain('12,542.40');
+    expect(PayStatement.find).toHaveBeenCalledWith(expect.objectContaining({ companyId, payPeriodYear: 2025 }));
+    const json = await request('/employer/reports/t4-summary?year=2025', employerToken('Company Owner'));
+    expect((await json.json() as any).summary.employmentIncome).toBe(12542.4);
+  });
+
   it('creates employer users in the employer collection with a company and temporary password', async () => {
     jest.spyOn(Company, 'findById').mockResolvedValue({ _id: companyId, legalName: 'Test Company' } as never);
     jest.spyOn(EmployerUser, 'exists').mockResolvedValue(null);

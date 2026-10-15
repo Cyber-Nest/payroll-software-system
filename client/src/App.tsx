@@ -1419,10 +1419,10 @@ function exportReportTable(
   }
 }
 
-function ReportExportButtons({ title }: { title: string }) {
+function ReportExportButtons({ title, onPdf, pdfDisabled = false }: { title: string; onPdf?: () => void; pdfDisabled?: boolean }) {
   return (
     <div className="report-export">
-      <button type="button" onClick={(event) => exportReportTable('pdf', title, event)}>PDF</button>
+      <button type="button" disabled={pdfDisabled} onClick={(event) => onPdf ? onPdf() : exportReportTable('pdf', title, event)}>PDF</button>
       <button type="button" onClick={(event) => exportReportTable('excel', title, event)}>Excel</button>
       <button type="button" onClick={(event) => exportReportTable('csv', title, event)}>CSV</button>
     </div>
@@ -8348,6 +8348,20 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
   const [data, setData] = useState<EmployerT4SummaryReport>();
   const [error, setError] = useState('');
   const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  async function downloadPdf() {
+    if (!data || downloadingPdf) return;
+    setDownloadingPdf(true); setError('');
+    try {
+      const response = await fetch(`${apiBase}/employer/reports/t4-summary?year=${data.year}&format=pdf`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error('Unable to download T4 summary PDF.');
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a'); link.href = url; link.download = `T4-Summary-${data.year}.pdf`;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to download T4 summary PDF.'); }
+    finally { setDownloadingPdf(false); }
+  }
   useEffect(() => {
     api<EmployerT4SummaryReport>(`/employer/reports/t4-summary?year=${encodeURIComponent(year)}`, token)
       .then((result) => {
@@ -8375,7 +8389,7 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
             </div>
             <div className="report-export">
               <label className="compact-report-filter">Tax Year<select value={year} onChange={(event) => setYear(event.target.value)}>{yearOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
-              <ReportExportButtons title={`T4 Summary Report ${data.year}`} />
+              <ReportExportButtons title={`T4 Summary Report ${data.year}`} onPdf={downloadPdf} pdfDisabled={downloadingPdf || year !== String(data.year)} />
             </div>
           </header>
           <div className="t4-summary-form">

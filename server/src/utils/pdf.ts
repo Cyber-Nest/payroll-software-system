@@ -524,6 +524,62 @@ function drawT4(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Pdf
   return page;
 }
 
+export type T4SummaryPdfData = {
+  year: number;
+  employer: { legalName: string; operatingName?: string; customerId: string; businessNumber: string; payrollProgramAccountNumber: string; address: Array<string | undefined>; province: string; remittanceFrequency: string };
+  metrics: { employees: number; statements: number };
+  summary: { employmentIncome: number; cpp: number; ei: number; incomeTax: number; pensionableEarnings: number; insurableEarnings: number; employerCpp: number; employerEi: number; totalDeductions: number; remittances: number; balanceDue: number; totalPayable: number };
+};
+
+export function t4SummaryPdf(data: T4SummaryPdfData): Buffer {
+  const page = new PdfPage(612, 792);
+  const money = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  page.rect(30, 688, 552, 62);
+  page.line(290, 688, 290, 750); page.line(510, 688, 510, 750);
+  page.text('Canada Revenue Agency', 40, 728, 11, true);
+  page.text('Agence du revenu du Canada', 40, 711, 8);
+  page.text('T4SUM', 302, 725, 20, true);
+  page.text('Summary of Remuneration Paid', 302, 707, 8);
+  page.text('Year', 530, 730, 8); page.text(data.year, 526, 709, 12, true);
+  page.rect(30, 630, 552, 58);
+  page.text('Summary Information', 40, 665, 14, true);
+  page.text('Employer copy generated from finalized payroll records.', 40, 646, 8);
+  page.rect(30, 456, 552, 174); page.line(306, 456, 306, 630);
+  page.text("Employer's name and address", 40, 611, 9, true);
+  page.text(truncateText(data.employer.legalName, 37), 40, 584, 11, true);
+  const address = [data.employer.operatingName, ...compactLines(data.employer.address)].filter(Boolean);
+  address.slice(0, 5).forEach((line, index) => page.text(truncateText(line, 49), 40, 563 - index * 17, 8));
+  page.text('Employer information', 316, 611, 9, true);
+  const details = [
+    ['Employer code', data.employer.customerId], ['Business number', data.employer.businessNumber],
+    ['Payroll account', data.employer.payrollProgramAccountNumber], ['Province', data.employer.province], ['Remitter type', data.employer.remittanceFrequency]
+  ];
+  details.forEach(([label, value], index) => {
+    const y = 584 - index * 24;
+    page.text(label, 316, y, 8); page.text(truncateText(value || '-', 27), 422, y, 8);
+    page.line(316, y - 8, 572, y - 8);
+  });
+  const boxes: Array<[string, string, number]> = [
+    ['14', 'Employment income', data.summary.employmentIncome], ['16', "Employee's CPP contributions", data.summary.cpp], ['18', "Employee's EI premiums", data.summary.ei],
+    ['22', 'Income tax deducted', data.summary.incomeTax], ['26', 'CPP/QPP pensionable earnings', data.summary.pensionableEarnings], ['24', 'EI insurable earnings', data.summary.insurableEarnings],
+    ['27', "Employer's CPP contributions", data.summary.employerCpp], ['19', "Employer's EI premiums", data.summary.employerEi], ['80', 'Total deductions reported', data.summary.totalDeductions],
+    ['82', 'Minus remittances', data.summary.remittances], ['84', 'Overpayment', Math.max(0, -data.summary.balanceDue)], ['86', 'Balance due', Math.max(0, data.summary.balanceDue)]
+  ];
+  boxes.forEach(([box, label, value], index) => {
+    const x = 30 + (index % 3) * 184;
+    const y = 388 - Math.floor(index / 3) * 68;
+    page.rect(x, y, 184, 68); page.fillRect(x + 9, y + 44, 24, 15, [0, 0, 0]);
+    page.text(box, x + 15, y + 48, 7, true, [1, 1, 1]);
+    page.text(label, x + 9, y + 29, 8); page.rightText(money(value), x + 174, y + 10, 11, true);
+  });
+  [['Number of T4 slips filed', String(data.metrics.employees)], ['Pay statements included', String(data.metrics.statements)], ['Total payable', money(data.summary.totalPayable)]].forEach(([label, value], index) => {
+    const x = 30 + index * 184;
+    page.rect(x, 126, 184, 58); page.text(label, x + 9, 165, 8); page.text(value, x + 9, 143, 11, true);
+  });
+  if (!data.metrics.statements) page.text(`No T4 summary data found for ${data.year}.`, 30, 105, 9);
+  return page.buffer();
+}
+
 export function t4Pdf(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Buffer {
   return drawT4(data, format).buffer();
 }
