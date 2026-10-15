@@ -43,6 +43,8 @@ import { roleNames } from '../security/rbac';
 import employerRoleRoutes from './employerRoles';
 import employerDeductionRoutes from './employerDeductions';
 import employerBenefitRoutes from './employerBenefits';
+import employerReportBuilder from './employerReportBuilder';
+import { EmployerReport, EmployerReportRun, EmployerReportSchedule } from '../models/EmployerReport';
 import { hasBenefit } from '../services/employerBenefits.service';
 import { applicableCustomDeductions } from '../services/customDeductions.service';
 import { employerRoles } from '../services/employerRoles.service';
@@ -70,6 +72,7 @@ const router = Router();
 router.use('/settings/roles', employerRoleRoutes);
 router.use('/settings/deductions', employerDeductionRoutes);
 router.use('/settings/benefits', employerBenefitRoutes);
+router.use('/reports/builder', employerReportBuilder);
 const PAY_PERIOD_NUMBERING_YEARLY_RESET = 'Yearly reset (starts at 1 every January)';
 
 function settingDefaults(company?: InstanceType<typeof Company>) {
@@ -1388,13 +1391,15 @@ router.get(
   async (req: AuthRequest, res) => {
     const companyId = requireEmployer(req, res);
     if (!companyId) return;
-    const [payrollRuns, statements, employees, filings, deductionTypes, latestRun] = await Promise.all([
+    const [payrollRuns, statements, employees, filings, deductionTypes, latestRun, savedReports, activeSchedules, generatedReports] = await Promise.all([
       PayrollRun.countDocuments({ companyId }),
       PayStatement.countDocuments({ companyId, supersededByStatementId: { $exists: false } }),
       Employee.countDocuments({ companyId }),
       GovernmentFiling.countDocuments({ companyId }),
       DeductionType.countDocuments({ employerId: companyId }),
-      PayrollRun.findOne({ companyId }).sort({ payDate: -1 }).select('payDate')
+      PayrollRun.findOne({ companyId }).sort({ payDate: -1 }).select('payDate'),
+      EmployerReport.countDocuments({ companyId }), EmployerReportSchedule.countDocuments({ companyId, enabled: true }),
+      EmployerReportRun.countDocuments({ companyId, status: 'completed', createdAt: { $gte: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) } })
     ]);
     const groups = [
       {
@@ -1473,13 +1478,13 @@ router.get(
     ];
     res.json({
       metrics: {
-        totalReports: groups.reduce((total, group) => total + group.reports.length, 0),
+        totalReports: groups.reduce((total, group) => total + group.reports.length, 0) + savedReports,
         mostUsed: payrollRuns ? 'Payroll Summary' : 'Employee List',
         mostUsedCaption: latestRun
           ? `Last generated ${latestRun.payDate.toISOString().slice(0, 10)}`
           : `${employees} employees available`,
-        scheduledReports: 0,
-        reportsGenerated: payrollRuns + statements + filings + deductionTypes
+        scheduledReports: activeSchedules,
+        reportsGenerated: generatedReports
       },
       groups: groups.map((group) => ({
         ...group,

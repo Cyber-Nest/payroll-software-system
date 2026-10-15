@@ -48,7 +48,7 @@ function permissionsFromAccessRole(rolePermissions: Record<string, string[]>): P
   return Array.from(granted);
 }
 
-function employerRolePermissions(rolePermissions: Record<string, string[]>): Permission[] {
+export function employerRolePermissions(rolePermissions: Record<string, string[]>): Permission[] {
   const actions: Record<string, Record<string, Permission[]>> = {
     Employees: { 'View employees': ['employee.view'], 'Add / edit employees': ['employee.create', 'employee.edit'], 'Import employees': ['employee.create'], 'Terminate employees': ['employee.edit'], 'View employee documents': ['employee.view'] },
     Payroll: { 'Run payroll': ['payroll.prepare'], 'View payroll data': ['payroll.view'], 'Edit payroll entries': ['payroll.prepare'], 'Approve / finalize payroll': ['payroll.approve'], 'Void payroll': ['payroll.reverse'], 'View payroll reports': ['reports.view'] },

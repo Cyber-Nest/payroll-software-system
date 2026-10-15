@@ -9923,3 +9923,10 @@ th {
 .employer-benefits-manager { min-width: 0; display: grid; gap: 12px; }
 .benefit-manager-actions { display: flex; justify-content: flex-end; }
 .settings-deduction-reports.benefits-managed-separately { grid-template-columns: minmax(0, 1fr); }
+.report-builder { display: grid; gap: 18px; }
+.report-builder fieldset { min-width: 0; border: 0; margin: 0; padding: 0; }
+.report-builder .report-builder-checks { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 24px; }
+.report-builder .report-builder-checks label { display: flex; align-items: center; gap: 8px; }
+.report-builder form > footer { margin-top: 22px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+.report-builder input:not([type="checkbox"]), .report-builder select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 9px; }
+.report-builder .admin-panel { min-width: 0; }

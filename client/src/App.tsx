@@ -6,6 +6,7 @@ import T4FormatsPage from './T4FormatsPage';
 import EmployerRolesSection from './EmployerRolesSection';
 import EmployerDeductionSetup from './EmployerDeductionSetup';
 import EmployerBenefitsSection from './EmployerBenefitsSection';
+import EmployerReportBuilder from './EmployerReportBuilder';
 
 type Page =
   'home' | 'pay' | 'payDetail' | 'documents' | 'taxForms' | 'profile' | 'help' | 'notifications';
@@ -7433,6 +7434,8 @@ function EmployerReportsPage({
   const [data, setData] = useState<EmployerReportsData>();
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [builderAction, setBuilderAction] = useState('');
+  const [builderVersion, setBuilderVersion] = useState(0);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All Categories');
   const [format, setFormat] = useState('All Formats');
@@ -7446,11 +7449,19 @@ function EmployerReportsPage({
         setData(undefined);
         setError('Unable to load reports from the database.');
       });
-  }, [token]);
+  }, [token, activeTab]);
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
   const tabs = ['All Reports', 'Payroll Reports', 'Employee Reports', 'Tax & Compliance', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'];
+  function openBuilder(section: string, action = '') {
+    setActiveTab(section); setBuilderAction(action); setBuilderVersion((value) => value + 1);
+  }
+  if (activeTab === 'Custom Reports' || activeTab === 'Scheduled Reports') return <section className="reports-page">
+    <header className="reports-head"><div><h1>Reports</h1><p>Custom reports and automated schedules for your organization.</p></div></header>
+    <nav className="report-tabs">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => openBuilder(tab)}>{tab}</button>)}</nav>
+    <EmployerReportBuilder key={`${activeTab}-${builderVersion}`} token={token} section={activeTab} action={builderAction} onCreateReport={() => openBuilder('Custom Reports', 'Create Custom Report')} />
+  </section>;
   const normalized = search.trim().toLowerCase();
   const visibleGroups = (data?.groups || [])
     .filter((group) => activeTab === 'All Reports' || group.title.startsWith(activeTab))
@@ -7471,7 +7482,7 @@ function EmployerReportsPage({
           <h1>Reports</h1>
           <p>Generate reports for payroll, employees, taxes, deductions and more.</p>
         </div>
-        <button type="button" className="reports-primary"><span>+</span>Create Custom Report</button>
+        <button type="button" className="reports-primary" onClick={() => openBuilder('Custom Reports', 'Create Custom Report')}><span>+</span>Create Custom Report</button>
       </header>
       {error && <p className="report-empty">{error}</p>}
       {!data && !error && <p className="report-empty">Loading reports...</p>}
@@ -7484,7 +7495,7 @@ function EmployerReportsPage({
         <article><span>down</span><p>Reports Generated</p><strong>{data.metrics.reportsGenerated}</strong><small>This Month</small></article>
       </div>
       <nav className="report-tabs">
-        {tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>)}
+        {tabs.map((tab) => <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => openBuilder(tab)}>{tab}</button>)}
       </nav>
       <div className="report-filters">
         <label className="report-search"><span className="top-icon search" aria-hidden="true"></span><input placeholder="Search reports..." value={search} onChange={(event) => setSearch(event.target.value)} /></label>
@@ -7501,6 +7512,7 @@ function EmployerReportsPage({
                 className={`report-row ${report.name === 'T4 Summary Report' ? 't4-summary-row' : ''}`}
                 key={report.name}
                 onClick={() => {
+                  if (group.title === 'Custom Reports' || group.title === 'Scheduled Reports') openBuilder(group.title, report.name);
                   if (group.title === 'Payroll Reports') onOpenPayroll();
                   if (report.name === 'Employee List') onOpenEmployees();
                   if (report.name === 'Employee Hours Report') onOpenHours();
@@ -7522,6 +7534,7 @@ function EmployerReportsPage({
             <button
               className="report-view"
               onClick={() => {
+                if (group.title === 'Custom Reports' || group.title === 'Scheduled Reports') openBuilder(group.title);
                 if (group.title === 'Payroll Reports') onOpenPayroll();
                 if (group.title === 'Employee Reports') onOpenEmployees();
               }}

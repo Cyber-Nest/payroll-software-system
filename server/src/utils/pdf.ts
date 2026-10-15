@@ -523,6 +523,32 @@ function drawT4(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Pdf
   return page;
 }
 
+export function customReportPdf(title: string, employer: string, columns: string[], rows: string[][]): Buffer {
+  const pages: Array<{ width: number; height: number; content: string }> = [];
+  const count = Math.max(1, Math.ceil(rows.length / 24));
+  const width = 752 / columns.length;
+  for (let index = 0; index < count; index++) {
+    const page = new PdfPage(792, 612);
+    page.text(truncateText(title, 52), 20, 578, 15, true);
+    page.text(truncateText(employer, 79), 20, 557, 10);
+    page.text(`${rows.length} rows`, 20, 540, 8);
+    const maxCharacters = Math.max(8, Math.floor((width - 12) / 6.7));
+    columns.forEach((column, cell) => {
+      const x = 20 + cell * width;
+      page.fillRect(x, 510, width, 22, [0.9, 0.94, 0.98]); page.rect(x, 510, width, 22);
+      page.text(truncateText(column, maxCharacters), x + 5, 518, 7, true);
+    });
+    rows.slice(index * 24, index * 24 + 24).forEach((row, rowIndex) => row.forEach((value, cell) => {
+      const x = 20 + cell * width; const y = 492 - rowIndex * 18;
+      page.rect(x, y, width, 18); page.text(truncateText(value, maxCharacters), x + 5, y + 6, 7);
+    }));
+    if (!rows.length) page.text('No records match the selected filters.', 20, 490, 10);
+    page.text(`Page ${index + 1} of ${count}`, 20, 35, 8);
+    pages.push({ width: 792, height: 612, content: page.content() });
+  }
+  return buildPdf(pages);
+}
+
 export type T4SummaryPdfData = {
   year: number;
   employer: { legalName: string; operatingName?: string; customerId: string; businessNumber: string; payrollProgramAccountNumber: string; address: Array<string | undefined>; province: string; remittanceFrequency: string };

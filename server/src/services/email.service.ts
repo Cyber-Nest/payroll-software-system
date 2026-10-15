@@ -6,6 +6,7 @@ export interface EmailMessage {
   subject: string;
   body: string;
   html?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
 }
 
 function emailConfigured() {
@@ -52,7 +53,8 @@ export class EmailService {
         'X-Priority': '3',
         Importance: 'Normal'
       },
-      html: message.html
+      html: message.html,
+      attachments: message.attachments
     });
   }
 }

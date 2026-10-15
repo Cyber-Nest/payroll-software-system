@@ -1,11 +1,13 @@
 import app from './app';
 import { env } from './config/env';
 import { connectDatabase } from './config/database';
+import { startReportScheduler } from './services/employerReports.service';
 
 const startServer = async (): Promise<void> => {
   try {
     await connectDatabase();
     console.log('MongoDB connected');
+    startReportScheduler();
 
     app.listen(env.port, () => {
       console.log(`Server running on http://localhost:${env.port}`);
