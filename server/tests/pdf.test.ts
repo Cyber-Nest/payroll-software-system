@@ -106,9 +106,9 @@ describe('PDF generation', () => {
     expect(pageCount(file)).toBe(2);
   });
 
-  it('generates a branded T4 PDF with employer details', () => {
+  it('generates a T4 PDF with employer details and no Payhours logo', () => {
     const file = t4Pdf(t4);
-    expect(pdfText(file)).toContain('Payhours');
+    expect(pdfText(file)).not.toContain('Payhours');
     expect(pdfText(file)).toContain('Acme Payroll Ltd.');
     expect(pageCount(file)).toBe(1);
   });

@@ -51,7 +51,7 @@ export type T4FormatOptions = {
 };
 
 export const defaultT4Format: T4FormatOptions = {
-  headerTitle: 'T4 STATEMENT', accentColor: '#0D1F33', showLogo: true, footerText: '', headerStyle: 'plain'
+  headerTitle: 'T4 STATEMENT', accentColor: '#0D1F33', showLogo: false, footerText: '', headerStyle: 'plain'
 };
 
 export type RoePdfData = {
@@ -453,7 +453,6 @@ function drawT4(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Pdf
   const color = /^#[a-f\d]{6}$/i.test(format.accentColor) ? format.accentColor : defaultT4Format.accentColor;
   const accent = [1, 3, 5].map((offset) => parseInt(color.slice(offset, offset + 2), 16) / 255) as [number, number, number];
   if (format.headerStyle === 'band') page.fillRect(14, 580, 764, 26, accent);
-  if (format.showLogo) drawPayhoursLogo(page, 18, format.headerStyle === 'band' ? 536 : 566, format.headerStyle === 'band' ? 0.8 : 1);
   page.text(format.headerTitle, 400, 585, 12, true, format.headerStyle === 'band' ? [1, 1, 1] : accent);
   page.rect(14, 438, 286, 92);
   page.text("Employer's name and address - Nom et adresse de l'employeur", 24, 516, 8);

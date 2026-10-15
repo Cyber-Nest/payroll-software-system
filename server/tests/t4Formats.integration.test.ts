@@ -100,7 +100,7 @@ describe('T4 format management and rendering', () => {
     expect((pdf.match(/CUSTOM T4/g) || []).length).toBe(2);
     expect((pdf.match(/Contact payroll for questions/g) || []).length).toBe(2);
     expect(pdf).toContain('65,000.00'); expect(pdf).toContain('SECOND');
-    const noLogo = t4Pdf(t4PreviewData, { ...format, showLogo: false }).toString('latin1');
+    const noLogo = t4Pdf(t4PreviewData, { ...format, showLogo: true }).toString('latin1');
     expect(noLogo).not.toContain('(Payhours)');
   });
 });

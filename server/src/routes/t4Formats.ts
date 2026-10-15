@@ -18,14 +18,14 @@ export const t4FormatSchema = z.object({
   description: z.string().trim().max(250).default(''),
   headerTitle: z.string().trim().min(1).max(32).default(defaultT4Format.headerTitle),
   accentColor: z.string().regex(/^#[a-f\d]{6}$/i).default(defaultT4Format.accentColor),
-  showLogo: z.boolean().default(true),
+  showLogo: z.boolean().default(false).transform(() => false),
   footerText: z.string().trim().max(120).default(''),
   headerStyle: z.enum(['plain', 'band']).default('plain')
 });
 
 const serialize = (format: InstanceType<typeof T4Format>) => ({
   id: String(format._id), name: format.name, description: format.description,
-  headerTitle: format.headerTitle, accentColor: format.accentColor, showLogo: format.showLogo,
+  headerTitle: format.headerTitle, accentColor: format.accentColor, showLogo: false,
   footerText: format.footerText, headerStyle: format.headerStyle
 });
 

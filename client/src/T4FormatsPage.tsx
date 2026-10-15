@@ -12,7 +12,7 @@ type FormatFields = {
 type Format = FormatFields & { id: string };
 const defaults: FormatFields = {
   name: '', description: '', headerTitle: 'T4 STATEMENT', headerStyle: 'plain',
-  accentColor: '#0D1F33', showLogo: true, footerText: ''
+  accentColor: '#0D1F33', showLogo: false, footerText: ''
 };
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -133,7 +133,6 @@ export default function T4FormatsPage({ token }: { token: string }) {
             <option value="plain">Plain</option><option value="band">Color Band</option>
           </select></label>
           <label>Accent Color<input type="color" value={form.accentColor} onChange={(event) => update('accentColor', event.target.value)} /></label>
-          <label className="t4-format-toggle"><input type="checkbox" checked={form.showLogo} onChange={(event) => update('showLogo', event.target.checked)} />Show Payhours Logo</label>
           <label>Footer Message<textarea maxLength={120} rows={2} value={form.footerText} onChange={(event) => update('footerText', event.target.value)} /></label>
           <p>{dirty ? 'Unsaved changes are shown in the preview.' : 'Preview shows the saved settings.'}</p>
           <div className="head-actions">

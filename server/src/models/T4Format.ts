@@ -13,7 +13,7 @@ const schema = new Schema<IT4Format>({
   description: { type: String, default: '', maxlength: 250 },
   headerTitle: { type: String, default: 'T4 STATEMENT', maxlength: 32 },
   accentColor: { type: String, default: '#0D1F33' },
-  showLogo: { type: Boolean, default: true },
+  showLogo: { type: Boolean, default: false },
   footerText: { type: String, default: '', maxlength: 120 },
   headerStyle: { type: String, enum: ['plain', 'band'], default: 'plain' }
 }, { timestamps: true });
