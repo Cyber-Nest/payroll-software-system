@@ -13,6 +13,8 @@ export const EmployerReport = mongoose.model<IReportDefinition>('EmployerReport'
   employeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }]
 }, { timestamps: true }));
 
+export const EmployerReportTemplate = mongoose.model<IReportDefinition>('EmployerReportTemplate', EmployerReport.schema.clone());
+
 export interface IReportSchedule {
   companyId: mongoose.Types.ObjectId; reportId: mongoose.Types.ObjectId; createdBy: mongoose.Types.ObjectId;
   name: string; frequency: 'daily' | 'weekly' | 'monthly'; format: 'csv' | 'excel' | 'pdf';

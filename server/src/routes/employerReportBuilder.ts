@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { authenticate, AuthRequest, requirePermission } from '../middleware/auth';
 import { Employee } from '../models/Employee';
-import { EmployerReport, EmployerReportRun, EmployerReportSchedule } from '../models/EmployerReport';
+import { EmployerReport, EmployerReportTemplate, EmployerReportRun, EmployerReportSchedule } from '../models/EmployerReport';
 import { buildReport, reportFields, runReport } from '../services/employerReports.service';
 import { env } from '../config/env';
 
@@ -37,15 +37,23 @@ router.post('/preview', requirePermission('reports.export'), async (req: AuthReq
   try { const result = await buildReport({ ...parsed.data, companyId: new mongoose.Types.ObjectId(req.employerContext!.companyId), employeeIds: parsed.data.employeeIds.map((value) => new mongoose.Types.ObjectId(value)) }); res.json({ ...result, rows: result.rows.slice(0, 100), totalRows: result.rows.length }); }
   catch (error) { res.status(400).json({ message: (error as Error).message }); }
 });
-router.post('/definitions', requirePermission('reports.export'), saveDefinition);
-router.put('/definitions/:id', requirePermission('reports.export'), saveDefinition);
-async function saveDefinition(req: AuthRequest, res: import('express').Response) {
+router.post('/definitions', requirePermission('reports.export'), (req, res) => saveDefinition(req, res));
+router.put('/definitions/:id', requirePermission('reports.export'), (req, res) => saveDefinition(req, res));
+router.get('/templates', async (req: AuthRequest, res) => { res.json({ templates: (await EmployerReportTemplate.find({ companyId: req.employerContext!.companyId }).sort({ name: 1 })).map(serialize) }); });
+router.post('/templates', requirePermission('reports.export'), (req, res) => saveDefinition(req, res, true));
+router.put('/templates/:id', requirePermission('reports.export'), (req, res) => saveDefinition(req, res, true));
+router.delete('/templates/:id', requirePermission('reports.export'), async (req: AuthRequest, res) => {
+  if (!await EmployerReportTemplate.findOneAndDelete({ _id: req.params.id, companyId: req.employerContext!.companyId })) return res.status(404).json({ message: 'Template not found.' });
+  res.json({ deleted: true });
+});
+async function saveDefinition(req: AuthRequest, res: import('express').Response, template = false) {
   const parsed = reportDefinitionSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0].message });
   const companyId = req.employerContext!.companyId;
   if (parsed.data.employeeIds.length && await Employee.countDocuments({ companyId, _id: { $in: [...new Set(parsed.data.employeeIds)] } }) !== new Set(parsed.data.employeeIds).size) return res.status(400).json({ message: 'Choose employees from this employer only.' });
-  const report = req.params.id ? await EmployerReport.findOneAndUpdate({ _id: req.params.id, companyId }, { $set: parsed.data }, { new: true, runValidators: true }) : await EmployerReport.create({ ...parsed.data, companyId });
-  if (!report) return res.status(404).json({ message: 'Saved report not found.' });
+  const model = template ? EmployerReportTemplate : EmployerReport;
+  const report = req.params.id ? await model.findOneAndUpdate({ _id: req.params.id, companyId }, { $set: parsed.data }, { new: true, runValidators: true }) : await model.create({ ...parsed.data, companyId });
+  if (!report) return res.status(404).json({ message: template ? 'Template not found.' : 'Saved report not found.' });
   res.status(req.params.id ? 200 : 201).json({ report: serialize(report) });
 }
 router.delete('/definitions/:id', requirePermission('reports.export'), async (req: AuthRequest, res) => {
