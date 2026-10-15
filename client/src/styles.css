@@ -9930,3 +9930,8 @@ th {
 .report-builder form > footer { margin-top: 22px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 .report-builder input:not([type="checkbox"]), .report-builder select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 9px; }
 .report-builder .admin-panel { min-width: 0; }
+.report-builder .access-tabs { flex-wrap: wrap; }
+.report-field-order { padding-left: 24px; }
+.report-field-order li { padding: 8px; }
+.report-field-order li span { display: inline-block; min-width: 180px; }
+.report-field-order button { margin: 4px; }
