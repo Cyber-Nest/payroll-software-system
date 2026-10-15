@@ -39,7 +39,9 @@ import {
   sumMoney
 } from '../utils/money';
 import { normalizeRole } from '../security/rbac';
-import { roleNames, rolePermissions } from '../security/rbac';
+import { roleNames } from '../security/rbac';
+import employerRoleRoutes from './employerRoles';
+import { employerRoles } from '../services/employerRoles.service';
 import { selectedT4Format } from '../services/t4Format.service';
 import {
   decryptSin,
@@ -61,6 +63,7 @@ import { calculateStatutoryDeductions } from '../services/taxEngine.service';
 import { env } from '../config/env';
 
 const router = Router();
+router.use('/settings/roles', employerRoleRoutes);
 const PAY_PERIOD_NUMBERING_YEARLY_RESET = 'Yearly reset (starts at 1 every January)';
 
 function settingDefaults(company?: InstanceType<typeof Company>) {
@@ -744,19 +747,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
   const paySchedule = (settings.payroll as Record<string, unknown> | undefined)?.paySchedule as Record<string, unknown> | undefined;
   const calculatedPayPeriods = calculatedPayPeriodOptions(paySchedule || {});
   if (paySchedule && calculatedPayPeriods.current) paySchedule.currentPayPeriod = calculatedPayPeriods.current;
-  const roleCounts = new Map<string, number>();
-  users.forEach((user) => roleCounts.set(normalizeRole(user.role), (roleCounts.get(normalizeRole(user.role)) || 0) + 1));
-  const roles = roleNames
-    .filter((role) => role !== 'CyberNest Super Admin')
-    .map((role, index) => ({
-      id: role,
-      index: index + 1,
-      name: role === 'Company Owner' ? 'Super Admin' : role.replace('Payroll Administrator', 'Payroll Admin').replace('HR Administrator', 'HR Manager'),
-      description: role === 'Company Owner' ? 'Full access to all modules' : role === 'Employee' ? 'Self service access' : `Manage ${role.toLowerCase()} access`,
-      users: roleCounts.get(role) || 0,
-      status: 'Active',
-      permissions: rolePermissions[role]
-    }));
+  const roles = employerRoles(company.settings, users);
   const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
   const deductionYtd = new Map<string, number>();
   payStatements.forEach((statement) => {
@@ -890,6 +881,12 @@ router.put('/settings', authenticate, requirePermission('users.manage'), async (
   const existingTaxes = (existingSettings.taxes as Record<string, unknown> | undefined) || (settingDefaults(company).taxes as Record<string, unknown>);
   company.settings = normalizeEmployerSettings(mergeSettings(existingSettings, {
     ...parsed.data.settings,
+    usersRoles: {
+      ...((parsed.data.settings.usersRoles || {}) as Record<string, unknown>),
+      customRoles: (existingSettings.usersRoles as Record<string, unknown> | undefined)?.customRoles || [],
+      roleOverrides: (existingSettings.usersRoles as Record<string, unknown> | undefined)?.roleOverrides || {},
+      deletedRoleIds: (existingSettings.usersRoles as Record<string, unknown> | undefined)?.deletedRoleIds || []
+    },
     taxes: existingTaxes
   }));
   const general = (company.settings.general as Record<string, unknown> | undefined)?.companyInformation as Record<string, unknown> | undefined;

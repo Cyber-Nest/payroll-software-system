@@ -9,6 +9,8 @@ import { User } from '../models/User';
 import { AccessRole } from '../models/AccessRole';
 import { Permission, permissionsForRole } from '../security/rbac';
 import { accessRoles } from '../data/superAdminAccess';
+import { Company } from '../models/Company';
+import { employerPermissionOverride } from '../services/employerRoles.service';
 
 export interface AuthRequest extends Request {
   user?: { id: string };
@@ -98,7 +100,9 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       }
       req.user = { id: payload.sub };
       const customRole = await AccessRole.findOne({ name: employer.role, userType: 'employer' });
-      req.employerContext = { employerUserId: payload.sub, companyId: payload.companyId, role: employer.role, permissions: customRole ? (customRole.status === 'Active' ? employerRolePermissions(customRole.permissions) : []) : permissionsForRole(employer.role) };
+      const company = employer.role === 'Company Owner' ? undefined : await Company.findById(payload.companyId);
+      const companyPermissions = employerPermissionOverride(company?.settings, employer.role);
+      req.employerContext = { employerUserId: payload.sub, companyId: payload.companyId, role: employer.role, permissions: companyPermissions ?? (customRole ? (customRole.status === 'Active' ? employerRolePermissions(customRole.permissions) : []) : permissionsForRole(employer.role)) };
       next();
       return;
     }
