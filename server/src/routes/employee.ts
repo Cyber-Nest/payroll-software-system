@@ -13,6 +13,7 @@ import { serializeEmployee, serializeMoney } from '../utils/serializers';
 import { MoneyValue, sumMoney } from '../utils/money';
 import { employeeCompanyScope } from '../utils/scope';
 import { payslipPdf, payslipsPdf, PayslipPdfData, t4Pdf } from '../utils/pdf';
+import { selectedT4Format } from '../services/t4Format.service';
 import { isInPayStatementYtd } from '../utils/payStatementYtd';
 import { calculatePayrollLine, stateHolidayPayRule2026 } from '../services/payrollWorkflow.service';
 import { defaultHelpContent } from '../data/helpContent';
@@ -989,7 +990,7 @@ router.get(
           incomeTax: deduction('TAX', 'FTAX', 'PTAX'),
           cppContributions: deduction('CPP'),
           eiPremiums: deduction('EI')
-        })
+        }, await selectedT4Format(company?.settings))
       );
   }
 );

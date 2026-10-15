@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'r
 import clsx from 'clsx';
 import DeductionsPage from './DeductionsPage';
 import GovernmentFilingsPage from './GovernmentFilingsPage';
+import T4FormatsPage from './T4FormatsPage';
 
 type Page =
   'home' | 'pay' | 'payDetail' | 'documents' | 'taxForms' | 'profile' | 'help' | 'notifications';
@@ -529,6 +530,8 @@ type PaystubTemplateItem = {
 };
 
 type AccessUser = {
+  userType?: 'superAdmin' | 'employer';
+  companyId?: string;
   id: string;
   name: string;
   email: string;
@@ -545,6 +548,7 @@ type AccessUser = {
   loginMethod: string;
 };
 type AccessRoleItem = {
+  userType?: 'superAdmin' | 'employer';
   id: string;
   name: string;
   type: string;
@@ -556,11 +560,14 @@ type AccessRoleItem = {
   permissions: Record<string, string[]>;
 };
 type AccessData = {
+  companies: Array<{ id: string; name: string }>;
+  employerModules: Array<{ name: string; caption: string; permissions: string[] }>;
   metrics: Record<string, number>;
   modules: Array<{ name: string; caption: string; permissions: string[] }>;
   roles: AccessRoleItem[];
   users: AccessUser[];
   activityLogs: Array<{
+    userType?: 'superAdmin' | 'employer';
     id: string;
     dateTime: string;
     user: string;
@@ -8761,7 +8768,7 @@ const employerFormPlaceholders = {
   overtimeHourLabel: 'Overtime Hours',
   doubleTimeHourLabel: 'Double Time Hours',
   rateDisplayFormat: 'Show $ per hour',
-  t4Format: 'Payslip Summary',
+  t4Format: 'platform',
   t4SummaryFormat: 'All T4 Summary',
   t4GenerationSource: 'Employer Module',
   plan: 'Standard',
@@ -8821,170 +8828,19 @@ function AccessMetric({
   );
 }
 
-function PermissionSettingsView({
-  access,
-  onMode
-}: {
-  access: AccessData;
-  onMode: (mode: string) => void;
-}) {
-  const matrix = access.permissionMatrix;
-  return (
-    <section className="module-page access-page permission-settings-page">
-      <div className="sa-breadcrumb">
-        Role Management &gt; Create Role &gt; <b>Permission Settings</b>
-      </div>
-      <h1>Permission Settings</h1>
-      <p>Select and configure permissions for this role.</p>
-      <div className="role-steps exact">
-        <span className="done">
-          <i aria-hidden="true"></i>
-          <b>Role Details</b>
-        </span>
-        <span className="current">
-          <i>2</i>
-          <b>Permission Settings</b>
-        </span>
-        <span>
-          <i>3</i>
-          <b>Review & Save</b>
-        </span>
-      </div>
-      <div className="permission-exact-grid">
-        <aside className="module-rail">
-          <h2>Modules</h2>
-          {access.modules.map((module) => (
-            <button
-              key={module.name}
-              className={module.name === matrix.primaryModule ? 'active' : ''}
-            >
-              <span className="module-icon">{module.name.charAt(0)}</span>
-              {module.name}
-            </button>
-          ))}
-        </aside>
-        <main className="permission-center">
-          <div className="permission-panel-head">
-            <div>
-              <h2>Employers Permissions</h2>
-              <p>Manage employer accounts and onboarding.</p>
-            </div>
-            <div>
-              <button>Select All</button>
-              <button>Clear All</button>
-            </div>
-          </div>
-          <table className="permission-table">
-            <thead>
-              <tr>
-                <th>Permission</th>
-                <th>Description</th>
-                {matrix.actions.map((action) => (
-                  <th key={action}>{action}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.rows.map((row) => (
-                <tr key={row.permission}>
-                  <td>{row.permission}</td>
-                  <td>{row.description}</td>
-                  {matrix.actions.map((action) => (
-                    <td key={action}>
-                      <input type="checkbox" checked={row.grants.includes(action)} readOnly />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="permission-note">
-            <b>i</b>
-            <span>
-              <strong>Permission Inheritance</strong>Some permissions may include access to related
-              sub-modules and data. Review each module carefully before saving.
-            </span>
-          </div>
-          <section className="submodule-panel">
-            <h2>Sub-module Permissions (Optional)</h2>
-            <p>Further refine access for this module.</p>
-            <table className="permission-table">
-              <thead>
-                <tr>
-                  <th></th>
-                  <th></th>
-                  {matrix.subModuleActions.map((action) => (
-                    <th key={action}>{action}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {matrix.subModules.map((row) => (
-                  <tr key={row.name}>
-                    <td>{row.name}</td>
-                    <td>{row.description}</td>
-                    {matrix.subModuleActions.map((action) => (
-                      <td key={action}>
-                        <input type="checkbox" checked={row.grants.includes(action)} readOnly />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </main>
-        <aside className="permission-summary-side">
-          <section>
-            <div className="big-avatar">PM</div>
-            <h2>{matrix.role.name}</h2>
-            <Pill>{matrix.role.type} Role</Pill>
-            <p>{matrix.role.description}</p>
-            <dl>
-              <dt>Status</dt>
-              <dd>
-                <Pill tone="green">{matrix.role.status}</Pill>
-              </dd>
-              <dt>Total Permissions</dt>
-              <dd>{matrix.role.totalPermissions}</dd>
-              <dt>Modules Configured</dt>
-              <dd>{matrix.role.modulesConfigured}</dd>
-              <dt>Created Date</dt>
-              <dd>{matrix.role.createdDate}</dd>
-              <dt>Last Updated</dt>
-              <dd>{matrix.role.lastUpdated}</dd>
-            </dl>
-          </section>
-          <section>
-            <h3>Configured Modules</h3>
-            {matrix.configuredModules.map((item) => (
-              <p key={item}>
-                <span className="check-dot" aria-hidden="true"></span>
-                {item}
-              </p>
-            ))}
-          </section>
-          <section>
-            <h3>Next Steps</h3>
-            {matrix.nextSteps.map((item) => (
-              <p key={item}>
-                <span className="todo-dot" aria-hidden="true"></span>
-                {item}
-              </p>
-            ))}
-          </section>
-          <div className="side-actions">
-            <button onClick={() => onMode('Create Role')}>Back</button>
-            <button className="run-payroll" onClick={() => onMode('Role Management')}>
-              Next: Review & Save
-            </button>
-          </div>
-        </aside>
-      </div>
-    </section>
-  );
+function PermissionSettingsView({ access, onMode }: { access: AccessData; onMode: (mode: string) => void }) {
+  const [roleId, setRoleId] = useState('');
+  const role = access.roles.find((item) => item.id === roleId) || access.roles[0];
+  return <section className="module-page access-page"><h1>Permission Settings</h1>
+    <label>Role <select value={role?.id || ''} onChange={(event) => setRoleId(event.target.value)}>
+      {access.roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </select></label>
+    {role ? <><p>{role.description}</p>{role.permissions['Built-in permissions'] && <p>Permissions: {role.permissions['Built-in permissions'].join(', ')}</p>}{access.modules.map((module) => <section className="admin-panel" key={module.name}>
+      <h2>{module.name}</h2>{(role.permissions[module.name] || []).length ? <ul>{role.permissions[module.name].map((permission) => <li key={permission}>{permission}</li>)}</ul> : <p>No permissions assigned.</p>}
+    </section>)}</> : <p>No roles for this user type. Create a role to configure permissions.</p>}
+    <button onClick={() => onMode('Role Management')}>Manage Role Permissions</button>
+  </section>;
 }
-
 function csvEscape(value: unknown) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;
 }
@@ -9069,12 +8925,13 @@ function SuperAdminAccess({
   mode: string;
   onMode: (mode: string) => void;
 }) {
-  const [access, setAccess] = useState<AccessData>();
+  const [allAccess, setAccess] = useState<AccessData>();
+  const [userType, setUserType] = useState<'superAdmin' | 'employer'>('superAdmin');
   const [selectedRole, setSelectedRole] = useState('role-super-admin');
   const [selectedUser, setSelectedUser] = useState('user-js');
   const [selectedActivity, setSelectedActivity] = useState('act-1');
   const [roleName, setRoleName] = useState('');
-  const [roleType, setRoleType] = useState<'System' | 'Custom'>('System');
+  const [roleType, setRoleType] = useState<'System' | 'Custom'>('Custom');
   const [description, setDescription] = useState('');
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [step, setStep] = useState(1);
@@ -9094,13 +8951,34 @@ function SuperAdminAccess({
       .then(setAccess)
       .catch(() => undefined);
   }, [token, accessRefresh]);
-  if (!access)
+  if (!allAccess)
     return (
       <section className="module-page">
         <h1>Users & Access</h1>
         <p>Loading access controls...</p>
       </section>
     );
+  const scopedUsers = allAccess.users.filter((user) => user.id.startsWith(userType + ':'));
+  const scopedRoles = allAccess.roles.filter((role) => (role.userType || 'superAdmin') === userType);
+  const scopedLogs = allAccess.activityLogs.filter((log) => log.userType === userType);
+  const access: AccessData = { ...allAccess, users: scopedUsers, roles: scopedRoles, activityLogs: scopedLogs,
+    modules: userType === 'employer' ? allAccess.employerModules : allAccess.modules,
+    metrics: { ...allAccess.metrics, totalUsers: scopedUsers.length, activeUsers: scopedUsers.filter((u) => u.status === 'Active').length,
+      inactiveUsers: scopedUsers.filter((u) => u.status === 'Inactive').length, pendingInvitations: scopedUsers.filter((u) => u.status === 'Pending').length,
+      userRoles: new Set(scopedUsers.map((u) => u.role)).size, totalRoles: scopedRoles.length,
+      activeRoles: scopedRoles.filter((r) => r.status === 'Active').length, inactiveRoles: scopedRoles.filter((r) => r.status !== 'Active').length,
+      usersAssigned: scopedRoles.reduce((sum, r) => sum + r.users, 0), activities: scopedLogs.length,
+      activeActivityUsers: new Set(scopedLogs.map((log) => log.user)).size, employersWithActivity: new Set(scopedLogs.map((log) => log.employer)).size }
+  };
+  function changeUserType(value: 'superAdmin' | 'employer') {
+    setUserType(value); setSelectedRole(''); setSelectedUser(''); setSelectedActivity('');
+    setEditingAccessUser(false); setCreatingAccessUser(false); setEditingRole(false);
+    setAccessRoleFilter('All Roles'); setAccessStatusFilter('All Statuses'); setAccessUserSearch('');
+    setEnabled({}); setRoleName(''); setDescription(''); setStep(1); setAccessUserNotice('');
+  }
+  const typeSelector = <label>User Type <select value={userType} onChange={(event) => changeUserType(event.target.value as 'superAdmin' | 'employer')}>
+    <option value="superAdmin">Super Admin User</option><option value="employer">Employer User</option>
+  </select></label>;
   const tabs = [
     'All Users',
     'Role Management',
@@ -9115,9 +8993,9 @@ function SuperAdminAccess({
   const accessRoleOptions = Array.from(new Set(access.users.map((user) => user.role).filter(Boolean))).sort();
   const platformRoleOptions = Array.from(
     new Set([
-      'CyberNest Super Admin',
+      ...(userType === 'superAdmin' ? ['CyberNest Super Admin'] : []),
       ...access.roles.filter((role) => role.status === 'Active').map((role) => role.name),
-      ...access.users.filter((user) => user.employer === 'Payhours Inc.').map((user) => user.role)
+      ...access.users.map((user) => user.role)
     ])
   ).sort();
   const filteredAccessUsers = access.users.filter((user) => {
@@ -9175,10 +9053,12 @@ function SuperAdminAccess({
   }
   function startCreateAccessUser() {
     setAccessUserDraft({
+      userType,
+      companyId: '',
       name: '',
       email: '',
-      role: platformRoleOptions[0] || 'CyberNest Super Admin',
-      employer: 'Payhours Inc.',
+      role: platformRoleOptions[0] || '',
+      employer: userType === 'superAdmin' ? 'Payhours Inc.' : '',
       status: 'Active',
       phone: '',
       department: 'Platform Administration',
@@ -9231,6 +9111,7 @@ function SuperAdminAccess({
           }
       );
       setSelectedUser(response.user.id);
+      setAccessRefresh((value) => value + 1);
       setCreatingAccessUser(false);
       setEditingAccessUser(false);
       setAccessUserNotice(
@@ -9253,6 +9134,7 @@ function SuperAdminAccess({
         }
     );
     setSelectedUser(response.user.id);
+    setAccessRefresh((value) => value + 1);
     setEditingAccessUser(false);
   }
   async function deleteAccessUser(user: AccessUser) {
@@ -9265,6 +9147,7 @@ function SuperAdminAccess({
     setAccessRefresh((value) => value + 1);
   }
   function startEditRole(role: AccessRoleItem) {
+    if (role.id.startsWith('employer-role:') || role.id.startsWith('role-')) return;
     setSelectedRole(role.id);
     setRoleDraft(role);
     setEditingRole(true);
@@ -9318,9 +9201,14 @@ function SuperAdminAccess({
     setAccessRefresh((value) => value + 1);
   }
   async function saveRole() {
+    if (roleName.trim().length < 2) {
+      setAccessUserNotice('Enter a role name with at least two characters.');
+      return;
+    }
     const response = await api<{ role: AccessData['roles'][number] }>('/super-admin/roles', token, {
       method: 'POST',
       body: JSON.stringify({
+        userType,
         name: roleName || 'Payroll Manager',
         type: roleType,
         description,
@@ -9341,6 +9229,7 @@ function SuperAdminAccess({
         }
     );
     setSelectedRole(response.role.id);
+    setAccessRefresh((value) => value + 1);
     onMode('Role Management');
   }
   const exportUsers = (format: 'csv' | 'pdf') =>
@@ -9370,6 +9259,7 @@ function SuperAdminAccess({
     );
   const accessTabs = (
     <div className="access-tabs">
+      {typeSelector}
       {tabs.map((tab) => (
         <button key={tab} className={mode === tab ? 'active' : ''} onClick={() => onMode(tab)}>
           {tab}
@@ -9458,13 +9348,20 @@ function SuperAdminAccess({
       </tbody>
     </table>
   );
+  if (mode === 'Login Policies') return <section className="module-page access-page"><h1>Login Policies</h1>{accessTabs}
+    <section className="admin-panel"><h2>{userType === 'employer' ? 'Employer' : 'Super Admin'} Login Policies</h2>
+      <dl><dt>Login method</dt><dd>Email &amp; Password</dd><dt>Session duration</dt><dd>8 hours</dd>
+      <dt>New account credentials</dt><dd>Generated temporary password{userType === 'employer' ? '; password change required at first login' : ''}</dd></dl>
+    </section></section>;
   if (mode === 'Permission Settings')
-    return <PermissionSettingsView access={access} onMode={onMode} />;
+    return <>{accessTabs}<PermissionSettingsView key={userType} access={access} onMode={onMode} /></>;
   if (mode === 'Create Role')
     return (
       <section className="module-page access-page">
         <div className="sa-breadcrumb">Role Management &gt; Create Role</div>
         <h1>Create Role</h1>
+        {accessTabs}
+        {accessUserNotice && <p role="alert">{accessUserNotice}</p>}
         <p>Define the role details and select permissions for the Payhours platform.</p>
         <div className="access-create-grid">
           <section className="access-workspace">
@@ -9486,7 +9383,7 @@ function SuperAdminAccess({
                       checked={roleType === 'System'}
                       onChange={() => setRoleType('System')}
                     />
-                    System Role<small>Used for Payhours internal staff</small>
+                    System Role<small>Managed role for the selected user type</small>
                   </label>
                   <label>
                     <input
@@ -9584,11 +9481,11 @@ function SuperAdminAccess({
             </dl>
             <div className="info-card">
               <b>{roleType} Role</b>
-              <span>This role will be available for assignment to Payhours staff users.</span>
+              <span>This role will be available for assignment to {userType === 'employer' ? 'employer' : 'super admin'} users.</span>
             </div>
             <div className="side-actions">
               <button onClick={() => onMode('Role Management')}>Cancel</button>
-              <button className="run-payroll" onClick={() => onMode('Permission Settings')}>
+              <button className="run-payroll" onClick={() => saveRole().catch((error) => setAccessUserNotice(error.message))}>
                 Create Role
               </button>
             </div>
@@ -9687,9 +9584,9 @@ function SuperAdminAccess({
               </tbody>
             </table>
           </section>
-          <aside className="access-detail">
+          {activeActivity && <aside className="access-detail">
             <button className="close-button">x</button>
-            <div className="big-avatar">JS</div>
+            <div className="big-avatar">{activeActivity.user.slice(0, 2)}</div>
             <h2>{activeActivity.user}</h2>
             <Pill>{activeActivity.role}</Pill>
             <dl>
@@ -9715,7 +9612,7 @@ function SuperAdminAccess({
               <span>{activeActivity.details}</span>
             </div>
             <button>View Full Audit Trail</button>
-          </aside>
+          </aside>}
         </div>
       </section>
     );
@@ -9805,22 +9702,22 @@ function SuperAdminAccess({
                 Clear Filters
               </button>
             </div>
-            <div className="access-user-section">
+            {userType === 'superAdmin' && <div className="access-user-section">
               <div>
                 <h2>Super Admin Users</h2>
                 <p>Payhours staff with access to the super admin console.</p>
               </div>
               {renderAccessUsersTable(platformAccessUsers, 'No super admin users match these filters.')}
-            </div>
-            <div className="access-user-section">
+            </div>}
+            {userType === 'employer' && <div className="access-user-section">
               <div>
                 <h2>Employer Users</h2>
                 <p>Normal employer and employee accounts from customer companies.</p>
               </div>
               {renderAccessUsersTable(employerAccessUsers, 'No employer users match these filters.')}
-            </div>
+            </div>}
           </section>
-          {activeUser && (
+          {(activeUser || creatingAccessUser) && (
             <aside className="access-detail">
               <button className="close-button" onClick={() => { setEditingAccessUser(false); setCreatingAccessUser(false); }}>
                 x
@@ -9833,12 +9730,24 @@ function SuperAdminAccess({
                   .slice(0, 2)}
               </div>
               <h2>{creatingAccessUser ? 'Add User' : activeUser.name}</h2>
-              <p>{creatingAccessUser ? 'Create a Payhours Super Admin user.' : activeUser.email}</p>
+              <p>{creatingAccessUser ? 'Create a ' + (userType === 'employer' ? 'Employer' : 'Super Admin') + ' user.' : activeUser.email}</p>
               <Pill tone={(creatingAccessUser ? accessUserDraft.role || '' : activeUser.role).includes('Super Admin') ? 'purple' : 'blue'}>
                 {creatingAccessUser ? accessUserDraft.role || 'CyberNest Super Admin' : activeUser.role}
               </Pill>
               {editingAccessUser ? (
                 <div className="edit-details-stack">
+                  {creatingAccessUser && <>
+                    <label>User Type<select value={accessUserDraft.userType || userType} onChange={(event) => {
+                      const nextType = event.target.value as 'superAdmin' | 'employer';
+                      changeUserType(nextType);
+                      const roles = allAccess.roles.filter((role) => (role.userType || 'superAdmin') === nextType && role.status === 'Active');
+                      setAccessUserDraft({ name: accessUserDraft.name, email: accessUserDraft.email, userType: nextType, companyId: '', role: nextType === 'superAdmin' ? 'CyberNest Super Admin' : roles[0]?.name || '', status: 'Active', permissions: {} });
+                      setCreatingAccessUser(true); setEditingAccessUser(true);
+                    }}><option value="superAdmin">Super Admin User</option><option value="employer">Employer User</option></select></label>
+                    {userType === 'employer' && <label>Employer<select value={accessUserDraft.companyId || ''} onChange={(event) => updateAccessUserDraft('companyId', event.target.value)}>
+                      <option value="">Choose employer</option>{allAccess.companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+                    </select></label>}
+                  </>}
                   <label>
                     Name
                     <input
@@ -9879,14 +9788,14 @@ function SuperAdminAccess({
                   <label>
                     Status
                     <select
-                      value={accessUserDraft.status || activeUser.status}
+                      value={accessUserDraft.status || activeUser?.status || 'Active'}
                       onChange={(event) => updateAccessUserDraft('status', event.target.value)}
                     >
                       <option>Active</option>
                       <option>Inactive</option>
                     </select>
                   </label>
-                  {(creatingAccessUser || activeUser.id.startsWith('superAdmin:')) && (
+                  {userType === 'superAdmin' && (
                     <div className="user-permission-editor">
                       <div>
                         <b>Super Admin Permissions</b>
@@ -9930,7 +9839,7 @@ function SuperAdminAccess({
                   )}
                   <div className="side-actions">
                     <button onClick={() => { setEditingAccessUser(false); setCreatingAccessUser(false); }}>Cancel</button>
-                    <button className="run-payroll" onClick={saveAccessUser}>
+                    <button className="run-payroll" onClick={() => saveAccessUser().catch((error) => setAccessUserNotice(error.message))}>
                       {creatingAccessUser ? 'Create User' : 'Save User'}
                     </button>
                   </div>
@@ -9988,6 +9897,7 @@ function SuperAdminAccess({
   if (mode === 'Role Management')
     return (
       <section className="module-page access-page">
+        {accessUserNotice && <p role="alert">{accessUserNotice}</p>}
         <div className="employee-head">
           <div>
             <h1>Role Management</h1>
@@ -9997,9 +9907,7 @@ function SuperAdminAccess({
             Create Role
           </button>
         </div>
-        <div className="access-tabs">
-          <button className="active">Payhours Roles</button>
-        </div>
+        {accessTabs}
         <div className="metric-grid four">
           <AccessMetric
             icon="U"
@@ -10094,7 +10002,7 @@ function SuperAdminAccess({
               </tbody>
             </table>
           </section>
-          <aside className="access-detail">
+          {activeRole && <aside className="access-detail">
             <div className="employee-head">
               <h2>{activeRole.name}</h2>
               <Pill tone={activeRole.status === 'Active' ? 'green' : 'red'}>
@@ -10176,14 +10084,14 @@ function SuperAdminAccess({
                 </div>
                 <div className="side-actions">
                   <button onClick={() => setEditingRole(false)}>Cancel</button>
-                  <button className="run-payroll" onClick={saveExistingRole}>
+                  <button className="run-payroll" onClick={() => saveExistingRole().catch((error) => setAccessUserNotice(error.message))}>
                     Save Role
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                <p>{activeRole.description}</p>
+                <p>{activeRole.description}</p>{activeRole.permissions['Built-in permissions'] && <p>Permissions: {activeRole.permissions['Built-in permissions'].join(', ')}</p>}
                 <dl>
                   <dt>Role Type</dt>
                   <dd>{activeRole.type} Role</dd>
@@ -10209,7 +10117,7 @@ function SuperAdminAccess({
                   </span>
                 </div>
                 <div className="side-actions">
-                  <button onClick={() => startEditRole(activeRole)}>Edit Role</button>
+                  <button disabled={activeRole.id.startsWith('employer-role:') || activeRole.id.startsWith('role-')} onClick={() => startEditRole(activeRole)}>Edit Role</button>
                   <button
                     className="danger-button"
                     disabled={activeRole.type === 'System' || activeRole.users > 0}
@@ -10220,16 +10128,16 @@ function SuperAdminAccess({
                 </div>
               </>
             )}
-          </aside>
+          </aside>}
         </div>
-        <section className="admin-panel permission-summary">
+        {activeRole && <section className="admin-panel permission-summary">
           <h2>Permission Summary</h2>
           <p>Overview of key permissions for this role.</p>
           <div>
             {access.modules.slice(0, 7).map((module) => (
               <article key={module.name}>
                 <b>{module.name}</b>
-                {(activeRole.permissions[module.name] || module.permissions.slice(0, 3))
+                {(activeRole.permissions[module.name] || [])
                   .slice(0, 3)
                   .map((permission) => (
                     <span key={permission} className="summary-permission">
@@ -10240,7 +10148,7 @@ function SuperAdminAccess({
               </article>
             ))}
           </div>
-        </section>
+        </section>}
       </section>
     );
   if (mode === 'All Users')
@@ -10405,9 +10313,7 @@ function SuperAdminAccess({
           Create Role
         </button>
       </div>
-      <div className="access-tabs">
-        <button className="active">Payhours Roles</button>
-      </div>
+      {accessTabs}
       <div className="metric-grid four">
         <AccessMetric
           icon="U"
@@ -13717,7 +13623,7 @@ function SuperAdminT4({ token }: { token: string }) {
         <label>Employee Scope<select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={!eligibleEmployees.length}><option value="all">All employees</option>{eligibleEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} ({employee.employeeNumber})</option>)}</select></label>
         <button disabled>Generate from Employer</button>
       </div>
-      <p>T4 format is set in Super Admin Add/Edit Employer. Employers generate T4 slips from Government Filings using payslip summary data. T4 Summary represents all T4 slips for the employer.</p>
+      <p>Manage formats and previews in T4 Formats. Choose an employer-specific format in Add/Edit Employer, or use the platform default. Employers generate T4 slips from Government Filings using payslip summary data.</p>
       {!years.length ? <p>T4 generation becomes available after December has ended for a year with finalized payslips.</p> : !eligibleEmployees.length && <p>No employees with payslips are available for this employer and year.</p>}
     </section>
   </section>;
@@ -14276,6 +14182,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const [employerNotice, setEmployerNotice] = useState('');
   const [resendingEmployerId, setResendingEmployerId] = useState('');
   const [paystubTemplateOptions, setPaystubTemplateOptions] = useState(['Standard']);
+  const [t4FormatOptions, setT4FormatOptions] = useState<Array<{ id: string; name: string }>>([]);
   const nav = [
     { label: 'Dashboard' },
     { label: 'Employers' },
@@ -14291,6 +14198,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     { label: 'Compliance & Tax' },
     { label: 'Deduction Types' },
     { label: 'Paystub Templates' },
+    { label: 'T4 Formats' },
     { label: 'Year End (T4)' },
     { label: 'ROE' },
     { label: 'Notifications' },
@@ -14324,6 +14232,11 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         setPaystubTemplateOptions(activeNames.length ? activeNames : ['Standard']);
       })
       .catch(() => setPaystubTemplateOptions(['Standard']));
+  }, [token, page]);
+  useEffect(() => {
+    api<{ formats: Array<{ id: string; name: string }> }>('/super-admin/t4-formats', token)
+      .then((result) => setT4FormatOptions(result.formats))
+      .catch(() => setT4FormatOptions([]));
   }, [token, page]);
   const taxSettingsPayload = () => ({
     configuration: {
@@ -14626,7 +14539,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         overtimeHourLabel: String(paystubSettings.overtimeHourLabel || 'Overtime Hours'),
         doubleTimeHourLabel: String(paystubSettings.doubleTimeHourLabel || 'Double Time Hours'),
         rateDisplayFormat: String(paystubSettings.rateDisplayFormat || 'Show $ per hour'),
-        t4Format: String(yearEndSettings.t4Format || 'Payslip Summary'),
+        t4Format: String(yearEndSettings.t4Format || 'platform'),
         t4SummaryFormat: String(yearEndSettings.t4SummaryFormat || 'All T4 Summary'),
         t4GenerationSource: String(yearEndSettings.t4GenerationSource || 'Employer Module'),
         plan: detail.subscription.plan || employer.plan || 'Standard',
@@ -14972,7 +14885,11 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       <div className="sa-section">
         <h3>T4 & Year-End Format</h3>
         <div className="wizard-fields three">
-          <AdminSelect label="T4 Format" value={form.t4Format} onChange={(value) => update('t4Format', value)} options={['Payslip Summary']} />
+          <label>T4 Format<select value={form.t4Format === 'Payslip Summary' ? 'platform' : form.t4Format} onChange={(event) => update('t4Format', event.target.value)}>
+            <option value="platform">Use Platform Default</option>
+            {t4FormatOptions.map((format) => <option key={format.id} value={format.id}>{format.name}</option>)}
+            {form.t4Format !== 'platform' && form.t4Format !== 'Payslip Summary' && !t4FormatOptions.some((format) => format.id === form.t4Format) && <option value={form.t4Format}>Saved Format (unavailable)</option>}
+          </select></label>
           <AdminSelect label="T4 Summary Format" value={form.t4SummaryFormat} onChange={(value) => update('t4SummaryFormat', value)} options={['All T4 Summary']} />
           <AdminSelect label="T4 Generation Source" value={form.t4GenerationSource} onChange={(value) => update('t4GenerationSource', value)} options={['Employer Module']} />
         </div>
@@ -15476,6 +15393,8 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <SuperAdminDeductionTypes token={token} />
           ) : page === 'Paystub Templates' ? (
             <SuperAdminPaystubTemplatesManager token={token} />
+          ) : page === 'T4 Formats' ? (
+            <T4FormatsPage token={token} />
           ) : page === 'Year End (T4)' ? (
             <SuperAdminT4 token={token} />
           ) : page === 'ROE' ? (

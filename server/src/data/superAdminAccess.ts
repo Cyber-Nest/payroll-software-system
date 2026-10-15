@@ -1,4 +1,5 @@
 ﻿export type AccessRole = {
+  userType?: 'superAdmin' | 'employer';
   id: string;
   name: string;
   type: 'System' | 'Custom';

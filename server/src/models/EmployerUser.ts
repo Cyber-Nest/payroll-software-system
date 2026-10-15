@@ -1,5 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
-import { RoleName, roleNames } from '../security/rbac';
+
 
 export interface IEmployerUser {
   companyId: mongoose.Types.ObjectId;
@@ -10,7 +10,7 @@ export interface IEmployerUser {
   phone?: string;
   jobTitle?: string;
   passwordHash: string;
-  role: RoleName;
+  role: string;
   isActive: boolean;
   mustChangePassword: boolean;
   lastLoginAt?: Date;
@@ -27,7 +27,7 @@ const employerUserSchema = new Schema<IEmployerUser>(
     phone: String,
     jobTitle: String,
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: roleNames, default: 'Company Owner' },
+    role: { type: String, default: 'Company Owner' },
     isActive: { type: Boolean, default: true },
     mustChangePassword: { type: Boolean, default: true },
     lastLoginAt: Date

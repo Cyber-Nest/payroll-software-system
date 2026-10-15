@@ -11,6 +11,7 @@ import { SuperAdmin } from '../src/models/SuperAdmin';
 import { User } from '../src/models/User';
 import { Company } from '../src/models/Company';
 import { AuditLog } from '../src/models/AuditLog';
+import { AccessRole } from '../src/models/AccessRole';
 import { PayStatement } from '../src/models/PayStatement';
 import { signEmployerToken, signSuperAdminToken, signToken } from '../src/middleware/auth';
 import { RoleName } from '../src/security/rbac';
@@ -49,6 +50,8 @@ describe('RBAC route enforcement', () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
+    jest.spyOn(AccessRole, 'findOne').mockResolvedValue(null);
+    jest.spyOn(AccessRole, 'exists').mockResolvedValue(null);
     employerRole = 'Company Owner';
     jest.spyOn(User, 'findById').mockResolvedValue({ _id: userId, isActive: true } as never);
     jest.spyOn(Employee, 'exists').mockResolvedValue({ _id: employeeId } as never);
@@ -79,6 +82,61 @@ describe('RBAC route enforcement', () => {
   function employeeToken() {
     return signToken(userId, employeeId, companyId);
   }
+
+  it('creates employer users in the employer collection with a company and temporary password', async () => {
+    jest.spyOn(Company, 'findById').mockResolvedValue({ _id: companyId, legalName: 'Test Company' } as never);
+    jest.spyOn(EmployerUser, 'exists').mockResolvedValue(null);
+    const create = jest.spyOn(EmployerUser, 'create').mockImplementation(async (data: any) => ({ ...data, _id: employerUserId, createdAt: new Date() }) as never);
+    const adminCreate = jest.spyOn(SuperAdmin, 'create');
+    const response = await request('/super-admin/access/users', signSuperAdminToken(superAdminId), {
+      method: 'POST', body: JSON.stringify({ userType: 'employer', companyId, name: 'Employer Test', email: 'employer@example.com', role: 'Manager' })
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json() as any;
+    expect(body.user.id).toBe('employer:' + employerUserId);
+    expect(body.temporaryPassword).toBeTruthy();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ companyId, role: 'Manager', mustChangePassword: true }));
+    expect(adminCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects employer creation without a company and rejects platform roles for employer users', async () => {
+    const create = jest.spyOn(EmployerUser, 'create');
+    for (const data of [{ role: 'Manager' }, { companyId, role: 'CyberNest Super Admin' }]) {
+      const response = await request('/super-admin/access/users', signSuperAdminToken(superAdminId), {
+        method: 'POST', body: JSON.stringify({ userType: 'employer', name: 'Test User', email: 'test@example.com', ...data })
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('looks up employer custom roles only in the employer scope', async () => {
+    await request('/employer/employees', employerToken('Manager'));
+    expect(AccessRole.findOne).toHaveBeenCalledWith({ name: 'Manager', userType: 'employer' });
+  });
+
+  it('stores the selected user type when creating a role and blocks platform modules on employer roles', async () => {
+    const create = jest.spyOn(AccessRole, 'create').mockImplementation(async (data: any) => ({ ...data, _id: superAdminId, createdAt: new Date(), updatedAt: new Date() }) as never);
+    const response = await request('/super-admin/roles', signSuperAdminToken(superAdminId), {
+      method: 'POST', body: JSON.stringify({ userType: 'employer', name: 'Employer Viewer', type: 'Custom', permissions: { Employees: ['View employees'] } })
+    });
+    expect(response.status).toBe(201);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ userType: 'employer', name: 'Employer Viewer' }));
+    const invalid = await request('/super-admin/roles', signSuperAdminToken(superAdminId), {
+      method: 'POST', body: JSON.stringify({ userType: 'employer', name: 'Invalid Employer', permissions: { Employers: ['Delete employers'] } })
+    });
+    expect(invalid.status).toBe(400);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not grant write permissions from an employer role with view-only access', async () => {
+    jest.spyOn(AccessRole, 'findOne').mockResolvedValue({ status: 'Active', permissions: { Employees: ['View employees'] } } as never);
+    const token = employerToken('Manager');
+    expect((await request('/employer/employees', token)).status).toBe(200);
+    expect((await request(`/employer/employees/${employeeId}/banking`, token, { method: 'PATCH', body: '{}' })).status).toBe(403);
+    jest.spyOn(AccessRole, 'findOne').mockResolvedValue({ status: 'Inactive', permissions: { Employees: ['View employees'] } } as never);
+    expect((await request('/employer/employees', token)).status).toBe(403);
+  });
 
   function employerToken(role: RoleName) {
     employerRole = role;

@@ -15,18 +15,21 @@ import { PlatformNotification } from '../models/PlatformNotification';
 import { DeductionType } from '../models/DeductionType';
 import { PaystubTemplate } from '../models/PaystubTemplate';
 import { SuperAdmin } from '../models/SuperAdmin';
-import { permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
+import { accessRoles, permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
 import { authenticate, AuthRequest, requirePermission, signSuperAdminToken } from '../middleware/auth';
 import { decryptSin, generateTemporaryPassword, hashPassword, verifyPassword } from '../utils/security';
 import { sendEmployerCredentialsEmail } from '../services/employerWelcome.service';
 import { normalizeProvince, withVacationPolicy } from '../services/vacationPolicy.service';
-import { roleNames } from '../security/rbac';
+import { roleNames, permissionsForRole } from '../security/rbac';
 import { auditEvent } from '../utils/audit';
 import { formatMoney, moneyToDecimal, sumMoney, MoneyValue } from '../utils/money';
 import { decimalToMoney } from '../utils/money';
 import { roePdf, t4sPdf, T4PdfData } from '../utils/pdf';
+import t4FormatRoutes from './t4Formats';
+import { selectedT4Format } from '../services/t4Format.service';
 
 const router = express.Router();
+router.use('/t4-formats', t4FormatRoutes);
 
 const supportedProvinces = ['AB', 'BC', 'MB', 'SK', 'ON'] as const;
 const statutoryDeductionTypes = [
@@ -388,7 +391,7 @@ router.post('/t4/generate', authenticate, requirePermission('tax.manage'), async
     { upsert: true }
   )));
   await auditEvent(req, { userId: req.superAdminContext!.superAdminId, companyId, eventType: 'T4_GENERATED', metadata: { year, employeeCount: employees.length } });
-  res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="T4-${year}-${employeeId === 'all' ? 'all-employees' : employees[0].employeeNumber}.pdf"`).send(t4sPdf(forms));
+  res.type('application/pdf').setHeader('Content-Disposition', `attachment; filename="T4-${year}-${employeeId === 'all' ? 'all-employees' : employees[0].employeeNumber}.pdf"`).send(t4sPdf(forms, await selectedT4Format(company.settings)));
 });
 
 const roeSchema = z.object({
@@ -866,6 +869,7 @@ router.get('/access', authenticate, requirePermission('users.manage'), async (re
   if (persistedRoles.length) {
     payload.roles = persistedRoles.map((role) => ({
       id: String(role._id),
+      userType: role.userType || 'superAdmin',
       name: role.name,
       type: role.type,
       description: role.description,
@@ -882,6 +886,7 @@ router.get('/access', authenticate, requirePermission('users.manage'), async (re
   }
   payload.activityLogs = recentLogs.map((log) => ({
     id: String(log._id),
+    userType: log.metadata?.userType || (superAdmins.some((admin) => String(admin._id) === String(log.userId)) || log.eventType.startsWith('SUPER_ADMIN') ? 'superAdmin' : 'employer'),
     dateTime: log.createdAt.toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }),
     user: log.metadata?.actorName ? String(log.metadata.actorName) : String(log.userId || 'System'),
     employer: log.companyId ? companiesById.get(String(log.companyId)) || 'Unknown employer' : 'Payhours',
@@ -895,7 +900,15 @@ router.get('/access', authenticate, requirePermission('users.manage'), async (re
     device: log.userAgent || '-',
     location: '-'
   }));
-  res.json(payload);
+  const employerModules = permissionModules.filter((module) => !['Employers', 'System Administration', 'Billing & Subscriptions'].includes(module.name));
+  const employerRoles = roleNames.filter((name) => name !== 'CyberNest Super Admin').map((name) => ({
+    id: 'employer-role:' + name, userType: 'employer' as const, name, type: 'System' as const,
+    description: 'Built-in ' + name + ' role', users: employerUsers.filter((user) => user.role === name).length,
+    status: 'Active' as const, createdDate: '-', lastUpdated: '-', permissions: { 'Built-in permissions': permissionsForRole(name) }
+  }));
+  payload.roles = [...payload.roles, ...accessRoles.filter((role) => !payload.roles.some((item) => item.userType !== 'employer' && item.name === role.name)), ...employerRoles.filter((role) => !payload.roles.some((item) => item.userType === 'employer' && item.name === role.name))];
+  payload.roles = payload.roles.map((role) => ({ ...role, users: accessUsers.filter((user) => user.role === role.name && user.id.startsWith((role.userType || 'superAdmin') + ':')).length }));
+  res.json({ ...payload, companies: companyList.map((company) => ({ id: String(company._id), name: company.operatingName || company.legalName })), employerModules });
 });
 
 const updateAccessUserSchema = z.object({
@@ -909,6 +922,8 @@ const updateAccessUserSchema = z.object({
 });
 
 const createAccessUserSchema = z.object({
+  userType: z.enum(['superAdmin', 'employer']).default('superAdmin'),
+  companyId: z.string().optional(),
   name: z.string().min(2),
   email: z.string().email(),
   role: z.string().min(2).default('CyberNest Super Admin'),
@@ -943,6 +958,17 @@ router.post('/access/users', authenticate, requirePermission('users.manage'), as
   if (!parsed.success) return res.status(400).json({ message: 'Invalid user details', issues: parsed.error.issues });
   const data = parsed.data;
   const email = data.email.toLowerCase();
+  if (!(await validAccessRole(data.role, data.userType))) return res.status(400).json({ message: 'Choose an active role for this user type.' });
+  if (data.userType === 'employer') {
+    if (!data.companyId || !mongoose.isValidObjectId(data.companyId)) return res.status(400).json({ message: 'Choose an employer.' });
+    const company = await Company.findById(data.companyId);
+    if (!company) return res.status(400).json({ message: 'Employer not found.' });
+    if (await EmployerUser.exists({ email })) return res.status(409).json({ message: 'An employer user already exists with that email.' });
+    const temporaryPassword = generateTemporaryPassword();
+    const user = await EmployerUser.create({ name: data.name, email, role: data.role, companyId: company._id, companyIds: [company._id], phone: data.phone, jobTitle: data.department, passwordHash: await hashPassword(temporaryPassword), isActive: data.status === 'Active', mustChangePassword: true });
+    await auditEvent(req, { userId: req.superAdminContext!.superAdminId, companyId: company._id, eventType: 'USER_UPDATED', metadata: { userType: 'employer', action: 'Created employer user ' + email, module: 'Users & Access' } });
+    return res.status(201).json({ user: { id: 'employer:' + user._id, name: user.name, email, role: user.role, employer: company.operatingName || company.legalName, status: user.isActive ? 'Active' : 'Inactive', phone: user.phone || '-', department: user.jobTitle || 'Employer User', createdDate: formatDate(user.createdAt), lastLogin: '-', timeZone: 'Company default', twoFactor: 'Not configured', loginMethod: 'Email & Password' }, temporaryPassword });
+  }
   const existing = await SuperAdmin.findOne({ email });
   if (existing) return res.status(409).json({ message: 'A Super Admin user already exists with that email.' });
   const temporaryPassword = generateTemporaryPassword();
@@ -970,6 +996,7 @@ router.put('/access/users/:userKey', authenticate, requirePermission('users.mana
   if (!parsed.success) return res.status(400).json({ message: 'Invalid user details', issues: parsed.error.issues });
   const { kind, id } = splitAccessUserKey(String(req.params.userKey));
   const data = parsed.data;
+  if (data.role && !(await validAccessRole(data.role, kind))) return res.status(400).json({ message: 'Choose an active role for this user type.' });
 
   if (kind === 'superAdmin') {
     const user = await SuperAdmin.findById(id);
@@ -991,7 +1018,7 @@ router.put('/access/users/:userKey', authenticate, requirePermission('users.mana
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (data.name !== undefined) user.name = data.name;
     if (data.email !== undefined) user.email = data.email.toLowerCase();
-    if (data.role !== undefined && roleNames.includes(data.role as never)) user.role = data.role as never;
+    if (data.role !== undefined) user.role = data.role;
     if (data.phone !== undefined) user.phone = data.phone;
     if (data.department !== undefined) user.jobTitle = data.department;
     if (data.status !== undefined) user.isActive = data.status === 'Active';
@@ -1024,7 +1051,14 @@ router.delete('/access/users/:userKey', authenticate, requirePermission('users.m
   return res.status(400).json({ message: 'Unsupported user type' });
 });
 
+async function validAccessRole(name: string, userType: string) {
+  if (userType === 'employer' && roleNames.some((role) => role === name && role !== 'CyberNest Super Admin')) return true;
+  if (userType === 'superAdmin' && (name === 'CyberNest Super Admin' || accessRoles.some((role) => role.name === name && role.status === 'Active'))) return true;
+  return Boolean(await AccessRole.exists({ name, status: 'Active', ...(userType === 'employer' ? { userType } : { userType: { $ne: 'employer' } }) }));
+}
+
 const createRoleSchema = z.object({
+  userType: z.enum(['superAdmin', 'employer']).default('superAdmin'),
   name: z.string().min(2),
   type: z.enum(['System', 'Custom']).default('System'),
   description: z.string().max(250).optional(),
@@ -1032,11 +1066,12 @@ const createRoleSchema = z.object({
   permissions: z.record(z.string(), z.array(z.string())).default({})
 });
 
-const updateRoleSchema = createRoleSchema.partial();
+const updateRoleSchema = createRoleSchema.omit({ userType: true }).partial();
 
 function serializeAccessRole(role: InstanceType<typeof AccessRole>) {
   return {
     id: String(role._id),
+    userType: role.userType || 'superAdmin',
     name: role.name,
     type: role.type,
     description: role.description,
@@ -1052,7 +1087,11 @@ router.post('/roles', authenticate, requirePermission('users.manage'), async (re
   if (!requireSuperAdmin(req, res)) return;
   const parsed = createRoleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid role details', issues: parsed.error.issues });
+  if (await AccessRole.exists({ name: parsed.data.name })) return res.status(409).json({ message: 'A role already exists with that name.' });
+  if (roleNames.some((name) => name === parsed.data.name)) return res.status(409).json({ message: 'This name is reserved for a built-in role.' });
+  if (parsed.data.userType === 'employer' && Object.keys(parsed.data.permissions).some((name) => ['Employers', 'System Administration', 'Billing & Subscriptions'].includes(name))) return res.status(400).json({ message: 'Employer roles cannot include platform administration modules.' });
   const persistedRole = await AccessRole.create({
+    userType: parsed.data.userType,
     name: parsed.data.name,
     type: parsed.data.type,
     description: parsed.data.description || 'No description added yet.',
@@ -1061,7 +1100,7 @@ router.post('/roles', authenticate, requirePermission('users.manage'), async (re
     permissions: parsed.data.permissions
   });
   const role = serializeAccessRole(persistedRole);
-  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_CREATED', metadata: { roleName: role.name, modules: Object.keys(role.permissions) } });
+  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_CREATED', metadata: { userType: role.userType, roleName: role.name, modules: Object.keys(role.permissions) } });
   res.status(201).json({ role, modules: permissionModules });
 });
 
@@ -1071,14 +1110,17 @@ router.put('/roles/:id', authenticate, requirePermission('users.manage'), async 
   if (!parsed.success) return res.status(400).json({ message: 'Invalid role details', issues: parsed.error.issues });
   const role = await AccessRole.findById(req.params.id);
   if (!role) return res.status(404).json({ message: 'Role not found' });
-  if (parsed.data.name !== undefined) role.name = parsed.data.name;
+  if (parsed.data.name !== undefined && parsed.data.name !== role.name) {
+    return res.status(400).json({ message: 'Role names cannot be changed after creation.' });
+  }
+  if (role.userType === 'employer' && parsed.data.permissions && Object.keys(parsed.data.permissions).some((name) => ['Employers', 'System Administration', 'Billing & Subscriptions'].includes(name))) return res.status(400).json({ message: 'Employer roles cannot include platform administration modules.' });
   if (parsed.data.type !== undefined) role.type = parsed.data.type;
   if (parsed.data.description !== undefined) role.description = parsed.data.description || 'No description added yet.';
   if (parsed.data.status !== undefined) role.status = parsed.data.status;
   if (parsed.data.permissions !== undefined) role.permissions = parsed.data.permissions;
   await role.save();
   const serialized = serializeAccessRole(role);
-  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_UPDATED', metadata: { action: `Updated role ${role.name}`, module: 'Users & Access' } });
+  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_UPDATED', metadata: { userType: role.userType, action: `Updated role ${role.name}`, module: 'Users & Access' } });
   res.json({ role: serialized });
 });
 
@@ -1087,9 +1129,10 @@ router.delete('/roles/:id', authenticate, requirePermission('users.manage'), asy
   const role = await AccessRole.findById(req.params.id);
   if (!role) return res.status(404).json({ message: 'Role not found' });
   if (role.type === 'System') return res.status(400).json({ message: 'System roles cannot be deleted. Deactivate them instead.' });
-  if (role.users > 0) return res.status(400).json({ message: 'Cannot delete a role while users are assigned to it.' });
+  const assigned = role.userType === 'employer' ? await EmployerUser.countDocuments({ role: role.name }) : await SuperAdmin.countDocuments({ role: role.name });
+  if (assigned > 0) return res.status(400).json({ message: 'Cannot delete a role while users are assigned to it.' });
   await AccessRole.deleteOne({ _id: role._id });
-  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_DELETED', metadata: { action: `Deleted role ${role.name}`, module: 'Users & Access' } });
+  await auditEvent(req, { userId: req.superAdminContext!.superAdminId, eventType: 'ROLE_DELETED', metadata: { userType: role.userType, action: `Deleted role ${role.name}`, module: 'Users & Access' } });
   res.json({ deleted: true, roleId: req.params.id });
 });
 

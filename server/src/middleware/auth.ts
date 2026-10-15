@@ -8,6 +8,7 @@ import { SuperAdmin } from '../models/SuperAdmin';
 import { User } from '../models/User';
 import { AccessRole } from '../models/AccessRole';
 import { Permission, permissionsForRole } from '../security/rbac';
+import { accessRoles } from '../data/superAdminAccess';
 
 export interface AuthRequest extends Request {
   user?: { id: string };
@@ -45,6 +46,17 @@ function permissionsFromAccessRole(rolePermissions: Record<string, string[]>): P
   return Array.from(granted);
 }
 
+function employerRolePermissions(rolePermissions: Record<string, string[]>): Permission[] {
+  const actions: Record<string, Record<string, Permission[]>> = {
+    Employees: { 'View employees': ['employee.view'], 'Add / edit employees': ['employee.create', 'employee.edit'], 'Import employees': ['employee.create'], 'Terminate employees': ['employee.edit'], 'View employee documents': ['employee.view'] },
+    Payroll: { 'Run payroll': ['payroll.prepare'], 'View payroll data': ['payroll.view'], 'Edit payroll entries': ['payroll.prepare'], 'Approve / finalize payroll': ['payroll.approve'], 'Void payroll': ['payroll.reverse'], 'View payroll reports': ['reports.view'] },
+    'Users & Access': { 'View users': ['audit.view'], 'Create users': ['users.manage'], 'Edit users': ['users.manage'], 'Assign roles': ['users.manage'], 'Reset passwords': ['users.manage'], 'View user activity logs': ['audit.view'] },
+    'Compliance & Tax': { 'View tax configurations': ['tax.view'], 'Edit tax configurations': ['tax.manage'], 'Submit CRA payroll filings': ['tax.manage'], 'View compliance reports': ['reports.view'], 'Access year-end (T4)': ['tax.view'], 'Manage ROE submissions': ['tax.manage'] },
+    Reports: { 'View all reports': ['reports.view'], 'Export data': ['reports.export'], 'Customize reports': ['reports.view'], 'Schedule reports': ['reports.export'] }
+  };
+  return Array.from(new Set(Object.entries(rolePermissions).flatMap(([module, selected]) => selected.flatMap((action) => actions[module]?.[action] || []))));
+}
+
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
@@ -64,11 +76,11 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       }
       req.user = { id: payload.sub };
       const role = superAdmin.role || 'CyberNest Super Admin';
-      const customRole = await AccessRole.findOne({ name: role, status: 'Active' });
+      const customRole = await AccessRole.findOne({ name: role, status: 'Active', userType: { $ne: 'employer' } });
       req.superAdminContext = {
         superAdminId: payload.sub,
         role,
-        permissions: customRole ? permissionsFromAccessRole(customRole.permissions) : permissionsForRole(role)
+        permissions: customRole ? permissionsFromAccessRole(customRole.permissions) : accessRoles.some((item) => item.name === role) ? permissionsFromAccessRole(accessRoles.find((item) => item.name === role)!.permissions) : permissionsForRole(role)
       };
       next();
       return;
@@ -85,7 +97,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         return;
       }
       req.user = { id: payload.sub };
-      req.employerContext = { employerUserId: payload.sub, companyId: payload.companyId, role: employer.role, permissions: permissionsForRole(employer.role) };
+      const customRole = await AccessRole.findOne({ name: employer.role, userType: 'employer' });
+      req.employerContext = { employerUserId: payload.sub, companyId: payload.companyId, role: employer.role, permissions: customRole ? (customRole.status === 'Active' ? employerRolePermissions(customRole.permissions) : []) : permissionsForRole(employer.role) };
       next();
       return;
     }

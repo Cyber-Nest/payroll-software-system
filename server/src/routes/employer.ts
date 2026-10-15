@@ -40,6 +40,7 @@ import {
 } from '../utils/money';
 import { normalizeRole } from '../security/rbac';
 import { roleNames, rolePermissions } from '../security/rbac';
+import { selectedT4Format } from '../services/t4Format.service';
 import {
   decryptSin,
   encryptSin,
@@ -4381,7 +4382,7 @@ router.get('/government-filings/:id/view', authenticate, requirePermission('payr
       { employeeId: employee._id, companyId, taxYear: filing.year, formType: 'T4', generatedAt: new Date() },
       { upsert: true }
     )));
-    return res.type('application/pdf').setHeader('Content-Disposition', `inline; filename="T4-${filing.year}.pdf"`).send(t4sPdf(forms));
+    return res.type('application/pdf').setHeader('Content-Disposition', `inline; filename="T4-${filing.year}.pdf"`).send(t4sPdf(forms, await selectedT4Format(company?.settings)));
   }
 
   if (filing.type === 'ROE') {

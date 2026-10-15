@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
 export interface IAccessRole {
+  userType: 'superAdmin' | 'employer';
   name: string;
   type: 'System' | 'Custom';
   description: string;
@@ -13,6 +14,7 @@ export interface IAccessRole {
 
 const accessRoleSchema = new Schema<IAccessRole>(
   {
+    userType: { type: String, enum: ['superAdmin', 'employer'], default: 'superAdmin', index: true },
     name: { type: String, required: true, trim: true, unique: true },
     type: { type: String, enum: ['System', 'Custom'], default: 'Custom' },
     description: { type: String, default: 'No description added yet.' },

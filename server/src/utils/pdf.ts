@@ -42,6 +42,18 @@ export type T4PdfData = {
   eiPremiums?: string;
 };
 
+export type T4FormatOptions = {
+  headerTitle: string;
+  accentColor: string;
+  showLogo: boolean;
+  footerText: string;
+  headerStyle: 'plain' | 'band';
+};
+
+export const defaultT4Format: T4FormatOptions = {
+  headerTitle: 'T4 STATEMENT', accentColor: '#0D1F33', showLogo: true, footerText: '', headerStyle: 'plain'
+};
+
 export type RoePdfData = {
   serialNumber?: string;
   payrollReference: string;
@@ -434,12 +446,15 @@ function boxedValue(
   page.rightText(value, x + width - 6, y + 6, 9);
 }
 
-function drawT4(data: T4PdfData): PdfPage {
+function drawT4(data: T4PdfData, format: T4FormatOptions = defaultT4Format): PdfPage {
   const page = new PdfPage(792, 612);
   const employerAddress = compactLines(data.employerAddress);
   const employeeAddress = compactLines(data.address);
-  drawPayhoursLogo(page, 18, 576);
-  page.text('T4 STATEMENT', 602, 596, 10, true, [0.05, 0.12, 0.2]);
+  const color = /^#[a-f\d]{6}$/i.test(format.accentColor) ? format.accentColor : defaultT4Format.accentColor;
+  const accent = [1, 3, 5].map((offset) => parseInt(color.slice(offset, offset + 2), 16) / 255) as [number, number, number];
+  if (format.headerStyle === 'band') page.fillRect(14, 580, 764, 26, accent);
+  if (format.showLogo) drawPayhoursLogo(page, 18, format.headerStyle === 'band' ? 536 : 566, format.headerStyle === 'band' ? 0.8 : 1);
+  page.text(format.headerTitle, 400, 585, 12, true, format.headerStyle === 'band' ? [1, 1, 1] : accent);
   page.rect(14, 438, 286, 92);
   page.text("Employer's name and address - Nom et adresse de l'employeur", 24, 516, 8);
   page.text(truncateText(data.employerName, 38), 24, 500, 10, true);
@@ -500,16 +515,22 @@ function drawT4(data: T4PdfData): PdfPage {
     page.rect(x + 42, y, 154, 18);
   }
   page.text('T4 (23)', 14, 82, 8);
+  if (format.footerText) {
+    const footer = format.footerText.replace(/\s+/g, ' ').trim();
+    for (let offset = 0; offset < footer.length; offset += 90) {
+      page.text(footer.slice(offset, offset + 90), 14, 56 - (offset / 90) * 12, 8, false, accent);
+    }
+  }
   return page;
 }
 
-export function t4Pdf(data: T4PdfData): Buffer {
-  return drawT4(data).buffer();
+export function t4Pdf(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Buffer {
+  return drawT4(data, format).buffer();
 }
 
-export function t4sPdf(items: T4PdfData[]): Buffer {
+export function t4sPdf(items: T4PdfData[], format: T4FormatOptions = defaultT4Format): Buffer {
   return buildPdf(
-    items.map((item) => ({ width: 792, height: 612, content: drawT4(item).content() }))
+    items.map((item) => ({ width: 792, height: 612, content: drawT4(item, format).content() }))
   );
 }
 
