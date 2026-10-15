@@ -38,6 +38,7 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
     setMode(nextMode); setSelected(item); setForm(item ? { ...item, employeeIds: [...item.employeeIds] } : { ...empty }); setError(''); setNotice(''); setSearch('');
   };
   const save = async () => {
+    if (busy || (mode !== 'add' && mode !== 'edit')) return;
     setBusy(true); setError('');
     try {
       const { benefit } = await request<{ benefit: Benefit }>(selected ? `/${encodeURIComponent(selected.id)}` : '', {
@@ -68,7 +69,11 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
     {mode && <div className="employer-role-backdrop"><section className="employer-role-dialog" role="dialog" aria-modal="true" aria-labelledby="benefit-form-title">
       <header><h2 id="benefit-form-title">{mode === 'add' ? 'Add Benefit' : mode === 'edit' ? 'Edit Benefit' : 'View Benefit'}</h2><button type="button" autoFocus disabled={busy} onClick={() => setMode(undefined)}>Close</button></header>
       {error && <p role="alert" className="field-error">{error}</p>}
-      <form onSubmit={(event) => { event.preventDefault(); void save(); }}><fieldset disabled={readOnly || busy} className="deduction-form-fields"><div className="settings-fields two">
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        if (!readOnly && !busy && submitter instanceof HTMLButtonElement && submitter.dataset.action === 'save-benefit') void save();
+      }}><fieldset disabled={readOnly || busy} className="deduction-form-fields"><div className="settings-fields two">
         <label>Benefit Name<input required minLength={2} maxLength={100} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
         <label>Type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{['Health', 'Insurance', 'Wellness', 'Retirement', 'Deduction', 'Taxable Benefit', 'Other'].map((type) => <option key={type}>{type}</option>)}</select></label>
         <label>Coverage / Value<input required maxLength={200} placeholder="For example, Family coverage or $500 annually" value={form.coverageOrValue} onChange={(event) => setForm({ ...form, coverageOrValue: event.target.value })} /></label>
@@ -83,7 +88,7 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
         {!employees.length && <p>No employees are available for this employer.</p>}
       </>}</section>}</fieldset>
       {!readOnly && <p>Use Deduction Setup to configure any payroll deductions for employee contributions.</p>}
-      <footer><button type="button" disabled={busy} onClick={() => setMode(undefined)}>{readOnly ? 'Close' : 'Cancel'}</button>{readOnly ? <button type="button" onClick={() => setMode('edit')}>Edit Benefit</button> : <button type="submit" className="run-payroll" disabled={busy || (form.employeeScope === 'selected' && !form.employeeIds.length)}>{busy ? 'Saving...' : 'Save Benefit'}</button>}</footer>
+      <footer><button type="button" disabled={busy} onClick={() => setMode(undefined)}>{readOnly ? 'Close' : 'Cancel'}</button>{readOnly ? <button key="edit-benefit" type="button" onClick={(event) => { event.preventDefault(); setMode('edit'); }}>Edit Benefit</button> : <button key="save-benefit" type="submit" data-action="save-benefit" className="run-payroll" disabled={busy || (form.employeeScope === 'selected' && !form.employeeIds.length)}>{busy ? 'Saving...' : 'Save Benefit'}</button>}</footer>
       </form>
     </section></div>}
   </div>;
