@@ -9935,3 +9935,57 @@ th {
 .report-field-order li { padding: 8px; }
 .report-field-order li span { display: inline-block; min-width: 180px; }
 .report-field-order button { margin: 4px; }
+
+/* Keep report controls consistent without changing other employer pages. */
+.report-builder { color: #183454; }
+.report-builder .employee-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.report-builder .employee-head h2 { margin: 0 0 8px; }
+.report-builder p { line-height: 1.5; }
+.report-builder .head-actions { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.report-builder button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 9px 16px; border: 1px solid #cbdbea; border-radius: 7px; background: #fff; color: #175b9c; font: inherit; font-size: 14px; font-weight: 600; line-height: 1.35; cursor: pointer; white-space: normal; text-align: center; }
+.report-builder button:hover:not(:disabled) { background: #edf6ff; border-color: #80acd6; }
+.report-builder button.run-payroll { background: #0879dc; border-color: #0879dc; color: #fff; }
+.report-builder button.run-payroll:hover:not(:disabled) { background: #0664b7; }
+.report-builder button.danger-button { color: #b42318; border-color: #efc6c3; background: #fff; }
+.report-builder button.danger-button:hover:not(:disabled) { background: #fff1f0; }
+.report-builder button:disabled { opacity: .5; cursor: not-allowed; }
+.report-builder :is(button, input, select):focus-visible { outline: 3px solid #92c7ff; outline-offset: 2px; }
+.report-builder .access-tabs { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid #dbe5ef; }
+.report-builder .access-tabs button.active { color: #fff; background: #0879dc; border-color: #0879dc; }
+.report-builder .admin-panel { padding: 24px; border: 1px solid #dbe5ef; border-radius: 10px; background: #fff; }
+.report-builder .admin-panel > h3 { margin: 0 0 12px; }
+.report-builder .settings-fields.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.report-builder label:has(> :is(input:not([type="checkbox"]), select)) { display: flex; flex-direction: column; align-items: stretch; gap: 7px; font-size: 14px; font-weight: 600; min-width: 0; }
+.report-builder input:not([type="checkbox"]), .report-builder select { box-sizing: border-box; min-height: 42px; max-width: 100%; background: #fff; color: #183454; font: inherit; font-size: 14px; }
+.report-builder .settings-fields :is(input:not([type="checkbox"]), select), .report-builder .admin-panel > label > select { width: 100%; }
+.report-builder input[type="checkbox"] { width: 17px; height: 17px; margin: 0 8px 0 0; flex-shrink: 0; accent-color: #0879dc; vertical-align: middle; }
+.report-builder .report-builder-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.report-builder .deduction-employee-list { margin-top: 12px; padding: 12px; border: 1px solid #dbe5ef; border-radius: 7px; max-height: 240px; overflow-y: auto; }
+.report-builder .deduction-employee-list label { display: flex; align-items: center; padding: 8px; line-height: 1.5; }
+.report-builder .settings-table { width: 100%; max-width: 100%; overflow-x: auto; margin-top: 20px; }
+.report-builder .settings-table table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: auto; }
+.report-builder .settings-table :is(th, td) { padding: 13px 15px; text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; line-height: 1.5; }
+.report-builder .settings-table th { background: #eff6fd; font-size: 12px; letter-spacing: .02em; white-space: nowrap; }
+.report-builder .settings-table td { font-size: 14px; }
+.report-builder .settings-table td p { margin: 6px 0 0; }
+.report-builder .employer-role-actions { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; min-width: 200px; }
+.report-builder .employer-role-actions button { min-height: 34px; padding: 7px 11px; font-size: 13px; white-space: nowrap; }
+.report-builder .report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 20px; }
+.report-builder .report-grid .admin-panel { display: flex; flex-direction: column; align-items: flex-start; }
+.report-builder .report-grid button { margin-top: auto; }
+.report-builder .report-field-order { padding-left: 24px; }
+.report-builder .report-field-order li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #e5edf5; padding: 12px 0; }
+.report-builder .report-field-order li span { flex: 1; min-width: 180px; }
+.report-builder .report-field-order button { margin: 0; }
+.report-builder :is(.field-error, .success-note) { padding: 12px 16px; border-radius: 7px; overflow-wrap: anywhere; }
+.report-builder .field-error { background: #fff2f0; color: #b42318; }
+.report-builder .success-note { background: #ecfdf3; color: #067647; }
+@media (max-width: 760px) {
+  .report-builder .admin-panel { padding: 16px; }
+  .report-builder .settings-fields.two { grid-template-columns: 1fr; }
+  .report-builder .employee-head > .head-actions { width: 100%; }
+  .report-builder .employee-head > .head-actions button { flex: 1; }
+  .report-builder .head-actions > :is(input, label) { flex: 1 1 100%; width: 100%; }
+  .report-builder .access-tabs button { flex: 1 1 145px; }
+  .report-builder form > footer button { flex: 1; }
+}
