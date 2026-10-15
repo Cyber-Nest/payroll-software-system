@@ -42,6 +42,8 @@ import { normalizeRole } from '../security/rbac';
 import { roleNames } from '../security/rbac';
 import employerRoleRoutes from './employerRoles';
 import employerDeductionRoutes from './employerDeductions';
+import employerBenefitRoutes from './employerBenefits';
+import { hasBenefit } from '../services/employerBenefits.service';
 import { applicableCustomDeductions } from '../services/customDeductions.service';
 import { employerRoles } from '../services/employerRoles.service';
 import { selectedT4Format } from '../services/t4Format.service';
@@ -67,6 +69,7 @@ import { env } from '../config/env';
 const router = Router();
 router.use('/settings/roles', employerRoleRoutes);
 router.use('/settings/deductions', employerDeductionRoutes);
+router.use('/settings/benefits', employerBenefitRoutes);
 const PAY_PERIOD_NUMBERING_YEARLY_RESET = 'Yearly reset (starts at 1 every January)';
 
 function settingDefaults(company?: InstanceType<typeof Company>) {
@@ -801,7 +804,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
       .map(([key, name, type]) => {
         const rawValue = benefits[key];
         const value = rawValue === undefined || rawValue === null ? '' : String(rawValue);
-        const active = Boolean(value.trim()) && !['not enrolled', 'none', 'no', '0'].includes(value.trim().toLowerCase());
+        const active = hasBenefit(rawValue);
         return {
           id: `${String(employee._id)}-${key}`,
           employeeId: String(employee._id),
@@ -815,7 +818,7 @@ router.get('/settings', authenticate, requirePermission('reports.view'), async (
           status: active
         };
       })
-      .filter((row) => row.status || row.coverageOrValue !== 'Not Enrolled');
+      .filter((row) => row.status);
   });
 
   res.json({

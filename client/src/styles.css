@@ -9920,3 +9920,6 @@ th {
 .settings-deduction-reports .status { white-space: nowrap; }
 .settings-deduction-options { min-width: 0; }
 @media (max-width: 1250px) { .settings-deduction-reports { grid-template-columns: minmax(0, 1fr); } }
+.employer-benefits-manager { min-width: 0; display: grid; gap: 12px; }
+.benefit-manager-actions { display: flex; justify-content: flex-end; }
+.settings-deduction-reports.benefits-managed-separately { grid-template-columns: minmax(0, 1fr); }
