@@ -15,6 +15,7 @@
     "seed:help": "ts-node src/scripts/seedHelp.ts",
     "seed:customer-care": "node --use-system-ca -r ts-node/register src/scripts/seedCustomerCare.ts",
     "seed:government-filings": "node --use-system-ca -r ts-node/register src/scripts/seedGovernmentFilings.ts",
+    "seed:report-examples": "node --use-system-ca -r ts-node/register src/scripts/seedReportExamples.ts",
     "seed:december-2025-t4": "node --use-system-ca -r ts-node/register src/scripts/seedDecember2025T4.ts",
     "db:ping": "ts-node src/scripts/dbPing.ts",
     "lint": "eslint . --ext .ts",

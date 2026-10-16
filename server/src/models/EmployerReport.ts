@@ -5,12 +5,13 @@ export interface IReportDefinition {
   source: 'employees' | 'payroll' | 'deductions'; fields: string[];
   dateRange: 'all' | 'last30' | 'year' | 'custom'; fromDate?: string; toDate?: string;
   employeeIds: mongoose.Types.ObjectId[];
+  fieldLabels?: Record<string, string>;
 }
 export const EmployerReport = mongoose.model<IReportDefinition>('EmployerReport', new Schema<IReportDefinition>({
   companyId: { type: Schema.Types.ObjectId, required: true, index: true }, name: { type: String, required: true }, description: { type: String, default: '' },
   source: { type: String, enum: ['employees', 'payroll', 'deductions'], required: true }, fields: [String],
   dateRange: { type: String, enum: ['all', 'last30', 'year', 'custom'], default: 'all' }, fromDate: String, toDate: String,
-  employeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }]
+  employeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }], fieldLabels: { type: Schema.Types.Mixed }
 }, { timestamps: true }));
 
 export const EmployerReportTemplate = mongoose.model<IReportDefinition>('EmployerReportTemplate', EmployerReport.schema.clone());

@@ -51,7 +51,7 @@ export async function buildReport(report: IReportDefinition) {
   }
   if (rows.length > 5000 || employees.length > 5000) throw new Error('Report exceeds 5,000 rows. Narrow the date range or employee filter.');
   const labels = reportFields[report.source] as Record<string, string>;
-  return { columns: report.fields.map((key) => ({ key, label: labels[key] })), rows };
+  return { columns: report.fields.map((key) => ({ key, label: report.fieldLabels?.[key] || labels[key] })), rows };
 }
 export function csvCell(value: string | number) {
   const safe = typeof value === 'string' && /^[\s]*[=+\-@]/.test(value) ? `'${value}` : String(value);

@@ -42,6 +42,18 @@ describe('Employer custom and scheduled reports', () => {
     for (const fields of [['sin'], ['__proto__'], ['employeeName', 'employeeName']]) expect(reportDefinitionSchema.safeParse({ ...definition, fields }).success).toBe(false);
     expect(reportDefinitionSchema.safeParse({ ...definition, dateRange: 'custom', fromDate: '2026-02-01', toDate: '2026-01-01' }).success).toBe(false);
     expect(reportScheduleSchema.safeParse({ name: 'Schedule', reportId, nextRunAt: 'invalid', frequency: 'daily', format: 'csv' }).success).toBe(false);
+    expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { employeeName: 'Staff Member' } }).success).toBe(true);
+    expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { grossPay: 'Invalid source field' } }).success).toBe(false);
+    expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { employeeName: '' } }).success).toBe(false);
+    expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { employeeName: 'a'.repeat(61) } }).success).toBe(false);
+  });
+  it('preserves chosen column order and custom headings in report previews and exports', async () => {
+    const result = await buildReport({ ...definition, companyId: new mongoose.Types.ObjectId(companyId), fields: ['employeeName', 'employeeNumber'], employeeIds: [], fieldLabels: { employeeName: 'Staff Member' } });
+    expect(result.columns).toEqual([{ key: 'employeeName', label: 'Staff Member' }, { key: 'employeeNumber', label: 'Employee ID' }]);
+    expect(result.rows[0].employeeName).toBe('Jane Sample');
+    const csv = reportFile('Directory', 'csv', result.columns, result.rows, 'Test employer').file.toString();
+    expect(csv).toContain('"Staff Member","Employee ID"');
+    expect(csv).toContain('"Jane Sample","E001"');
   });
   it('creates and updates definitions with the employer scope enforced', async () => {
     const create = jest.spyOn(EmployerReport, 'create').mockResolvedValue(doc({ ...definition, _id: reportId }) as never);

@@ -16,9 +16,10 @@ export const reportDefinitionSchema = z.object({
   name: z.string().trim().min(2).max(90), description: z.string().trim().max(500).default(''),
   source: z.enum(['employees', 'payroll', 'deductions']), fields: z.array(z.string()).min(1).max(7),
   dateRange: z.enum(['all', 'last30', 'year', 'custom']).default('all'), fromDate: z.iso.date().optional(), toDate: z.iso.date().optional(),
-  employeeIds: z.array(id).max(5000).default([])
+  employeeIds: z.array(id).max(5000).default([]), fieldLabels: z.record(z.string(), z.string().trim().min(1).max(60)).optional()
 }).refine((value) => value.fields.every((field) => Object.prototype.hasOwnProperty.call(reportFields[value.source], field)) && new Set(value.fields).size === value.fields.length, { message: 'Select valid, unique fields for the report source.' })
-  .refine((value) => value.dateRange !== 'custom' || Boolean(value.fromDate && value.toDate && value.fromDate <= value.toDate), { message: 'Select a valid start and end date.' });
+  .refine((value) => value.dateRange !== 'custom' || Boolean(value.fromDate && value.toDate && value.fromDate <= value.toDate), { message: 'Select a valid start and end date.' })
+  .refine((value) => Object.keys(value.fieldLabels || {}).every((field) => Object.prototype.hasOwnProperty.call(reportFields[value.source], field)), { message: 'Column headings must belong to the selected data source.' });
 export const reportScheduleSchema = z.object({
   name: z.string().trim().min(2).max(90), reportId: id, frequency: z.enum(['daily', 'weekly', 'monthly']),
   format: z.enum(['csv', 'excel', 'pdf']), nextRunAt: z.iso.datetime(), enabled: z.boolean().default(true),
