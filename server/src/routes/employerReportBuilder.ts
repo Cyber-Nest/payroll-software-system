@@ -14,7 +14,7 @@ router.use(authenticate, requirePermission('reports.view'), (req: AuthRequest, r
 const id = z.string().regex(/^[a-f\d]{24}$/i);
 export const reportDefinitionSchema = z.object({
   name: z.string().trim().min(2).max(90), description: z.string().trim().max(500).default(''),
-  source: z.enum(['employees', 'payroll', 'deductions']), fields: z.array(z.string()).min(1).max(7),
+  source: z.enum(['employees', 'payroll', 'deductions', 'custom']).default('custom'), fields: z.array(z.string()).min(1).max(Object.keys(reportFields.custom).length),
   dateRange: z.enum(['all', 'last30', 'year', 'custom']).default('all'), fromDate: z.iso.date().optional(), toDate: z.iso.date().optional(),
   employeeIds: z.array(id).max(5000).default([]), fieldLabels: z.record(z.string(), z.string().trim().min(1).max(60)).optional()
 }).refine((value) => value.fields.every((field) => Object.prototype.hasOwnProperty.call(reportFields[value.source], field)) && new Set(value.fields).size === value.fields.length, { message: 'Select valid, unique fields for the report source.' })

@@ -11,11 +11,19 @@ import { permissionsForRole } from '../security/rbac';
 import { employerPermissionOverride } from './employerRoles.service';
 import { employerRolePermissions } from '../middleware/auth';
 
-export const reportFields = {
+const legacyReportFields = {
   employees: { employeeNumber: 'Employee ID', employeeName: 'Employee Name', email: 'Company Email', department: 'Department', jobTitle: 'Job Title', province: 'Province', startDate: 'Start Date' },
   payroll: { employeeNumber: 'Employee ID', employeeName: 'Employee Name', payDate: 'Pay Date', grossPay: 'Gross Pay', deductions: 'Total Deductions', netPay: 'Net Pay' },
   deductions: { employeeNumber: 'Employee ID', employeeName: 'Employee Name', payDate: 'Pay Date', code: 'Deduction Code', description: 'Deduction', amount: 'Amount' }
 };
+export const customReportFields: Record<string, string> = {
+  ...legacyReportFields.employees, ...legacyReportFields.payroll, ...legacyReportFields.deductions,
+  employmentType: 'Employment Type', payGroup: 'Pay Group', status: 'Employment Status', phone: 'Phone', terminationDate: 'Termination Date', yearsOfService: 'Years of Service',
+  payPeriod: 'Pay Period', regularHours: 'Regular Hours', overtimeHours: 'Overtime Hours', statHolidayHours: 'Statutory Holiday Hours', hours: 'Total Hours', hourlyRate: 'Hourly Rate',
+  earningCode: 'Earning Code', earningType: 'Earning Type', rate: 'Rate', earningHours: 'Earning Hours', earningAmount: 'Earning Amount',
+  cpp: 'Employee CPP', cpp2: 'Additional CPP', ei: 'Employee EI', federalTax: 'Income Tax (Federal)', provincialTax: 'Income Tax (Provincial)', incomeTax: 'Income Tax', otherDeductions: 'Other Deductions', employerCpp: 'Employer CPP', employerEi: 'Employer EI', employerCosts: 'Employer Costs', totalLiability: 'Total Liability'
+};
+export const reportFields = { ...legacyReportFields, custom: customReportFields };
 export function reportDateFilter(report: Pick<IReportDefinition, 'dateRange' | 'fromDate' | 'toDate'>, now = new Date()) {
   let from = report.fromDate; let to = report.toDate;
   if (report.dateRange === 'all') return undefined;
@@ -24,19 +32,22 @@ export function reportDateFilter(report: Pick<IReportDefinition, 'dateRange' | '
   return { $gte: new Date(`${from}T00:00:00.000Z`), $lte: new Date(`${to}T23:59:59.999Z`) };
 }
 export async function buildReport(report: IReportDefinition) {
+  const profileOnly = report.source === 'employees' || (report.source === 'custom' && report.fields.every((field) => Object.prototype.hasOwnProperty.call(legacyReportFields.employees, field) || ['employmentType', 'payGroup', 'status', 'phone', 'terminationDate', 'yearsOfService'].includes(field)));
   const companyId = report.companyId;
   const range = reportDateFilter(report);
-  const statements = report.source === 'employees' ? [] : await PayStatement.find({ companyId, supersededByStatementId: { $exists: false }, ...(report.employeeIds.length ? { employeeId: { $in: report.employeeIds } } : {}), ...(range ? { payDate: range } : {}) }).sort({ payDate: -1, _id: 1 }).limit(5001);
+  const statements = profileOnly ? [] : await PayStatement.find({ companyId, supersededByStatementId: { $exists: false }, ...(report.employeeIds.length ? { employeeId: { $in: report.employeeIds } } : {}), ...(range ? { payDate: range } : {}) }).sort({ payDate: -1, _id: 1 }).limit(5001);
   if (statements.length > 5000) throw new Error('Report exceeds 5,000 rows. Narrow the date range or employee filter.');
-  const selectedIds = report.source === 'employees' ? report.employeeIds : [...new Set(statements.map((statement) => String(statement.employeeId)))];
-  const employees = await Employee.find({ companyId, ...(report.source !== 'employees' || selectedIds.length ? { _id: { $in: selectedIds } } : {}), ...(report.source === 'employees' && range ? { startDate: range } : {}) })
-    .select('employeeNumber legalFirstName legalLastName companyEmail occupation taxProvince startDate adminProfile.employment').sort({ employeeNumber: 1 }).limit(5001);
+  const selectedIds = profileOnly ? report.employeeIds : [...new Set(statements.map((statement) => String(statement.employeeId)))];
+  const employees = await Employee.find({ companyId, ...(!profileOnly || selectedIds.length ? { _id: { $in: selectedIds } } : {}), ...(profileOnly && range ? { startDate: range } : {}) })
+    .select('employeeNumber legalFirstName legalLastName companyEmail occupation taxProvince startDate adminProfile.employment adminProfile.compensation payGroup phones').sort({ employeeNumber: 1 }).limit(5001);
   const employeeById = new Map(employees.map((employee) => [String(employee._id), employee]));
   const basic = (employee: typeof employees[number] | undefined) => ({
+    email: employee?.companyEmail || '', department: String(employee?.adminProfile?.employment?.department || ''), jobTitle: String(employee?.adminProfile?.employment?.jobTitle || employee?.occupation || ''), province: employee?.taxProvince || '', startDate: employee?.startDate?.toISOString().slice(0, 10) || '',
+    employmentType: String(employee?.adminProfile?.employment?.employmentType || ''), payGroup: String(employee?.adminProfile?.compensation?.payFrequency || employee?.payGroup || ''), status: String(employee?.adminProfile?.employment?.employmentStatus || 'Active'), phone: employee?.phones?.[0]?.number || '', terminationDate: String(employee?.adminProfile?.employment?.terminationDate || employee?.adminProfile?.employment?.endDate || ''), yearsOfService: employee?.startDate ? Number(((Date.now() - employee.startDate.getTime()) / (365.25 * 86400000)).toFixed(1)) : 0,
     employeeNumber: employee?.employeeNumber || '', employeeName: employee ? `${employee.legalFirstName} ${employee.legalLastName}`.trim() : 'Unknown employee'
   });
   let rows: Array<Record<string, string | number>>;
-  if (report.source === 'employees') {
+  if (profileOnly) {
     rows = employees.filter((employee) => !range || (employee.startDate && employee.startDate >= range.$gte && employee.startDate <= range.$lte)).map((employee) => ({
       ...basic(employee), email: employee.companyEmail || '', department: String(employee.adminProfile?.employment?.department || ''),
       jobTitle: employee.occupation || '', province: employee.taxProvince || '', startDate: employee.startDate?.toISOString().slice(0, 10) || ''
@@ -45,7 +56,14 @@ export async function buildReport(report: IReportDefinition) {
     rows = statements.flatMap<Record<string, string | number>>((statement) => {
       const identity = { ...basic(employeeById.get(String(statement.employeeId))), payDate: statement.payDate.toISOString().slice(0, 10) };
       if (report.source === 'deductions') return statement.deductions.filter((line) => line.code !== 'TOTAL').map((line) => ({ ...identity, code: line.code || '', description: line.description, amount: moneyToNumber(line.amount) }));
-      return [{ ...identity, grossPay: moneyToNumber(statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0),
+      const tax = (codes: string[]) => moneyToNumber(sumMoney(statement.deductions.filter((line) => codes.includes(line.code)).map((line) => line.amount)));
+      const cpp = tax(['CPP']); const cpp2 = tax(['CPP2']); const ei = tax(['EI']); const federalTax = tax(['FTAX']); const provincialTax = tax(['PTAX']);
+      const employerCpp = cpp + cpp2; const employerEi = Number((ei * 1.4).toFixed(2));
+      const earningLines = statement.grossEarnings.filter((line) => line.code !== 'TOTAL');
+      const deductionLines = statement.deductions.filter((line) => line.code !== 'TOTAL');
+      return [{ ...identity, cpp, cpp2, ei, federalTax, provincialTax, incomeTax: Number((federalTax + provincialTax).toFixed(2)), employerCpp, employerEi, employerCosts: Number((employerCpp + employerEi).toFixed(2)), totalLiability: Number((cpp + cpp2 + ei + federalTax + provincialTax + employerCpp + employerEi).toFixed(2)), otherDeductions: moneyToNumber(sumMoney(deductionLines.filter((line) => !['CPP', 'CPP2', 'EI', 'FTAX', 'PTAX'].includes(line.code)).map((line) => line.amount))),
+        regularHours: statement.regularHours || 0, overtimeHours: statement.overtimeHours || 0, statHolidayHours: statement.statePayHours || 0, hours: (statement.regularHours || 0) + (statement.overtimeHours || 0) + (statement.statePayHours || 0), hourlyRate: moneyToNumber(statement.hourlyRate || 0), payPeriod: statement.periodStart && statement.periodEnd ? `${statement.periodStart.toISOString().slice(0, 10)} - ${statement.periodEnd.toISOString().slice(0, 10)}` : String(statement.payPeriodNumber || ''),
+        code: deductionLines.map((line) => line.code).join('; '), description: deductionLines.map((line) => line.description).join('; '), amount: moneyToNumber(sumMoney(deductionLines.map((line) => line.amount))), earningCode: earningLines.map((line) => line.code).join('; '), earningType: earningLines.map((line) => line.description).join('; '), rate: earningLines.map((line) => line.rate || '').join('; '), earningHours: earningLines.map((line) => line.currentUnits || '').join('; '), earningAmount: moneyToNumber(sumMoney(earningLines.map((line) => line.amount))), grossPay: moneyToNumber(statement.grossPay || statement.grossEarnings.find((line) => line.code === 'TOTAL')?.amount || 0),
         deductions: moneyToNumber(sumMoney(statement.deductions.filter((line) => line.code !== 'TOTAL').map((line) => line.amount))), netPay: moneyToNumber(statement.netPay) }];
     });
   }

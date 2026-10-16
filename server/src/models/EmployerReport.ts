@@ -2,14 +2,14 @@ import mongoose, { Schema } from 'mongoose';
 
 export interface IReportDefinition {
   companyId: mongoose.Types.ObjectId; name: string; description: string;
-  source: 'employees' | 'payroll' | 'deductions'; fields: string[];
+  source: 'employees' | 'payroll' | 'deductions' | 'custom'; fields: string[];
   dateRange: 'all' | 'last30' | 'year' | 'custom'; fromDate?: string; toDate?: string;
   employeeIds: mongoose.Types.ObjectId[];
   fieldLabels?: Record<string, string>;
 }
 export const EmployerReport = mongoose.model<IReportDefinition>('EmployerReport', new Schema<IReportDefinition>({
   companyId: { type: Schema.Types.ObjectId, required: true, index: true }, name: { type: String, required: true }, description: { type: String, default: '' },
-  source: { type: String, enum: ['employees', 'payroll', 'deductions'], required: true }, fields: [String],
+  source: { type: String, enum: ['employees', 'payroll', 'deductions', 'custom'], required: true }, fields: [String],
   dateRange: { type: String, enum: ['all', 'last30', 'year', 'custom'], default: 'all' }, fromDate: String, toDate: String,
   employeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }], fieldLabels: { type: Schema.Types.Mixed }
 }, { timestamps: true }));

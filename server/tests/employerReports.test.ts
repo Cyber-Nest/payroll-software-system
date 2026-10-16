@@ -9,7 +9,7 @@ import { Company } from '../src/models/Company';
 import { AccessRole } from '../src/models/AccessRole';
 import { PayStatement } from '../src/models/PayStatement';
 import { signEmployerToken } from '../src/middleware/auth';
-import { buildReport, csvCell, nextReportRun, processReportSchedules, reportDateFilter, reportFile, runReport } from '../src/services/employerReports.service';
+import { buildReport, csvCell, nextReportRun, processReportSchedules, reportDateFilter, reportFields, reportFile, runReport } from '../src/services/employerReports.service';
 import { emailService } from '../src/services/email.service';
 
 const companyId = '64b7f8f8f8f8f8f8f8f8f8f1';
@@ -46,6 +46,21 @@ describe('Employer custom and scheduled reports', () => {
     expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { grossPay: 'Invalid source field' } }).success).toBe(false);
     expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { employeeName: '' } }).success).toBe(false);
     expect(reportDefinitionSchema.safeParse({ ...definition, fieldLabels: { employeeName: 'a'.repeat(61) } }).success).toBe(false);
+  });
+  it('accepts the complete unique catalog without a data source and combines profile, payroll and tax values', async () => {
+    const fields = Object.keys(reportFields.custom);
+    expect(fields.length).toBeGreaterThan(7);
+    const parsed = reportDefinitionSchema.safeParse({ ...definition, source: undefined, fields });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.source).toBe('custom');
+    const amount = (value: string) => mongoose.Types.Decimal128.fromString(value);
+    jest.spyOn(PayStatement, 'find').mockReturnValue(query([{ employeeId: new mongoose.Types.ObjectId(userId), payDate: new Date('2026-01-15'), grossPay: amount('100'), grossEarnings: [{ code: 'REG', description: 'Regular', amount: amount('100'), currentUnits: '5', rate: '20' }], netPay: amount('85'), regularHours: 5, deductions: [{ code: 'FTAX', description: 'Federal tax', amount: amount('15') }, { code: 'TOTAL', description: 'Total', amount: amount('15') }] }]) as never);
+    const result = await buildReport({ ...parsed.data, companyId: new mongoose.Types.ObjectId(companyId), employeeIds: [] });
+    expect(result.columns.map((column) => column.key)).toEqual(fields);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ employeeName: 'Jane Sample', grossPay: 100, federalTax: 15, hours: 5, earningCode: 'REG', code: 'FTAX', amount: 15, earningAmount: 100 });
+    expect(result.columns.every((column) => Boolean(column.label))).toBe(true);
   });
   it('preserves chosen column order and custom headings in report previews and exports', async () => {
     const result = await buildReport({ ...definition, companyId: new mongoose.Types.ObjectId(companyId), fields: ['employeeName', 'employeeNumber'], employeeIds: [], fieldLabels: { employeeName: 'Staff Member' } });
