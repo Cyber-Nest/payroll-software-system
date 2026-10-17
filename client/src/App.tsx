@@ -3347,7 +3347,8 @@ function AddEmployee({
   onCancel,
   employee,
   onDelete,
-  draftKey
+  draftKey,
+  onCreateRole
 }: {
   token: string;
   onSaved: (result?: {
@@ -3360,6 +3361,7 @@ function AddEmployee({
   employee?: EmployeeProfile;
   onDelete?: (employee: EmployeeProfile) => void;
   draftKey?: string;
+  onCreateRole: () => void;
 }) {
   const savedDraft = useMemo(
     () => draftKey ? readStoredJson<{ step?: number; profile?: AdminProfile }>(draftKey) : undefined,
@@ -3634,10 +3636,14 @@ function AddEmployee({
         />
         <label>Role *<select value={v('employment', 'role')} onFocus={() => {
           void api<{ roles: Array<{ id: string; name: string }> }>('/employer/employee-role-options', token).then((result) => { setEmployeeRoles(result.roles); setRolesError(''); }).catch(() => setRolesError('Unable to refresh roles. Reopen the role dropdown to retry.'));
-        }} onChange={(event) => updateField('employment', 'role', event.target.value)}>
+        }} onChange={(event) => {
+          if (event.target.value === '__create_role__') { onCreateRole(); return; }
+          updateField('employment', 'role', event.target.value);
+        }}>
           <option value="">Select role</option>
           {v('employment', 'role') && !employeeRoles.some((role) => role.name === v('employment', 'role')) && <option value={v('employment', 'role')} disabled>{v('employment', 'role')} (current assignment)</option>}
           {employeeRoles.map((role) => <option key={role.id} value={role.name}>{role.name}</option>)}
+          <option value="__create_role__">Create role</option>
         </select>{(rolesError || fieldErrors[errorKey('employment', 'role')]) && <span className="field-error" role="alert">{rolesError || fieldErrors[errorKey('employment', 'role')]}</span>}</label>
         {input('employment', 'hireDate', 'Hire Date *')}
         {input('employment', 'originalHireDate', 'Original Hire Date')}
@@ -6473,10 +6479,10 @@ const settingsSubtitles: Record<string, string> = {
   Notifications: 'Manage email and in-app notifications for your organization.'
 };
 
-function EmployerSettingsPage({ token }: { token: string }) {
+function EmployerSettingsPage({ token, createRole = false }: { token: string; createRole?: boolean }) {
   const [data, setData] = useState<EmployerSettingsData>();
   const [settings, setSettings] = useState<Record<string, any>>({});
-  const [activeTab, setActiveTab] = useState('General');
+  const [activeTab, setActiveTab] = useState(createRole ? 'Users & Roles' : 'General');
   const [message, setMessage] = useState('');
   const [paystubPreviewUrl, setPaystubPreviewUrl] = useState('');
   useEffect(() => {
@@ -6634,7 +6640,7 @@ function EmployerSettingsPage({ token }: { token: string }) {
       {activeTab === 'Paystubs' && <>{card('Paystub Template & Layout', <div className="settings-fields two">{field('Template', 'paystubs.template', 'text', paystubTemplateOptionsWithCurrent)}</div>, '🧾')}{card('Paystub PDF Preview', paystubPdfPreview, '👁', 'This preview matches the downloaded paystub PDF layout.')}</>}
       {activeTab === 'Payment' && <>{card('Payment Methods', <div>{field('Default Payment Method', 'payment.methods.defaultPaymentMethod', 'text', ['Direct Deposit', 'Cheque'])}{toggle('Allow Multiple Payment Methods', 'payment.methods.allowMultiplePaymentMethods')}{toggle('Allow Manual Payment (Cheque)', 'payment.methods.allowManualPayment')}{toggle('Allow Paycard', 'payment.methods.allowPaycard')}</div>, '💳')}{card('Direct Deposit Settings', <div className="settings-fields two">{field('Default Deposit Timing', 'payment.directDeposit.timing')}{field('File Format', 'payment.directDeposit.fileFormat')}{field('Bank Upload Method', 'payment.directDeposit.uploadMethod')}{toggle('Require Pre-Note Verification', 'payment.directDeposit.requirePreNote')}{toggle('Allow Foreign Bank Accounts', 'payment.directDeposit.allowForeignBankAccounts')}</div>, '🏦')}{card('Payment Schedule', <div className="settings-fields two">{field('Payment Processing Day', 'payment.schedule.day')}{field('Payment Processing Time', 'payment.schedule.time')}{field('Number of Days Before Pay Date', 'payment.schedule.daysBeforePayDate', 'number')}{toggle('Send Payment File Automatically', 'payment.schedule.sendFileAutomatically')}{toggle('Send Confirmation Email After Processing', 'payment.schedule.sendConfirmationEmail')}{toggle('Include Zero Net Pay in Payment File', 'payment.schedule.includeZeroNetPay')}</div>, '📅')}{card('Bank Account Information', <div className="settings-fields three">{field('Bank Name', 'payment.bank.bankName')}{field('Account Holder Name', 'payment.bank.accountHolderName')}{field('Transit Number', 'payment.bank.transitNumber')}{field('Institution Number', 'payment.bank.institutionNumber')}{field('Account Number', 'payment.bank.accountNumber')}</div>, '🏛')}{card('Payment Notifications', <div>{toggle('Send Payment Confirmation to Employees', 'payment.notifications.employeeConfirmations')}{toggle('Send Payment Confirmation to Admin', 'payment.notifications.adminConfirmations')}{toggle('Send Failed Payment Alert', 'payment.notifications.failedPaymentAlerts')}{toggle('Include Paystub with Payment Email', 'payment.notifications.includePaystub')}{field('Custom Email Message', 'payment.notifications.message')}</div>, '✉')}</>}
       {activeTab === 'Government Filings' && <>{card('CRA Remittance Settings', <div className="settings-fields two">{field('Remittance Frequency', 'governmentFilings.cra.remittanceFrequency')}{field('Next Remittance Due Date', 'governmentFilings.cra.nextRemittanceDueDate', 'date')}{field('Remittance Method', 'governmentFilings.cra.remittanceMethod')}{field('Bank Account for CRA Payments', 'governmentFilings.cra.bankAccount')}{toggle('Generate PD7A File', 'governmentFilings.cra.generatePd7a')}{toggle('Autofill from Payroll Runs', 'governmentFilings.cra.autofillFromPayrollRuns')}{toggle('Validate Before Submission', 'governmentFilings.cra.validateBeforeSubmission')}</div>, '🇨🇦')}{card('Year-End Filings (T4/T4A)', <div className="settings-fields two">{field('Tax Year', 'governmentFilings.yearEnd.taxYear')}{field('Filing Method', 'governmentFilings.yearEnd.filingMethod')}{toggle('Auto Generate T4', 'governmentFilings.yearEnd.autoGenerateT4')}{toggle('Auto Generate T4A', 'governmentFilings.yearEnd.autoGenerateT4A')}{toggle('Include T4 Summary Report', 'governmentFilings.yearEnd.includeT4Summary')}{toggle('Electronic Filing (T4/T4A)', 'governmentFilings.yearEnd.electronicFiling')}</div>, '📄')}{card('Other Government Filings', table(['Filing Type', 'Period', 'Due Date', 'Amount', 'Status', 'Reference #'], data.filings, ['filingType', 'period', 'dueDate', 'amount', 'status', 'referenceNumber']), '📁')}{card('Advanced Options', <div>{toggle('Include zero amount slips', 'governmentFilings.advanced.includeZeroAmountSlips')}{toggle('Use year-to-date totals for filings', 'governmentFilings.advanced.useYtdTotals')}{toggle('Enable test filing (sandbox)', 'governmentFilings.advanced.enableTestFiling')}{toggle('Log all filing activities', 'governmentFilings.advanced.logActivities')}{field('Retain filing files for', 'governmentFilings.advanced.retainYears')}{field('Default contact for government inquiries', 'governmentFilings.advanced.defaultContact')}</div>, '⚙')}</>}
-      {activeTab === 'Users & Roles' && <><EmployerRolesSection token={token} />{card('Users', table(['#', 'Name', 'Email', 'Role', 'Status', 'Last Login'], data.users, ['index', 'name', 'email', 'role', 'status', 'lastLogin']), '👤')}</>}
+      {activeTab === 'Users & Roles' && <><EmployerRolesSection token={token} initialCreateRole={createRole} />{card('Users', table(['#', 'Name', 'Email', 'Role', 'Status', 'Last Login'], data.users, ['index', 'name', 'email', 'role', 'status', 'lastLogin']), '👤')}</>}
       {activeTab === 'Integrations' && <>{card('Featured Integrations', <div className="integration-grid">{integrations.map((item) => <article key={item.name}><h3>{item.name}</h3><span className={item.status === 'Connected' ? 'status paid' : 'status pending'}>{item.status}</span><p>{item.description}</p><button>{item.status === 'Connected' ? 'Configure' : 'Connect'}</button></article>)}</div>, '🔗')}{card('API & Webhooks', <div className="settings-fields two">{field('API Key', 'integrations.api.apiKey')}{field('API Secret', 'integrations.api.apiSecret')}{toggle('Enable Webhooks', 'integrations.webhooks.enabled')}{field('Webhook URL', 'integrations.webhooks.url')}</div>, '🔌')}</>}
       {activeTab === 'Notifications' && <>{card('Notification Preferences', <div className="settings-fields two">{toggle('Enable Email Notifications', 'notifications.preferences.email')}{toggle('Enable In-App Notifications', 'notifications.preferences.inApp')}{toggle('Enable SMS Notifications (optional)', 'notifications.preferences.sms')}{toggle('Daily Digest Email (summary)', 'notifications.preferences.digest')}{field('Language', 'notifications.preferences.language')}{field('Time Zone', 'notifications.preferences.timeZone')}</div>, '⚙')}{card('Email Settings', <div className="settings-fields two">{field('From Name', 'notifications.email.fromName')}{field('From Email', 'notifications.email.fromEmail')}{field('Reply-To Email', 'notifications.email.replyTo')}</div>, '✉')}{card('Notification Recipients', <div className="settings-fields two">{field('Payroll Notifications', 'notifications.recipients.payroll')}{field('Government Filing Notifications', 'notifications.recipients.government')}{field('System Notifications', 'notifications.recipients.system')}{field('Employee Self-Service Notifications', 'notifications.recipients.employeeSelfService')}{field('Failed Payment Alerts', 'notifications.recipients.failedPayment')}{field('Security Alerts', 'notifications.recipients.security')}</div>, '👥')}{card('Reminder Settings', <div className="settings-fields four">{field('Payroll Approval Reminder', 'notifications.reminders.payrollApproval', 'number')}{field('Government Filing Due Reminder', 'notifications.reminders.governmentFiling', 'number')}{field('Employee Document Expiry Reminder', 'notifications.reminders.documentExpiry', 'number')}{field('Inactive Employee Reminder', 'notifications.reminders.inactiveEmployee', 'number')}</div>, '🕘')}</>}
     </div>
@@ -6906,6 +6912,14 @@ function EmployerDashboard({
     [employerUiKey]
   );
   const [adminPage, setAdminPage] = useState(storedUiState?.adminPage || 'Dashboard');
+  const [createRoleFromEmployee, setCreateRoleFromEmployee] = useState(false);
+  useEffect(() => {
+    if (adminPage !== 'Settings') setCreateRoleFromEmployee(false);
+  }, [adminPage]);
+  const openEmployeeRoleForm = () => {
+    setCreateRoleFromEmployee(true);
+    setAdminPage('Settings');
+  };
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeProfile | undefined>();
   const [restoredEditingEmployeeId, setRestoredEditingEmployeeId] = useState(
@@ -7221,6 +7235,7 @@ function EmployerDashboard({
       <AddEmployee
         token={token}
         draftKey={`${employerUiKey}:employee:new`}
+        onCreateRole={openEmployeeRoleForm}
         onCancel={() => setAdminPage('Employees')}
         onSaved={(result) => {
           if (result?.temporaryPassword && result.employee) {
@@ -7241,6 +7256,7 @@ function EmployerDashboard({
         token={token}
         employee={editingEmployee}
         draftKey={`${employerUiKey}:employee:${editingEmployee.id}`}
+        onCreateRole={openEmployeeRoleForm}
         onDelete={deleteEmployee}
         onCancel={() => setAdminPage('Employees')}
         onSaved={() => {
@@ -7339,7 +7355,7 @@ function EmployerDashboard({
     ) : adminPage === 'Company' ? (
       <EmployerCompanyPage token={token} />
     ) : adminPage === 'Settings' ? (
-      <EmployerSettingsPage token={token} />
+      <EmployerSettingsPage token={token} createRole={createRoleFromEmployee} />
     ) : adminPage === 'Notifications' ? (
       <EmployerNotifications
         token={token}

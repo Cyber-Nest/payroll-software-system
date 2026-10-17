@@ -7,9 +7,9 @@ const emptyDraft: Draft = { name: '', fullForm: '', description: '', status: 'Ac
 const permissionOptions = ['employee.view', 'employee.create', 'employee.edit', 'employee.sin.view', 'employee.compensation.view', 'payroll.view', 'payroll.prepare', 'payroll.approve', 'payroll.reverse', 'tax.view', 'tax.manage', 'reports.view', 'reports.export', 'bank.view', 'bank.edit', 'users.manage', 'audit.view', 'bulletins.manage', 'self.context.view', 'self.context.switch', 'self.profile.view', 'self.profile.edit', 'self.security.edit', 'self.pay.view', 'self.tax.view', 'self.bulletins.view'];
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-export default function EmployerRolesSection({ token }: { token: string }) {
+export default function EmployerRolesSection({ token, initialCreateRole = false }: { token: string; initialCreateRole?: boolean }) {
   const [roles, setRoles] = useState<Role[]>([]);
-  const [dialog, setDialog] = useState<Dialog>();
+  const [dialog, setDialog] = useState<Dialog | undefined>(() => initialCreateRole ? { mode: 'create' } : undefined);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
