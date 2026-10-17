@@ -8372,6 +8372,10 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
   const [approvalNotice, setApprovalNotice] = useState('');
   async function saveApproval() {
     if (!data || String(data.year) !== year) return;
+    if (approval.receivedDate && approval.processedDate && approval.processedDate < approval.receivedDate) {
+      setError('Processed date cannot be before received date.'); setApprovalNotice('');
+      return;
+    }
     setSavingApproval(true); setError(''); setApprovalNotice('');
     try {
       const response = await fetch(`${apiBase}/employer/reports/t4-summary/approval/${data.year}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(approval) });
@@ -8436,8 +8440,8 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
               <h3>Government Approval Details</h3><p>Leave these fields blank until government confirmation is available. Save details before downloading the PDF.</p>
               <fieldset disabled={savingApproval || year !== String(data.year)}><div className="settings-fields two">
                 <label>Submission Number<input maxLength={80} value={approval.submissionNumber} onChange={(event) => setApproval({ ...approval, submissionNumber: event.target.value })} /></label>
-                <label>Received Date<input type="date" value={approval.receivedDate} onChange={(event) => setApproval({ ...approval, receivedDate: event.target.value })} /></label>
-                <label>Processed Date<input type="date" value={approval.processedDate} onChange={(event) => setApproval({ ...approval, processedDate: event.target.value })} /></label>
+                <label>Received Date<input type="date" max={approval.processedDate || undefined} value={approval.receivedDate} onChange={(event) => setApproval({ ...approval, receivedDate: event.target.value })} /></label>
+                <label>Processed Date<input type="date" min={approval.receivedDate || undefined} value={approval.processedDate} onChange={(event) => setApproval({ ...approval, processedDate: event.target.value })} /></label>
               </div><button type="submit">{savingApproval ? 'Saving...' : 'Save Approval Details'}</button></fieldset>
               {approvalNotice && <p role="status">{approvalNotice}</p>}
             </form>

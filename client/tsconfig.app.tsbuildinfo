@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/deductionspage.tsx","./src/governmentfilingspage.tsx","./src/main.tsx","./src/vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/deductionspage.tsx","./src/employerbenefitssection.tsx","./src/employerdeductionsetup.tsx","./src/employerreportbuilder.tsx","./src/employerrolessection.tsx","./src/governmentfilingspage.tsx","./src/reportfieldmanager.tsx","./src/t4formatspage.tsx","./src/main.tsx","./src/vite-env.d.ts"],"version":"5.9.3"}

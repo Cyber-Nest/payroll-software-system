@@ -26,6 +26,19 @@ describe('T4 summary approval details', () => {
     expect(t4ApprovalSchema.parse({})).toEqual({ submissionNumber: '', receivedDate: '', processedDate: '' });
     expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-30' }).success).toBe(false);
   });
+  it('allows processing on or after receipt and keeps dates optional', () => {
+    expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03', processedDate: '2026-02-03' }).success).toBe(true);
+    expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03', processedDate: '2026-02-04' }).success).toBe(true);
+    expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03' }).success).toBe(true);
+    expect(t4ApprovalSchema.safeParse({ processedDate: '2026-02-03' }).success).toBe(true);
+  });
+  it('rejects processing before receipt without saving', async () => {
+    const update = jest.spyOn(Company, 'findByIdAndUpdate').mockResolvedValue({ _id: companyId } as never);
+    const response = await request({ receivedDate: '2026-03-01', processedDate: '2026-02-28' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: 'Processed date cannot be before received date.' });
+    expect(update).not.toHaveBeenCalled();
+  });
   it('loads employee role choices from current company settings and excludes inactive roles', async () => {
     jest.spyOn(Company, 'findById').mockResolvedValue({ _id: companyId, settings: { usersRoles: { customRoles: [{ id: 'custom-active', name: 'Team Lead', status: 'Active' }, { id: 'custom-inactive', name: 'Retired Role', status: 'Inactive' }], deletedRoleIds: ['Manager'] } } } as never);
     const response = await fetch(`${base}/employee-role-options`, { headers: { Authorization: `Bearer ${signEmployerToken(userId, companyId)}` } });
