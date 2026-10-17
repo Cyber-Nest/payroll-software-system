@@ -8370,12 +8370,21 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
   const [approval, setApproval] = useState({ submissionNumber: '', receivedDate: '', processedDate: '' });
   const [savingApproval, setSavingApproval] = useState(false);
   const [approvalNotice, setApprovalNotice] = useState('');
+  const processedDateError = approval.processedDate
+    ? !approval.receivedDate
+      ? 'Select a received date first.'
+      : approval.processedDate <= approval.receivedDate
+        ? 'Processed date should be after received date only.'
+        : ''
+    : '';
+  const minimumProcessedDate = approval.receivedDate ? (() => {
+    const date = new Date(`${approval.receivedDate}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    return date.toISOString().slice(0, 10);
+  })() : undefined;
   async function saveApproval() {
     if (!data || String(data.year) !== year) return;
-    if (approval.receivedDate && approval.processedDate && approval.processedDate < approval.receivedDate) {
-      setError('Processed date cannot be before received date.'); setApprovalNotice('');
-      return;
-    }
+    if (processedDateError) return;
     setSavingApproval(true); setError(''); setApprovalNotice('');
     try {
       const response = await fetch(`${apiBase}/employer/reports/t4-summary/approval/${data.year}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(approval) });
@@ -8440,9 +8449,9 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
               <h3>Government Approval Details</h3><p>Leave these fields blank until government confirmation is available. Save details before downloading the PDF.</p>
               <fieldset disabled={savingApproval || year !== String(data.year)}><div className="settings-fields two">
                 <label>Submission Number<input maxLength={80} value={approval.submissionNumber} onChange={(event) => setApproval({ ...approval, submissionNumber: event.target.value })} /></label>
-                <label>Received Date<input type="date" max={approval.processedDate || undefined} value={approval.receivedDate} onChange={(event) => setApproval({ ...approval, receivedDate: event.target.value })} /></label>
-                <label>Processed Date<input type="date" min={approval.receivedDate || undefined} value={approval.processedDate} onChange={(event) => setApproval({ ...approval, processedDate: event.target.value })} /></label>
-              </div><button type="submit">{savingApproval ? 'Saving...' : 'Save Approval Details'}</button></fieldset>
+                <label>Received Date<input type="date" value={approval.receivedDate} onChange={(event) => { setApproval({ ...approval, receivedDate: event.target.value }); setApprovalNotice(''); }} /></label>
+                <label>Processed Date<input type="date" disabled={!approval.receivedDate} min={minimumProcessedDate} value={approval.processedDate} aria-invalid={!!processedDateError} aria-describedby={processedDateError ? 't4-processed-date-error' : undefined} onChange={(event) => { setApproval({ ...approval, processedDate: event.target.value }); setApprovalNotice(''); }} />{processedDateError && <span id="t4-processed-date-error" className="field-error" role="alert">{processedDateError}</span>}</label>
+              </div><button type="submit" disabled={!!processedDateError}>{savingApproval ? 'Saving...' : 'Save Approval Details'}</button></fieldset>
               {approvalNotice && <p role="status">{approvalNotice}</p>}
             </form>
             <div className="t4-form-top">

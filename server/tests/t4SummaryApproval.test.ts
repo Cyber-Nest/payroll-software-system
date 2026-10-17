@@ -26,17 +26,17 @@ describe('T4 summary approval details', () => {
     expect(t4ApprovalSchema.parse({})).toEqual({ submissionNumber: '', receivedDate: '', processedDate: '' });
     expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-30' }).success).toBe(false);
   });
-  it('allows processing on or after receipt and keeps dates optional', () => {
-    expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03', processedDate: '2026-02-03' }).success).toBe(true);
+  it('requires processing strictly after receipt and allows blank processing dates', () => {
+    expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03', processedDate: '2026-02-03' }).success).toBe(false);
     expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03', processedDate: '2026-02-04' }).success).toBe(true);
     expect(t4ApprovalSchema.safeParse({ receivedDate: '2026-02-03' }).success).toBe(true);
-    expect(t4ApprovalSchema.safeParse({ processedDate: '2026-02-03' }).success).toBe(true);
+    expect(t4ApprovalSchema.safeParse({ processedDate: '2026-02-03' }).success).toBe(false);
   });
   it('rejects processing before receipt without saving', async () => {
     const update = jest.spyOn(Company, 'findByIdAndUpdate').mockResolvedValue({ _id: companyId } as never);
     const response = await request({ receivedDate: '2026-03-01', processedDate: '2026-02-28' });
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ message: 'Processed date cannot be before received date.' });
+    expect(await response.json()).toEqual({ message: 'Processed date should be after received date only.' });
     expect(update).not.toHaveBeenCalled();
   });
   it('loads employee role choices from current company settings and excludes inactive roles', async () => {

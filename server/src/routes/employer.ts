@@ -1686,8 +1686,8 @@ export const t4ApprovalSchema = z.object({
   submissionNumber: z.string().trim().max(80).default(''),
   receivedDate: z.union([z.iso.date(), z.literal('')]).default(''),
   processedDate: z.union([z.iso.date(), z.literal('')]).default('')
-}).refine((approval) => !approval.receivedDate || !approval.processedDate || approval.processedDate >= approval.receivedDate, {
-  message: 'Processed date cannot be before received date.',
+}).refine((approval) => !approval.processedDate || (!!approval.receivedDate && approval.processedDate > approval.receivedDate), {
+  message: 'Processed date should be after received date only.',
   path: ['processedDate']
 });
 router.put('/reports/t4-summary/approval/:year', authenticate, requirePermission('reports.export'), async (req: AuthRequest, res) => {
