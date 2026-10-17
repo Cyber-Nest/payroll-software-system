@@ -1682,11 +1682,12 @@ router.get(
   }
 );
 
-export const t4ApprovalSchema = z.object({
+const t4ApprovalFieldsSchema = z.object({
   submissionNumber: z.string().trim().max(80).default(''),
   receivedDate: z.union([z.iso.date(), z.literal('')]).default(''),
   processedDate: z.union([z.iso.date(), z.literal('')]).default('')
-}).refine((approval) => !approval.processedDate || (!!approval.receivedDate && approval.processedDate > approval.receivedDate), {
+});
+export const t4ApprovalSchema = t4ApprovalFieldsSchema.refine((approval) => !approval.processedDate || (!!approval.receivedDate && approval.processedDate > approval.receivedDate), {
   message: 'Processed date should be after received date only.',
   path: ['processedDate']
 });
@@ -1754,7 +1755,7 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
   );
   const report = {
     year: currentYear,
-    approval: t4ApprovalSchema.parse(((settings.t4SummaryApprovals || {}) as Record<string, unknown>)[String(currentYear)] || {}),
+    approval: t4ApprovalFieldsSchema.parse(((settings.t4SummaryApprovals || {}) as Record<string, unknown>)[String(currentYear)] || {}),
     employer: {
       legalName: company.legalName,
       operatingName: company.operatingName || company.legalName,

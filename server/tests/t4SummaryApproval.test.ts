@@ -4,6 +4,7 @@ import routes, { t4ApprovalSchema } from '../src/routes/employer';
 import { Company } from '../src/models/Company';
 import { EmployerUser } from '../src/models/EmployerUser';
 import { AccessRole } from '../src/models/AccessRole';
+import { PayStatement } from '../src/models/PayStatement';
 import { signEmployerToken } from '../src/middleware/auth';
 
 const companyId = '64b7f8f8f8f8f8f8f8f8f8f1';
@@ -38,6 +39,18 @@ describe('T4 summary approval details', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ message: 'Processed date should be after received date only.' });
     expect(update).not.toHaveBeenCalled();
+  });
+  it.each([
+    { receivedDate: '2026-03-01', processedDate: '2026-02-28' },
+    { receivedDate: '2026-03-01', processedDate: '2026-03-01' },
+    { receivedDate: '', processedDate: '2026-03-01' }
+  ])('loads previously saved approval dates for correction: %j', async (dates) => {
+    const approval = { submissionNumber: 'CRA-123', ...dates };
+    jest.spyOn(Company, 'findById').mockResolvedValue({ _id: companyId, settings: { t4SummaryApprovals: { '2025': approval } } } as never);
+    jest.spyOn(PayStatement, 'find').mockReturnValue({ sort: jest.fn().mockResolvedValue([]) } as never);
+    const response = await fetch(`${base}/reports/t4-summary?year=2025`, { headers: { Authorization: `Bearer ${signEmployerToken(userId, companyId)}` } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ year: 2025, approval });
   });
   it('loads employee role choices from current company settings and excludes inactive roles', async () => {
     jest.spyOn(Company, 'findById').mockResolvedValue({ _id: companyId, settings: { usersRoles: { customRoles: [{ id: 'custom-active', name: 'Team Lead', status: 'Active' }, { id: 'custom-inactive', name: 'Retired Role', status: 'Inactive' }], deletedRoleIds: ['Manager'] } } } as never);
