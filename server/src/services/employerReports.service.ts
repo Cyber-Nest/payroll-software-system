@@ -85,8 +85,18 @@ export function reportFile(name: string, format: 'csv' | 'excel' | 'pdf', column
   }
   return { file: Buffer.from('\uFEFF' + [columns.map((column) => csvCell(column.label)).join(','), ...rows.map((row) => columns.map((column) => csvCell(row[column.key] ?? '')).join(','))].join('\r\n')), filename, contentType: 'text/csv; charset=utf-8' };
 }
-export async function runReport(reportId: unknown, companyId: unknown, format: 'csv' | 'excel' | 'pdf', scheduleId?: unknown, recipients: string[] = []) {
-  const report = await EmployerReport.findOne({ _id: String(reportId), companyId: String(companyId) });
+export function scheduledDefinition(schedule: IReportSchedule): IReportDefinition | undefined {
+  if (!schedule.reportType) return undefined;
+  const presets = {
+    employee: ['employeeNumber', 'employeeName', 'email', 'department', 'jobTitle', 'province', 'startDate'],
+    payroll: ['employeeNumber', 'employeeName', 'payDate', 'payPeriod', 'hours', 'grossPay', 'deductions', 'netPay'],
+    tax: ['employeeNumber', 'employeeName', 'payDate', 'cpp', 'cpp2', 'ei', 'federalTax', 'provincialTax', 'employerCpp', 'employerEi', 'totalLiability'],
+    deductions: ['employeeNumber', 'employeeName', 'payDate', 'code', 'description', 'amount']
+  };
+  return { companyId: schedule.companyId, name: schedule.name, description: '', source: schedule.reportType === 'deductions' ? 'deductions' : 'custom', fields: presets[schedule.reportType], dateRange: schedule.dateRange || 'all', fromDate: schedule.fromDate, toDate: schedule.toDate, employeeIds: [] };
+}
+export async function runReport(reportId: unknown, companyId: unknown, format: 'csv' | 'excel' | 'pdf', scheduleId?: unknown, recipients: string[] = [], definition?: IReportDefinition) {
+  const report = definition || await EmployerReport.findOne({ _id: String(reportId), companyId: String(companyId) });
   if (!report) throw new Error('Saved report not found.');
   const run = await EmployerReportRun.create({ companyId: String(companyId), reportId: String(reportId), scheduleId: scheduleId ? String(scheduleId) : undefined, reportName: report.name, format, status: 'running' });
   try {
@@ -122,6 +132,10 @@ export async function processReportSchedules() {
       const now = new Date();
       const schedule = await EmployerReportSchedule.findOneAndUpdate({ enabled: true, nextRunAt: { $lte: now }, $or: [{ leaseUntil: { $exists: false } }, { leaseUntil: { $lte: now } }] }, { $set: { leaseUntil: new Date(now.getTime() + 600000) } }, { new: true });
       if (!schedule) break;
+      if (schedule.untilDate && now > new Date(`${schedule.untilDate}T23:59:59.999Z`)) {
+        await EmployerReportSchedule.updateOne({ _id: schedule._id, leaseUntil: schedule.leaseUntil }, { $set: { enabled: false }, $unset: { leaseUntil: '' } });
+        continue;
+      }
       let error = '';
       let generationStarted = false;
       try {
@@ -131,13 +145,14 @@ export async function processReportSchedules() {
         const permissions = employerPermissionOverride(company.settings, actor.role) ?? (custom ? custom.status === 'Active' ? employerRolePermissions(custom.permissions) : [] : permissionsForRole(actor.role));
         if (!permissions.includes('reports.export')) throw new Error('The schedule owner no longer has report export permission.');
         generationStarted = true;
-        const run = await runReport(schedule.reportId, schedule.companyId, schedule.format, schedule._id, schedule.recipients);
+        const run = await runReport(schedule.reportId || schedule._id, schedule.companyId, schedule.format, schedule._id, schedule.recipients, scheduledDefinition(schedule));
         error = run.deliveryError || '';
       } catch (cause) {
         error = cause instanceof Error ? cause.message : 'Scheduled report failed';
-        if (!generationStarted) await EmployerReportRun.create({ companyId: schedule.companyId, reportId: schedule.reportId, scheduleId: schedule._id, reportName: schedule.name, format: schedule.format, status: 'failed', error });
+        if (!generationStarted) await EmployerReportRun.create({ companyId: schedule.companyId, reportId: schedule.reportId || schedule._id, scheduleId: schedule._id, reportName: schedule.name, format: schedule.format, status: 'failed', error });
       }
-      await EmployerReportSchedule.updateOne({ _id: schedule._id, leaseUntil: schedule.leaseUntil }, { $set: { nextRunAt: nextReportRun(schedule), lastRunAt: now, lastError: error }, $unset: { leaseUntil: '' } });
+      const nextRunAt = nextReportRun(schedule);
+      await EmployerReportSchedule.updateOne({ _id: schedule._id, leaseUntil: schedule.leaseUntil }, { $set: { nextRunAt, lastRunAt: now, lastError: error, ...(schedule.untilDate && nextRunAt > new Date(`${schedule.untilDate}T23:59:59.999Z`) ? { enabled: false } : {}) }, $unset: { leaseUntil: '' } });
     }
   } finally { processing = false; }
 }

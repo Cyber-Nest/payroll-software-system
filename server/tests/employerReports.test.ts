@@ -142,6 +142,37 @@ describe('Employer custom and scheduled reports', () => {
     const result = await runReport(reportId, companyId, 'csv', runId, ['reports@example.com']);
     expect(result.status).toBe('completed'); expect(result.delivery).toBe('failed'); expect(result.deliveryError).toBe('SMTP unavailable'); expect(result.file).toBeInstanceOf(Buffer);
   });
+  it('saves each built-in report type with a monthly day and inclusive end date', async () => {
+    const create = jest.spyOn(EmployerReportSchedule, 'create').mockImplementation((async (data: any) => doc({ ...data, _id: runId })) as never);
+    const exists = jest.spyOn(EmployerReport, 'exists');
+    const settings = { name: 'Monthly report', frequency: 'monthly', format: 'csv', anchorDay: 31, nextRunAt: '2096-02-01T09:30:00Z', untilDate: '2096-12-31', dateRange: 'last30' };
+    for (const reportType of ['employee', 'payroll', 'tax', 'deductions']) {
+      expect((await request('/schedules', { ...settings, reportType })).status).toBe(201);
+    }
+    expect(exists).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ anchorDay: 31, nextRunAt: new Date('2096-02-29T09:30:00Z'), untilDate: '2096-12-31' }));
+    for (const invalid of [{ anchorDay: 32 }, { anchorDay: 0 }, { untilDate: '2096-01-01' }, { dateRange: 'custom', fromDate: '2096-03-01', toDate: '2096-02-01' }]) {
+      expect((await request('/schedules', { ...settings, reportType: 'tax', ...invalid })).status).toBe(400);
+    }
+  });
+  it('disables expired schedules without generating a report', async () => {
+    const schedule = doc({ _id: runId, companyId, reportType: 'employee', untilDate: '2000-01-31', nextRunAt: new Date('2000-01-31'), leaseUntil: new Date(), frequency: 'monthly' });
+    jest.spyOn(EmployerReportSchedule, 'findOneAndUpdate').mockResolvedValueOnce(schedule as never).mockResolvedValue(null);
+    const update = jest.spyOn(EmployerReportSchedule, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+    await processReportSchedules();
+    expect(update).toHaveBeenCalledWith(expect.anything(), { $set: { enabled: false }, $unset: { leaseUntil: '' } });
+    expect(EmployerReportRun.create).not.toHaveBeenCalled();
+  });
+  it('generates the final employee report on the until date and disables future runs', async () => {
+    const now = new Date();
+    const schedule = doc({ _id: runId, companyId: new mongoose.Types.ObjectId(companyId), createdBy: userId, reportType: 'employee', name: 'Monthly employees', dateRange: 'all', untilDate: now.toISOString().slice(0, 10), nextRunAt: new Date(now.getTime() - 60000), anchorDay: now.getUTCDate(), leaseUntil: new Date(now.getTime() + 600000), frequency: 'monthly', format: 'csv', recipients: [] });
+    jest.spyOn(EmployerReportSchedule, 'findOneAndUpdate').mockResolvedValueOnce(schedule as never).mockResolvedValue(null);
+    const update = jest.spyOn(EmployerReportSchedule, 'updateOne').mockResolvedValue({ matchedCount: 1 } as never);
+    await processReportSchedules();
+    expect(generated.status).toBe('completed');
+    expect(generated.file.toString()).toContain('Jane Sample');
+    expect(update).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ $set: expect.objectContaining({ enabled: false }) }));
+  });
   it('filters payroll by pay date and excludes total rows from deduction detail', async () => {
     const amount = (value: string) => mongoose.Types.Decimal128.fromString(value);
     const find = jest.spyOn(PayStatement, 'find').mockReturnValue(query([{ employeeId: new mongoose.Types.ObjectId(userId), payDate: new Date('2026-01-15'), grossPay: amount('100.00'), grossEarnings: [], netPay: amount('99.70'), deductions: [{ code: 'CPP', description: 'CPP', amount: amount('0.10') }, { code: 'EI', description: 'EI', amount: amount('0.20') }, { code: 'TOTAL', description: 'Total', amount: amount('0.30') }] }]) as never);

@@ -17,12 +17,16 @@ export const EmployerReport = mongoose.model<IReportDefinition>('EmployerReport'
 export const EmployerReportTemplate = mongoose.model<IReportDefinition>('EmployerReportTemplate', EmployerReport.schema.clone());
 
 export interface IReportSchedule {
-  companyId: mongoose.Types.ObjectId; reportId: mongoose.Types.ObjectId; createdBy: mongoose.Types.ObjectId;
+  companyId: mongoose.Types.ObjectId; reportId?: mongoose.Types.ObjectId; createdBy: mongoose.Types.ObjectId;
+  reportType?: 'employee' | 'payroll' | 'tax' | 'deductions';
+  dateRange?: IReportDefinition['dateRange']; fromDate?: string; toDate?: string; untilDate?: string;
   name: string; frequency: 'daily' | 'weekly' | 'monthly'; format: 'csv' | 'excel' | 'pdf';
   nextRunAt: Date; anchorDay: number; enabled: boolean; recipients: string[]; leaseUntil?: Date; lastRunAt?: Date; lastError?: string;
 }
 const scheduleSchema = new Schema<IReportSchedule>({
-  companyId: { type: Schema.Types.ObjectId, required: true, index: true }, reportId: { type: Schema.Types.ObjectId, ref: 'EmployerReport', required: true },
+  companyId: { type: Schema.Types.ObjectId, required: true, index: true }, reportId: { type: Schema.Types.ObjectId, ref: 'EmployerReport' },
+  reportType: { type: String, enum: ['employee', 'payroll', 'tax', 'deductions'] },
+  dateRange: { type: String, enum: ['all', 'last30', 'year', 'custom'] }, fromDate: String, toDate: String, untilDate: String,
   createdBy: { type: Schema.Types.ObjectId, ref: 'EmployerUser', required: true }, name: { type: String, required: true },
   frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], required: true }, format: { type: String, enum: ['csv', 'excel', 'pdf'], default: 'csv' },
   nextRunAt: { type: Date, required: true }, anchorDay: Number, enabled: { type: Boolean, default: true }, recipients: [String],

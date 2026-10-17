@@ -551,6 +551,7 @@ export function customReportPdf(title: string, employer: string, columns: string
 
 export type T4SummaryPdfData = {
   year: number;
+  approval?: { submissionNumber: string; receivedDate: string; processedDate: string };
   employer: { legalName: string; operatingName?: string; customerId: string; businessNumber: string; payrollProgramAccountNumber: string; address: Array<string | undefined>; province: string; remittanceFrequency: string };
   metrics: { employees: number; statements: number };
   summary: { employmentIncome: number; cpp: number; ei: number; incomeTax: number; pensionableEarnings: number; insurableEarnings: number; employerCpp: number; employerEi: number; totalDeductions: number; remittances: number; balanceDue: number; totalPayable: number };
@@ -601,6 +602,9 @@ export function t4SummaryPdf(data: T4SummaryPdfData): Buffer {
     const x = 30 + index * 184;
     page.rect(x, 126, 184, 58); page.text(label, x + 9, 165, 8); page.text(value, x + 9, 143, 11, true);
   });
+  page.text(`Submission number: ${data.approval?.submissionNumber || ''}`, 30, 86, 8);
+  page.text(`Received date: ${data.approval?.receivedDate || ''}`, 30, 68, 8);
+  page.text(`Processed date: ${data.approval?.processedDate || ''}`, 306, 68, 8);
   if (!data.metrics.statements) page.text(`No T4 summary data found for ${data.year}.`, 30, 105, 9);
   return page.buffer();
 }

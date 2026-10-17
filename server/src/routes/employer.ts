@@ -1682,6 +1682,21 @@ router.get(
   }
 );
 
+export const t4ApprovalSchema = z.object({
+  submissionNumber: z.string().trim().max(80).default(''),
+  receivedDate: z.union([z.iso.date(), z.literal('')]).default(''),
+  processedDate: z.union([z.iso.date(), z.literal('')]).default('')
+});
+router.put('/reports/t4-summary/approval/:year', authenticate, requirePermission('reports.export'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  if (!/^\d{4}$/.test(String(req.params.year)) || Number(req.params.year) < 1901) return res.status(400).json({ message: 'Select a valid tax year.' });
+  const parsed = t4ApprovalSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0].message });
+  const company = await Company.findByIdAndUpdate(companyId, { $set: { [`settings.t4SummaryApprovals.${req.params.year}`]: parsed.data } }, { new: true });
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  res.json({ approval: parsed.data });
+});
 router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   const companyId = requireEmployer(req, res);
   if (!companyId) return;
@@ -1736,6 +1751,7 @@ router.get('/reports/t4-summary', authenticate, requirePermission('reports.view'
   );
   const report = {
     year: currentYear,
+    approval: t4ApprovalSchema.parse(((settings.t4SummaryApprovals || {}) as Record<string, unknown>)[String(currentYear)] || {}),
     employer: {
       legalName: company.legalName,
       operatingName: company.operatingName || company.legalName,
@@ -4835,6 +4851,13 @@ router.post('/paystubs/send-selected', authenticate, requirePermission('payroll.
   res.json({ sent, errors });
 });
 
+router.get('/employee-role-options', authenticate, requirePermission('employee.view'), async (req: AuthRequest, res) => {
+  const companyId = requireEmployer(req, res);
+  if (!companyId) return;
+  const company = await Company.findById(companyId);
+  if (!company) return res.status(404).json({ message: 'Company not found.' });
+  res.setHeader('Cache-Control', 'no-store').json({ roles: employerRoles(company.settings).filter((role) => role.status === 'Active').map((role) => ({ id: role.id, name: role.name })) });
+});
 router.post(
   '/employees',
   authenticate,
@@ -4852,6 +4875,8 @@ router.post(
       Company.findById(companyId),
       Employee.countDocuments({ companyId })
     ]);
+    if (!company) return res.status(404).json({ message: 'Company not found.' });
+    if (!employerRoles(company.settings).some((role) => role.status === 'Active' && role.name === text(employment.role, 'Employee'))) return res.status(400).json({ message: 'Select an active role from the current role list.' });
     const employeeNumber = text(
       employment.employeeNumber,
       `EMP-${String(employeeCount + 1).padStart(4, '0')}`
@@ -4995,6 +5020,10 @@ router.put(
       return res.status(409).json({ message: 'Another user already uses that email address' });
 
     const company = await Company.findById(companyId);
+    if (!company) return res.status(404).json({ message: 'Company not found.' });
+    const selectedRole = text(profile.employment.role, 'Employee');
+    const existingRole = text(employee.adminProfile?.employment?.role, 'Employee');
+    if (selectedRole !== existingRole && !employerRoles(company.settings).some((role) => role.status === 'Active' && role.name === selectedRole)) return res.status(400).json({ message: 'Select an active role from the current role list.' });
     const fields = employeeFieldsFromProfile(
       profile,
       companyId,

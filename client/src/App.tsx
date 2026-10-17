@@ -458,6 +458,7 @@ type EmployerGovernmentLiabilitiesReport = {
 };
 type EmployerT4SummaryReport = {
   year: number;
+  approval: { submissionNumber: string; receivedDate: string; processedDate: string };
   employer: {
     legalName: string;
     operatingName: string;
@@ -3368,6 +3369,21 @@ function AddEmployee({
   const [profile, setProfile] = useState<AdminProfile>(
     () => withDefaultEmployeeRole(savedDraft?.profile || profileForEmployee(employee))
   );
+  const [employeeRoles, setEmployeeRoles] = useState<Array<{ id: string; name: string }>>([]);
+  const [rolesError, setRolesError] = useState('');
+  useEffect(() => {
+    let current = true;
+    const refreshRoles = async () => {
+      try {
+        const result = await api<{ roles: Array<{ id: string; name: string }> }>('/employer/employee-role-options', token);
+        if (current) { setEmployeeRoles(result.roles); setRolesError(''); }
+      } catch { if (current) setRolesError('Unable to refresh roles. Reopen the role dropdown to retry.'); }
+    };
+    void refreshRoles();
+    const interval = window.setInterval(() => { void refreshRoles(); }, 30000);
+    window.addEventListener('focus', refreshRoles);
+    return () => { current = false; window.clearInterval(interval); window.removeEventListener('focus', refreshRoles); };
+  }, [token]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -3616,21 +3632,13 @@ function AddEmployee({
           onChange={(next) => updateField('employment', 'employmentType', next)}
           options={['Full-Time', 'Part-Time', 'Casual']}
         />
-        <AdminSelect
-          label="Role *"
-          value={v('employment', 'role')}
-          error={fieldErrors[errorKey('employment', 'role')]}
-          onChange={(next) => updateField('employment', 'role', next)}
-          options={[
-            'Employee',
-            'Manager',
-            'Supervisor',
-            'Payroll Admin',
-            'Payroll Approver',
-            'HR Admin',
-            'Accountant'
-          ]}
-        />
+        <label>Role *<select value={v('employment', 'role')} onFocus={() => {
+          void api<{ roles: Array<{ id: string; name: string }> }>('/employer/employee-role-options', token).then((result) => { setEmployeeRoles(result.roles); setRolesError(''); }).catch(() => setRolesError('Unable to refresh roles. Reopen the role dropdown to retry.'));
+        }} onChange={(event) => updateField('employment', 'role', event.target.value)}>
+          <option value="">Select role</option>
+          {v('employment', 'role') && !employeeRoles.some((role) => role.name === v('employment', 'role')) && <option value={v('employment', 'role')} disabled>{v('employment', 'role')} (current assignment)</option>}
+          {employeeRoles.map((role) => <option key={role.id} value={role.name}>{role.name}</option>)}
+        </select>{(rolesError || fieldErrors[errorKey('employment', 'role')]) && <span className="field-error" role="alert">{rolesError || fieldErrors[errorKey('employment', 'role')]}</span>}</label>
         {input('employment', 'hireDate', 'Hire Date *')}
         {input('employment', 'originalHireDate', 'Original Hire Date')}
         {input('employment', 'jobTitle', 'Job Title *')}
@@ -8359,6 +8367,20 @@ function EmployerDeductionsReportPage({ token, onBack }: { token: string; onBack
 
 function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack: () => void }) {
   const [data, setData] = useState<EmployerT4SummaryReport>();
+  const [approval, setApproval] = useState({ submissionNumber: '', receivedDate: '', processedDate: '' });
+  const [savingApproval, setSavingApproval] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState('');
+  async function saveApproval() {
+    if (!data || String(data.year) !== year) return;
+    setSavingApproval(true); setError(''); setApprovalNotice('');
+    try {
+      const response = await fetch(`${apiBase}/employer/reports/t4-summary/approval/${data.year}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(approval) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Unable to save approval details.');
+      setData({ ...data, approval: result.approval }); setApprovalNotice('Approval details saved.');
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setSavingApproval(false); }
+  }
   const [error, setError] = useState('');
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -8376,15 +8398,19 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
     finally { setDownloadingPdf(false); }
   }
   useEffect(() => {
+    let current = true;
     api<EmployerT4SummaryReport>(`/employer/reports/t4-summary?year=${encodeURIComponent(year)}`, token)
       .then((result) => {
+        if (!current) return;
         setData(result);
+        setApproval(result.approval || { submissionNumber: '', receivedDate: '', processedDate: '' }); setApprovalNotice('');
         setError('');
       })
       .catch(() => {
         setData(undefined);
         setError('Unable to load T4 summary data from the database.');
       });
+    return () => { current = false; };
   }, [token, year]);
   const moneyValue = (value: number | undefined) => `$${(value || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const yearOptions = Array.from(new Set([String(new Date().getFullYear()), String(new Date().getFullYear() - 1), String(data?.year || year)]));
@@ -8406,6 +8432,15 @@ function EmployerT4SummaryReportPage({ token, onBack }: { token: string; onBack:
             </div>
           </header>
           <div className="t4-summary-form">
+            <form onSubmit={(event) => { event.preventDefault(); void saveApproval(); }}>
+              <h3>Government Approval Details</h3><p>Leave these fields blank until government confirmation is available. Save details before downloading the PDF.</p>
+              <fieldset disabled={savingApproval || year !== String(data.year)}><div className="settings-fields two">
+                <label>Submission Number<input maxLength={80} value={approval.submissionNumber} onChange={(event) => setApproval({ ...approval, submissionNumber: event.target.value })} /></label>
+                <label>Received Date<input type="date" value={approval.receivedDate} onChange={(event) => setApproval({ ...approval, receivedDate: event.target.value })} /></label>
+                <label>Processed Date<input type="date" value={approval.processedDate} onChange={(event) => setApproval({ ...approval, processedDate: event.target.value })} /></label>
+              </div><button type="submit">{savingApproval ? 'Saving...' : 'Save Approval Details'}</button></fieldset>
+              {approvalNotice && <p role="status">{approvalNotice}</p>}
+            </form>
             <div className="t4-form-top">
               <div>
                 <strong>Canada Revenue Agency</strong>
