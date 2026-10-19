@@ -75,9 +75,9 @@ export function csvCell(value: string | number) {
   const safe = typeof value === 'string' && /^[\s]*[=+\-@]/.test(value) ? `'${value}` : String(value);
   return `"${safe.replace(/"/g, '""')}"`;
 }
-export function reportFile(name: string, format: 'csv' | 'excel' | 'pdf', columns: Array<{ key: string; label: string }>, rows: Array<Record<string, string | number>>, companyName: string) {
+export function reportFile(name: string, format: 'csv' | 'excel' | 'pdf', columns: Array<{ key: string; label: string }>, rows: Array<Record<string, string | number>>, companyName: string, employerDetails: string[] = []) {
   const filename = `${name.replace(/[^a-z\d_-]/gi, '-').slice(0, 70) || 'report'}.${format === 'excel' ? 'xls' : format}`;
-  if (format === 'pdf') return { file: customReportPdf(name, companyName, columns.map((column) => column.label), rows.map((row) => columns.map((column) => String(row[column.key] ?? '')))), filename, contentType: 'application/pdf' };
+  if (format === 'pdf') return { file: customReportPdf(name, companyName, columns.map((column) => column.label), rows.map((row) => columns.map((column) => String(row[column.key] ?? ''))), employerDetails), filename, contentType: 'application/pdf' };
   if (format === 'excel') {
     const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
     const html = `<html><head><meta charset="utf-8"></head><body><h1>${escape(name)}</h1><p>${escape(companyName)}</p><table><tr>${columns.map((column) => `<th>${escape(column.label)}</th>`).join('')}</tr>${rows.map((row) => `<tr>${columns.map((column) => `<td style="mso-number-format:'\\@'">${escape(row[column.key])}</td>`).join('')}</tr>`).join('')}</table></body></html>`;
@@ -103,8 +103,15 @@ export async function runReport(reportId: unknown, companyId: unknown, format: '
     const company = await Company.findById(report.companyId);
     if (!company) throw new Error('Employer not found.');
     const { columns, rows } = await buildReport(report);
-    const file = reportFile(report.name, format, columns, rows, company.legalName);
-    Object.assign(run, file, { snapshot: { columns, rows, companyName: company.legalName }, rowCount: rows.length, status: 'completed' });
+    const employerDetails = [
+      company.operatingName && company.operatingName !== company.legalName ? company.operatingName : '',
+      company.address?.street, company.address?.line2,
+      [company.address?.city, company.address?.province, company.address?.postalCode].filter(Boolean).join(', '),
+      company.address?.country,
+      company.businessNumber ? `Business Number: ${company.businessNumber}` : ''
+    ].filter(Boolean) as string[];
+    const file = reportFile(report.name, format, columns, rows, company.legalName, employerDetails);
+    Object.assign(run, file, { snapshot: { columns, rows, companyName: company.legalName, employerDetails }, rowCount: rows.length, status: 'completed' });
     await run.save();
     if (recipients.length) {
       try { await emailService.send({ to: recipients.join(','), subject: report.name, body: `Your scheduled report "${report.name}" is attached.`, attachments: [{ filename: file.filename, content: file.file, contentType: file.contentType }] }); run.delivery = 'sent'; }

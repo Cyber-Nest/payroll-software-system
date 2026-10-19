@@ -183,6 +183,14 @@ class PdfPage {
     );
   }
 
+  fillSector(cx: number, cy: number, radius: number, start: number, end: number, color: [number, number, number]): void {
+    const points = Array.from({ length: 33 }, (_, index) => {
+      const angle = (start + (end - start) * index / 32) * Math.PI / 180;
+      return `${cx + radius * Math.sin(angle)} ${cy + radius * Math.cos(angle)} l`;
+    });
+    this.ops.push(`${color.join(' ')} rg`, `${cx} ${cy} m`, ...points, 'h f', '0 0 0 rg');
+  }
+
   fillCircleRightSide(
     centerX: number,
     centerY: number,
@@ -239,13 +247,16 @@ class PdfPage {
 }
 
 function drawPayhoursLogo(page: PdfPage, x: number, y: number, scale = 1): void {
-  const radius = 15 * scale;
-  page.fillCircle(x + 22 * scale, y + 18 * scale, radius, [0.078, 0.388, 0.953]);
-  page.fillCircleLeftSide(x + 22 * scale, y + 18 * scale, radius, x + 14 * scale, [0.094, 0.863, 0.765]);
-  page.fillCircle(x + 22 * scale, y + 18 * scale, 6 * scale, [0.973, 0.984, 1]);
-  page.fillRect(x + 19.75 * scale, y + 19 * scale, 4.5 * scale, 11 * scale, [0.078, 0.388, 0.953]);
-  page.text('Payhours', x + 48 * scale, y + 20 * scale, 21 * scale, true, [0.078, 0.388, 0.953]);
-  page.text('Payroll Made Simple', x + 49 * scale, y + 2 * scale, 8 * scale, true, [0.031, 0.259, 0.451]);
+  // Match the 40px CSS logo mark, colors and rounded clock hand in styles.css.
+  const blue: [number, number, number] = [11 / 255, 101 / 255, 1];
+  page.fillCircle(x + 20 * scale, y + 20 * scale, 20 * scale, blue);
+  page.fillSector(x + 20 * scale, y + 20 * scale, 20 * scale, 217.8, 315, [24 / 255, 220 / 255, 195 / 255]);
+  page.fillCircle(x + 20 * scale, y + 20 * scale, 13.6 * scale, [248 / 255, 251 / 255, 1]);
+  page.fillRect(x + 18 * scale, y + 23 * scale, 6 * scale, 6 * scale, blue);
+  page.fillCircle(x + 21 * scale, y + 23 * scale, 3 * scale, blue);
+  page.fillCircle(x + 21 * scale, y + 29 * scale, 3 * scale, blue);
+  page.text('Payhours', x + 50 * scale, y + 19 * scale, 27 * scale, true, [11 / 255, 117 / 255, 209 / 255]);
+  page.text('Payroll Made Simple', x + 50 * scale, y + 3 * scale, 10 * scale, true, [11 / 255, 39 / 255, 85 / 255]);
 }
 
 function drawDocumentHeader(
@@ -523,28 +534,31 @@ function drawT4(data: T4PdfData, format: T4FormatOptions = defaultT4Format): Pdf
   return page;
 }
 
-export function customReportPdf(title: string, employer: string, columns: string[], rows: string[][]): Buffer {
+export function customReportPdf(title: string, employer: string, columns: string[], rows: string[][], employerDetails: string[] = []): Buffer {
   const pages: Array<{ width: number; height: number; content: string }> = [];
-  const count = Math.max(1, Math.ceil(rows.length / 24));
+  const rowsPerPage = 22;
+  const count = Math.max(1, Math.ceil(rows.length / rowsPerPage));
   const width = 752 / columns.length;
   for (let index = 0; index < count; index++) {
     const page = new PdfPage(792, 612);
-    drawPayhoursLogo(page, 20, 564, 0.85);
-    page.text(truncateText(title, 64), 220, 580, 13, true);
-    page.text(truncateText(employer, 79), 220, 561, 10);
-    page.text(`${rows.length} rows`, 220, 544, 8);
-    page.line(20, 537, 772, 537);
+    drawPayhoursLogo(page, 20, 558);
+    page.rightText(truncateText(employer, 65), 772, 588, 10, true);
+    employerDetails.filter(Boolean).slice(0, 6).forEach((line, detailIndex) => page.rightText(truncateText(line, 85), 772, 575 - detailIndex * 11, 8));
+    const titleY = Math.min(532, 575 - Math.min(employerDetails.filter(Boolean).length, 6) * 11 - 12);
+    page.text(truncateText(title, 90), 20, titleY, 13, true);
+    page.text(`${rows.length} rows`, 20, titleY - 15, 8);
+    const tableTop = titleY - 30;
     const maxCharacters = Math.max(8, Math.floor((width - 12) / 6.7));
     columns.forEach((column, cell) => {
       const x = 20 + cell * width;
-      page.fillRect(x, 510, width, 22, [0.9, 0.94, 0.98]); page.rect(x, 510, width, 22);
-      page.text(truncateText(column, maxCharacters), x + 5, 518, 7, true);
+      page.fillRect(x, tableTop - 22, width, 22, [0.9, 0.94, 0.98]); page.rect(x, tableTop - 22, width, 22);
+      page.text(truncateText(column, maxCharacters), x + 5, tableTop - 14, 7, true);
     });
-    rows.slice(index * 24, index * 24 + 24).forEach((row, rowIndex) => row.forEach((value, cell) => {
-      const x = 20 + cell * width; const y = 492 - rowIndex * 18;
+    rows.slice(index * rowsPerPage, index * rowsPerPage + rowsPerPage).forEach((row, rowIndex) => row.forEach((value, cell) => {
+      const x = 20 + cell * width; const y = tableTop - 40 - rowIndex * 18;
       page.rect(x, y, width, 18); page.text(truncateText(value, maxCharacters), x + 5, y + 6, 7);
     }));
-    if (!rows.length) page.text('No records match the selected filters.', 20, 490, 10);
+    if (!rows.length) page.text('No records match the selected filters.', 20, tableTop - 42, 10);
     page.text(`Page ${index + 1} of ${count}`, 20, 35, 8);
     page.text('Generated by Payhours | Confidential payroll report', 460, 35, 8);
     pages.push({ width: 792, height: 612, content: page.content() });

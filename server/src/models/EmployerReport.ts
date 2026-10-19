@@ -39,7 +39,7 @@ export interface IReportRun {
   companyId: mongoose.Types.ObjectId; reportId: mongoose.Types.ObjectId; scheduleId?: mongoose.Types.ObjectId;
   reportName: string; status: 'running' | 'completed' | 'failed'; format: 'csv' | 'excel' | 'pdf';
   rowCount: number; file?: Buffer; filename?: string; contentType?: string; error?: string;
-  snapshot?: { columns: Array<{ key: string; label: string }>; rows: Array<Record<string, string | number>>; companyName: string };
+  snapshot?: { columns: Array<{ key: string; label: string }>; rows: Array<Record<string, string | number>>; companyName: string; employerDetails?: string[] };
   delivery: 'not_requested' | 'sent' | 'failed'; deliveryError?: string; createdAt: Date;
 }
 export const EmployerReportRun = mongoose.model<IReportRun>('EmployerReportRun', new Schema<IReportRun>({

@@ -240,7 +240,8 @@ describe('Report dates and exports', () => {
     const columns = [{ key: 'name', label: 'Employee' }]; const rows = Array.from({ length: 25 }, (_, index) => ({ name: `Employee ${index}` }));
     expect(reportFile('Directory', 'csv', columns, rows, 'Company').file.toString()).toContain('Employee 24');
     expect(reportFile('Directory', 'excel', columns, [{ name: '<script>' }], 'Company').file.toString()).toContain('&lt;script&gt;');
-    const pdf = reportFile('Directory', 'pdf', columns, rows, 'Company').file.toString();
+    const pdf = reportFile('Directory', 'pdf', columns, rows, 'Company', ['123 Main Street', 'Suite 100', 'Toronto, ON, M5V 1A1', 'Canada', 'Business Number: 123456789']).file.toString();
+    for (const text of ['Payhours', 'Payroll Made Simple', '123 Main Street', 'Suite 100', 'Toronto, ON, M5V 1A1', 'Business Number: 123456789']) expect(pdf).toContain(text);
     expect(pdf).toContain('%PDF-1.4'); expect((pdf.match(/\/Type \/Page\b/g) || []).length).toBe(2);
   });
 });

@@ -120,7 +120,7 @@ router.get('/runs/:id/download', requirePermission('reports.export'), async (req
   if (!run?.file) return res.status(404).json({ message: 'Generated report not found.' });
   if (format.data && format.data !== run.format) {
     if (!run.snapshot) return res.status(409).json({ message: 'Run this report again to enable downloads in all formats.' });
-    const output = reportFile(run.reportName, format.data, run.snapshot.columns, run.snapshot.rows, run.snapshot.companyName);
+    const output = reportFile(run.reportName, format.data, run.snapshot.columns, run.snapshot.rows, run.snapshot.companyName, run.snapshot.employerDetails);
     return res.type(output.contentType).setHeader('Cache-Control', 'no-store').setHeader('Content-Disposition', `attachment; filename="${output.filename}"`).send(output.file);
   }
   res.type(run.contentType || 'application/octet-stream').setHeader('Cache-Control', 'no-store').setHeader('Content-Disposition', `attachment; filename="${run.filename}"`).send(run.file);
