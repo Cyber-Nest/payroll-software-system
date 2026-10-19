@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import EmployerBenefitsSection from './EmployerBenefitsSection';
 
 type Line = { code: string; description: string; type: 'Statutory' | 'Voluntary'; amount: string };
 type RecordItem = {
@@ -206,7 +207,7 @@ export default function DeductionsPage({ token, onEditEmployee }: { token: strin
     <header className="deductions-title deductions-page-title"><div><h1>{tab === 'Deduction Types' ? 'Deduction Types' : 'Deductions'}</h1><p>{tab === 'Deduction Types' ? 'View deduction types managed by the Payhours super administrator.' : 'Review statutory payroll deductions and historical amounts.'}</p></div></header>
     {error && <p className="success-note" role="alert">{error}</p>}
     {notice && <p className="success-note" role="status">{notice}</p>}
-    {tab === 'Deduction Types' ? <div className="deductions-metrics deduction-type-metrics">
+    {tab === 'Employer' ? null : tab === 'Deduction Types' ? <div className="deductions-metrics deduction-type-metrics">
       <article><span>▤</span><div><small>Total Deduction Types</small><strong>{statutoryTypes.length}</strong><small>4 Statutory</small></div></article>
       <article><span>✓</span><div><small>Active Types</small><strong>{statutoryTypes.filter((item) => configuredCodes.includes(item.code) || activeCodes.has(item.code)).length}</strong><small>System managed</small></div></article>
       <article><span>◷</span><div><small>Used in Payroll</small><strong>{statutoryTypes.filter((item) => usedBy(item.code) > 0).length}</strong><small>{statutoryTypes.filter((item) => usedBy(item.code) === 0).length} not in use</small></div></article>
@@ -217,8 +218,8 @@ export default function DeductionsPage({ token, onEditEmployee }: { token: strin
       <article><span>$</span><div><small>Average Deductions (Per Employee)</small><strong>{money(activeEmployees ? total / activeEmployees : 0)}</strong></div></article>
       <article><span>◴</span><div><small>Active Deduction Types</small><strong>{statutoryTypes.filter((line) => activeCodes.has(line.code)).length}</strong><small>Statutory deductions only</small></div></article>
     </div>}
-    <nav className="deductions-tabs" aria-label="Deduction views">{['Employee Deductions', 'Deduction Types', 'Deduction History'].map((name) => <button key={name} className={tab === name ? 'active' : ''} onClick={() => { setTab(name); setEmployeeCodeFilter(''); setOpenTypeMenu(''); setPage(1); }}>{name}</button>)}</nav>
-    {tab === 'Deduction Types' ? <section className="deduction-types-view">
+    <nav className="deductions-tabs" aria-label="Deduction views">{['Employee Deductions', 'Employer', 'Deduction Types', 'Deduction History'].map((name) => <button key={name} className={tab === name ? 'active' : ''} onClick={() => { setTab(name); setEmployeeCodeFilter(''); setOpenTypeMenu(''); setPage(1); }}>{name}</button>)}</nav>
+    {tab === 'Employer' ? <EmployerBenefitsSection token={token} readOnly /> : tab === 'Deduction Types' ? <section className="deduction-types-view">
       <nav className="deduction-type-tabs"><button className="active">All Deduction Types</button><button>Statutory Deductions</button></nav>
       {customTypes.length > 0 && <section className="assigned-deduction-types"><header><h2>Employer Custom Deductions</h2><p>Assigned and managed by the Payhours super administrator.</p></header><table><thead><tr><th>Name</th><th>Code</th><th>Provinces</th><th>Calculation</th><th>Status</th></tr></thead><tbody>{customTypes.map((item) => <tr key={item.id}><td><b>{item.name}</b><small>{item.description}</small></td><td>{item.code}</td><td>{item.provinces.join(', ')}</td><td>{item.calculationMethod === 'percentage' ? `${item.value}% of gross pay` : money(item.value)}</td><td><span className={`status ${item.status === 'active' ? 'paid' : 'draft'}`}>{item.status}</span></td></tr>)}</tbody></table></section>}
       <div className="deduction-type-filters"><label>Type<select><option>All Types</option><option>Statutory</option></select></label><label>Status<select value={typeStatus} onChange={(event) => setTypeStatus(event.target.value)}><option value="">All Statuses</option><option>Active</option><option>Inactive</option></select></label><label>Search<input placeholder="Search by name, code or description..." value={typeSearch} onChange={(event) => setTypeSearch(event.target.value)} /></label><button type="button" onClick={() => { setTypeStatus(''); setTypeSearch(''); }}>Clear Filters</button></div>

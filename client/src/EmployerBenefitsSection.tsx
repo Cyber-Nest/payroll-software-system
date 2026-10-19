@@ -6,7 +6,7 @@ type Benefit = Fields & { id: string; source: 'plan' | 'employee' };
 const empty: Fields = { name: '', type: 'Health', coverageOrValue: '', description: '', employeeScope: 'all', employeeIds: [], applicableFrom: '', status: 'active' };
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-export default function EmployerBenefitsSection({ token }: { token: string }) {
+export default function EmployerBenefitsSection({ token, readOnly: displayOnly = false }: { token: string; readOnly?: boolean }) {
   const [benefits, setBenefits] = useState<Benefit[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [form, setForm] = useState<Fields>(empty);
@@ -68,14 +68,15 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
     return employee ? `${employee.name} (${employee.employeeNumber})` : 'Unavailable employee';
   }).join(', ');
   return <div className="employer-benefits-manager">
-    <div className="benefit-manager-actions"><button type="button" className="run-payroll" disabled={busy || loading} onClick={() => open('add')}>Add Benefit</button></div>
+    {!displayOnly && <div className="benefit-manager-actions"><button type="button" className="run-payroll" disabled={busy || loading} onClick={() => open('add')}>Add Benefit</button></div>}
+    {!loading && !error && !benefits.length && <p>No benefits have been added in Settings yet.</p>}
     {!mode && error && <p role="alert" className="field-error">{error}</p>}{notice && <p role="status">{notice}</p>}
     {loading && <p>Checking benefits...</p>}
     {benefits.length > 0 && <section className="settings-card"><header className="settings-card-head"><div><h2>Employee Benefits</h2><p>Configured benefits and existing employee enrollments.</p></div></header>
       <div className="settings-table"><table><colgroup>{Array.from({ length: 7 }, (_, index) => <col key={index} style={{ width: `${100 / 7}%` }} />)}</colgroup>
         <thead><tr>{['Benefit', 'Type', 'Coverage / Value', 'Employees', 'Applicable From', 'Status', 'Actions'].map((label) => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>{benefits.map((item) => <tr key={item.id}><td>{item.name}</td><td>{item.type}</td><td>{item.coverageOrValue}</td><td>{item.employeeScope === 'all' ? 'All employees (including new employees)' : employeeNames(item.employeeIds)}</td><td>{item.applicableFrom || 'Not recorded'}</td><td>{item.status === 'active' ? 'Active' : 'Inactive'}</td>
-          <td><div className="employer-role-actions"><button type="button" disabled={busy} onClick={() => open('view', item)}>View</button><button type="button" disabled={busy} onClick={() => open('edit', item)}>Edit</button><button type="button" className="danger-button" disabled={busy} onClick={() => remove(item)}>Delete</button></div></td></tr>)}</tbody>
+          <td><div className="employer-role-actions"><button type="button" disabled={busy} onClick={() => open('view', item)}>View</button><button type="button" hidden={displayOnly} disabled={busy} onClick={() => open('edit', item)}>Edit</button><button type="button" className="danger-button" hidden={displayOnly} disabled={busy} onClick={() => remove(item)}>Delete</button></div></td></tr>)}</tbody>
       </table></div>
     </section>}
     {mode && <div className="employer-role-backdrop"><section className="employer-role-dialog" role="dialog" aria-modal="true" aria-labelledby="benefit-form-title">
@@ -100,7 +101,7 @@ export default function EmployerBenefitsSection({ token }: { token: string }) {
         {!employees.length && <p>No employees are available for this employer.</p>}
       </>}</section>}</fieldset>
       {!readOnly && <p>Use Deduction Setup to configure any payroll deductions for employee contributions.</p>}
-      <footer><button type="button" disabled={busy} onClick={() => setMode(undefined)}>{readOnly ? 'Close' : 'Cancel'}</button>{readOnly ? <button key="edit-benefit" type="button" onClick={(event) => { event.preventDefault(); setMode('edit'); }}>Edit Benefit</button> : <button key="save-benefit" type="submit" data-action="save-benefit" className="run-payroll" disabled={busy || (form.employeeScope === 'selected' && !form.employeeIds.length)}>{busy ? 'Saving...' : 'Save Benefit'}</button>}</footer>
+      <footer><button type="button" disabled={busy} onClick={() => setMode(undefined)}>{readOnly ? 'Close' : 'Cancel'}</button>{readOnly ? !displayOnly && <button key="edit-benefit" type="button" onClick={(event) => { event.preventDefault(); setMode('edit'); }}>Edit Benefit</button> : <button key="save-benefit" type="submit" data-action="save-benefit" className="run-payroll" disabled={busy || (form.employeeScope === 'selected' && !form.employeeIds.length)}>{busy ? 'Saving...' : 'Save Benefit'}</button>}</footer>
       </form>
     </section></div>}
   </div>;
