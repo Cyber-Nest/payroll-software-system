@@ -114,7 +114,26 @@ describe('Employer custom and scheduled reports', () => {
     const download = await request(`/runs/${runId}/download`);
     expect(download.headers.get('content-disposition')).toContain('attachment');
     expect(await download.text()).toContain('Jane Sample');
+    for (const format of ['pdf', 'excel', 'csv']) {
+      const exported = await request(`/runs/${runId}/download?format=${format}`);
+      expect(exported.status).toBe(200);
+      const content = await exported.text();
+      expect(content).toContain('Jane Sample');
+      if (format === 'pdf') { expect(content).toContain('%PDF'); expect(content).toContain('Payhours'); }
+    }
+    expect((await request(`/runs/${runId}/download?format=invalid`)).status).toBe(400);
+    generated.snapshot = undefined;
+    expect((await request(`/runs/${runId}/download?format=pdf`)).status).toBe(409);
     expect(find).toHaveBeenCalledWith({ _id: runId, companyId, status: 'completed' });
+  });
+  it('allows a scheduled run format override without changing the saved schedule', async () => {
+    const schedule = doc({ _id: runId, companyId: new mongoose.Types.ObjectId(companyId), reportId, format: 'csv', recipients: [] });
+    jest.spyOn(EmployerReportSchedule, 'findOne').mockResolvedValue(schedule as never);
+    expect((await request(`/schedules/${runId}/run`, { format: 'pdf' })).status).toBe(200);
+    expect(generated.format).toBe('pdf');
+    expect(generated.file.toString()).toContain('Payhours');
+    expect(schedule.format).toBe('csv');
+    expect((await request(`/schedules/${runId}/run`, { format: 'invalid' })).status).toBe(400);
   });
   it('rejects employees outside the employer and read-only users', async () => {
     jest.spyOn(Employee, 'countDocuments').mockResolvedValue(0);

@@ -39,11 +39,12 @@ export interface IReportRun {
   companyId: mongoose.Types.ObjectId; reportId: mongoose.Types.ObjectId; scheduleId?: mongoose.Types.ObjectId;
   reportName: string; status: 'running' | 'completed' | 'failed'; format: 'csv' | 'excel' | 'pdf';
   rowCount: number; file?: Buffer; filename?: string; contentType?: string; error?: string;
+  snapshot?: { columns: Array<{ key: string; label: string }>; rows: Array<Record<string, string | number>>; companyName: string };
   delivery: 'not_requested' | 'sent' | 'failed'; deliveryError?: string; createdAt: Date;
 }
 export const EmployerReportRun = mongoose.model<IReportRun>('EmployerReportRun', new Schema<IReportRun>({
   companyId: { type: Schema.Types.ObjectId, required: true, index: true }, reportId: { type: Schema.Types.ObjectId, required: true },
   scheduleId: Schema.Types.ObjectId, reportName: String, status: { type: String, enum: ['running', 'completed', 'failed'], default: 'running' },
-  format: String, rowCount: { type: Number, default: 0 }, file: { type: Buffer, select: false }, filename: String, contentType: String,
+  format: String, rowCount: { type: Number, default: 0 }, file: { type: Buffer, select: false }, snapshot: { type: Schema.Types.Mixed, select: false }, filename: String, contentType: String,
   error: String, delivery: { type: String, default: 'not_requested' }, deliveryError: String
 }, { timestamps: true }));

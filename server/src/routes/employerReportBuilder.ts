@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticate, AuthRequest, requirePermission } from '../middleware/auth';
 import { Employee } from '../models/Employee';
 import { EmployerReport, EmployerReportTemplate, EmployerReportRun, EmployerReportSchedule } from '../models/EmployerReport';
-import { buildReport, reportFields, runReport, scheduledDefinition } from '../services/employerReports.service';
+import { buildReport, reportFields, reportFile, runReport, scheduledDefinition } from '../services/employerReports.service';
 import { env } from '../config/env';
 
 const router = Router();
@@ -29,7 +29,7 @@ export const reportScheduleSchema = z.object({
 }).refine((value) => Boolean(value.reportType || value.reportId), { message: 'Choose a report type.' })
   .refine((value) => value.dateRange !== 'custom' || Boolean(value.fromDate && value.toDate && value.fromDate <= value.toDate), { message: 'Select a valid report date range.' })
   .refine((value) => !value.untilDate || value.frequency === 'monthly' || value.nextRunAt.slice(0, 10) <= value.untilDate, { message: 'Until date must be on or after the first run.' });
-const serialize = (value: { _id: unknown; toObject(): any }) => { const { _id, __v, file, leaseUntil, ...data } = value.toObject(); return { ...data, id: String(_id) }; };
+const serialize = (value: { _id: unknown; toObject(): any }) => { const { _id, __v, file, snapshot, leaseUntil, ...data } = value.toObject(); return { ...data, id: String(_id) }; };
 router.param('id', (_req, res, next, value) => { if (!mongoose.isValidObjectId(value)) { res.status(400).json({ message: 'Invalid report ID.' }); return; } next(); });
 router.get('/options', async (req: AuthRequest, res) => {
   const employees = await Employee.find({ companyId: req.employerContext!.companyId }).select('employeeNumber legalFirstName legalLastName').sort({ employeeNumber: 1 });
@@ -105,15 +105,24 @@ router.delete('/schedules/:id', requirePermission('reports.export'), async (req:
   if (!await EmployerReportSchedule.findOneAndDelete({ _id: req.params.id, companyId: req.employerContext!.companyId })) return res.status(404).json({ message: 'Schedule not found.' }); res.json({ deleted: true });
 });
 router.post('/schedules/:id/run', requirePermission('reports.export'), async (req: AuthRequest, res) => {
+  const format = z.enum(['csv', 'excel', 'pdf']).optional().safeParse(req.body.format);
+  if (!format.success) return res.status(400).json({ message: 'Choose CSV, Excel or PDF.' });
   const schedule = await EmployerReportSchedule.findOne({ _id: req.params.id, companyId: req.employerContext!.companyId });
   if (!schedule) return res.status(404).json({ message: 'Schedule not found.' });
-  try { const run = await runReport(schedule.reportId || schedule._id, schedule.companyId, schedule.format, schedule._id, schedule.recipients, scheduledDefinition(schedule)); res.json({ run: serialize(run) }); }
+  try { const run = await runReport(schedule.reportId || schedule._id, schedule.companyId, format.data || schedule.format, schedule._id, schedule.recipients, scheduledDefinition(schedule)); res.json({ run: serialize(run) }); }
   catch (error) { res.status(400).json({ message: (error as Error).message }); }
 });
 router.get('/runs', async (req: AuthRequest, res) => { res.json({ runs: (await EmployerReportRun.find({ companyId: req.employerContext!.companyId }).sort({ createdAt: -1 }).limit(100)).map(serialize) }); });
 router.get('/runs/:id/download', requirePermission('reports.export'), async (req: AuthRequest, res) => {
-  const run = await EmployerReportRun.findOne({ _id: req.params.id, companyId: req.employerContext!.companyId, status: 'completed' }).select('+file');
+  const format = z.enum(['csv', 'excel', 'pdf']).optional().safeParse(req.query.format);
+  if (!format.success) return res.status(400).json({ message: 'Choose CSV, Excel or PDF.' });
+  const run = await EmployerReportRun.findOne({ _id: req.params.id, companyId: req.employerContext!.companyId, status: 'completed' }).select('+file +snapshot');
   if (!run?.file) return res.status(404).json({ message: 'Generated report not found.' });
+  if (format.data && format.data !== run.format) {
+    if (!run.snapshot) return res.status(409).json({ message: 'Run this report again to enable downloads in all formats.' });
+    const output = reportFile(run.reportName, format.data, run.snapshot.columns, run.snapshot.rows, run.snapshot.companyName);
+    return res.type(output.contentType).setHeader('Cache-Control', 'no-store').setHeader('Content-Disposition', `attachment; filename="${output.filename}"`).send(output.file);
+  }
   res.type(run.contentType || 'application/octet-stream').setHeader('Cache-Control', 'no-store').setHeader('Content-Disposition', `attachment; filename="${run.filename}"`).send(run.file);
 });
 export default router;

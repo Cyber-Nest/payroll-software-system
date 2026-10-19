@@ -104,7 +104,7 @@ export async function runReport(reportId: unknown, companyId: unknown, format: '
     if (!company) throw new Error('Employer not found.');
     const { columns, rows } = await buildReport(report);
     const file = reportFile(report.name, format, columns, rows, company.legalName);
-    Object.assign(run, file, { rowCount: rows.length, status: 'completed' });
+    Object.assign(run, file, { snapshot: { columns, rows, companyName: company.legalName }, rowCount: rows.length, status: 'completed' });
     await run.save();
     if (recipients.length) {
       try { await emailService.send({ to: recipients.join(','), subject: report.name, body: `Your scheduled report "${report.name}" is attached.`, attachments: [{ filename: file.filename, content: file.file, contentType: file.contentType }] }); run.delivery = 'sent'; }
