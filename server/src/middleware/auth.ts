@@ -91,7 +91,9 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
           res.status(403).json({ message: 'Change your temporary password before accessing your account.' }); return;
         }
         const section = path.startsWith('/employees') ? 'Employees' : path.startsWith('/paystub-templates') ? 'Paystub Templates' : path.startsWith('/t4-formats') ? 'T4 Formats' : path.startsWith('/deduction-types') ? 'Deduction Types' : path.startsWith('/t4/') ? 'Year End (T4)' : path.startsWith('/roe/') ? 'ROE' : path.startsWith('/notifications') ? 'Notifications' : path.startsWith('/access') || path.startsWith('/roles') ? 'Users & Access' : path.startsWith('/employers') ? 'Employers' : path.startsWith('/payroll-accounts') ? (path.endsWith('/banking') ? 'Banking & Funding' : path.endsWith('/remittance-payment') ? 'CRA Remittances' : path.endsWith('/remitter-type') ? 'Remittance Schedule' : req.method === 'POST' && path === '/payroll-accounts' ? 'Add Payroll Account' : 'All Payroll Accounts') : path.startsWith('/payroll-runs') ? 'Payroll Runs' : path.startsWith('/tax-config') ? 'Compliance & Tax' : path === '/dashboard' ? 'Dashboard' : undefined;
-        if (!req.originalUrl.includes('/super-admin/') || (!passwordAccess && (!section || !(superAdmin.sectionPermissions || []).includes(section)))) {
+        const hasSection = (superAdmin.sectionPermissions || []).includes(section || '');
+        const dashboardCanLoadEmployerList = path === '/dashboard' && (superAdmin.sectionPermissions || []).includes('Employers');
+        if (!req.originalUrl.includes('/super-admin/') || (!passwordAccess && !hasSection && !dashboardCanLoadEmployerList)) {
           res.status(403).json({ message: 'Section access denied' }); return;
         }
         if (req.method !== 'GET' && (path.startsWith('/access') || path.startsWith('/roles'))) {

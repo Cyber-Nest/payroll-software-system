@@ -14299,6 +14299,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     employer: { legalName: string; customerId: string; primaryContactEmail: string };
   }>();
   const [error, setError] = useState('');
+  const [dashboardError, setDashboardError] = useState('');
   const [savingEmployer, setSavingEmployer] = useState(false);
   const [employerNotice, setEmployerNotice] = useState('');
   const [resendingEmployerId, setResendingEmployerId] = useState('');
@@ -14345,8 +14346,11 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     setForm((current) => ({ ...current, [key]: value }));
   useEffect(() => {
     api<SuperAdminDashboard>('/super-admin/dashboard', token)
-      .then(setData)
-      .catch(() => setData(undefined));
+      .then((result) => { setData(result); setDashboardError(''); })
+      .catch((loadError) => {
+        setData(undefined);
+        setDashboardError(loadError instanceof Error ? loadError.message : 'Could not load employers.');
+      });
   }, [token, result]);
   useEffect(() => {
     api<{ templates: PaystubTemplateItem[] }>('/super-admin/paystub-templates', token)
@@ -15340,6 +15344,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <strong>{data?.metrics.draftEmployers || 0}</strong>
         </article>
       </div>
+      {dashboardError && <p className="error-message" role="alert">Could not load employer data: {dashboardError}</p>}
       <section className="admin-panel">
         <table>
           <thead>
