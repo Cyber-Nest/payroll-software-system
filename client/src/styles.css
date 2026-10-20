@@ -6537,6 +6537,26 @@ th {
   display: grid;
   gap: 8px;
 }
+.employees-page .staff-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 14px 24px;
+  margin: 16px 0 24px;
+}
+.employees-page .staff-permission-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  min-height: 28px;
+}
+.employees-page .staff-permission-grid input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 16px;
+}
 .permission-checks label {
   align-items: center;
   color: #283b7c;

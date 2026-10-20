@@ -36,22 +36,29 @@ router.get('/session', authenticate, async (req: AuthRequest, res) => {
   const admin = await SuperAdmin.findById(req.superAdminContext!.superAdminId);
   res.json({ sections: admin?.staffOwnerId ? admin.sectionPermissions || [] : staffSections });
 });
-const staffSchema = z.object({ firstName: z.string().trim().min(1), lastName: z.string().trim().min(1), employeeNumber: z.string().trim().min(1), email: z.string().email(), position: z.string().default(''), location: z.string().default(''), sections: z.array(z.string()).refine(items => items.every(item => staffSections.includes(item))) });
+async function activeStaffRoles(): Promise<string[]> {
+  // Use the same saved roles and initial defaults as Users & Roles.
+  const savedRoles = await AccessRole.find({});
+  const roles = savedRoles.length ? savedRoles : accessRoles;
+  return roles.filter(role => role.userType !== 'employer' && role.status === 'Active').map(role => role.name);
+}
+const staffSchema = z.object({ firstName: z.string().trim().min(1), lastName: z.string().trim().min(1), employeeNumber: z.string().trim().min(1), email: z.string().email(), role: z.string().trim().min(1), location: z.string().default(''), sections: z.array(z.string()).refine(items => items.every(item => staffSections.includes(item))) });
 router.get('/employees', authenticate, requirePermission('employee.view'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const employees = await SuperAdmin.find({ staffOwnerId: req.superAdminContext!.superAdminId });
-  res.json({ sections: staffSections, employees: employees.map(item => ({ ...item.staffProfile, id: String(item._id), email: item.email, sections: item.sectionPermissions || [] })) });
+  res.json({ sections: staffSections, roles: await activeStaffRoles(), employees: employees.map(item => ({ ...item.staffProfile, id: String(item._id), email: item.email, role: item.role || '', sections: item.sectionPermissions || [] })) });
 });
 router.post('/employees', authenticate, requirePermission('employee.create'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const parsed = staffSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Enter valid employee details.' });
   const data = parsed.data;
+  if (!(await activeStaffRoles()).includes(data.role)) return res.status(400).json({ message: 'Choose an active super admin role.' });
   if (await SuperAdmin.exists({ email: data.email.toLowerCase() })) return res.status(409).json({ message: 'Email already exists.' });
   if (await SuperAdmin.exists({ staffOwnerId: req.superAdminContext!.superAdminId, 'staffProfile.employeeNumber': data.employeeNumber })) return res.status(409).json({ message: 'Employee number already exists.' });
   const temporaryPassword = generateTemporaryPassword();
   const { sections, ...profile } = data;
-  const employee = await SuperAdmin.create({ staffOwnerId: req.superAdminContext!.superAdminId, staffProfile: profile, sectionPermissions: sections, name: data.firstName + ' ' + data.lastName, email: data.email, role: 'Platform Employee', passwordHash: await hashPassword(temporaryPassword), isActive: true });
+  const employee = await SuperAdmin.create({ staffOwnerId: req.superAdminContext!.superAdminId, staffProfile: profile, sectionPermissions: sections, name: data.firstName + ' ' + data.lastName, email: data.email, role: data.role, passwordHash: await hashPassword(temporaryPassword), isActive: true });
   res.status(201).json({ id: String(employee._id), temporaryPassword });
 });
 router.put('/employees/:id', authenticate, requirePermission('employee.edit'), async (req: AuthRequest, res) => {
@@ -59,10 +66,11 @@ router.put('/employees/:id', authenticate, requirePermission('employee.edit'), a
   const parsed = staffSchema.safeParse(req.body);
   if (!parsed.success || !mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Invalid employee.' });
   const data = parsed.data;
+  if (!(await activeStaffRoles()).includes(data.role)) return res.status(400).json({ message: 'Choose an active super admin role.' });
   if (await SuperAdmin.exists({ _id: { $ne: req.params.id }, email: data.email.toLowerCase() })) return res.status(409).json({ message: 'Email already exists.' });
   if (await SuperAdmin.exists({ _id: { $ne: req.params.id }, staffOwnerId: req.superAdminContext!.superAdminId, 'staffProfile.employeeNumber': data.employeeNumber })) return res.status(409).json({ message: 'Employee number already exists.' });
   const { sections, ...profile } = data;
-  const employee = await SuperAdmin.findOneAndUpdate({ _id: req.params.id, staffOwnerId: req.superAdminContext!.superAdminId }, { staffProfile: profile, sectionPermissions: sections, name: data.firstName + ' ' + data.lastName, email: data.email.toLowerCase() }, { new: true });
+  const employee = await SuperAdmin.findOneAndUpdate({ _id: req.params.id, staffOwnerId: req.superAdminContext!.superAdminId }, { staffProfile: profile, sectionPermissions: sections, role: data.role, name: data.firstName + ' ' + data.lastName, email: data.email.toLowerCase() }, { new: true });
   if (!employee) return res.status(404).json({ message: 'Employee not found.' });
   res.json({ saved: true });
 });
