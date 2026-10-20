@@ -14237,7 +14237,15 @@ function SuperAdminEmployees({ token }: { token: string }) {
   useEffect(() => { void load(); }, [token]);
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (!draft) return; setBusy(true);
-    try { const result = await api<{ temporaryPassword?: string }>('/super-admin/employees' + (draft.id ? '/' + draft.id : ''), token, { method: draft.id ? 'PUT' : 'POST', body: JSON.stringify(draft) }); setMessage(result.temporaryPassword ? 'Employee created. Sign in through Super Admin with ' + draft.email + '. Temporary password: ' + result.temporaryPassword : 'Employee saved.'); setDraft(undefined); await load(); }
+    try {
+      const result = await api<{ temporaryPassword?: string; emailSent?: boolean; emailError?: string }>('/super-admin/employees' + (draft.id ? '/' + draft.id : ''), token, { method: draft.id ? 'PUT' : 'POST', body: JSON.stringify(draft) });
+      setMessage(result.temporaryPassword
+        ? result.emailSent
+          ? 'Employee created. Login details and a temporary password were emailed to ' + draft.email + '. They must change the password on first sign-in.'
+          : 'Employee created, but the login email could not be sent: ' + (result.emailError || 'Email delivery failed.') + ' Login: ' + draft.email + '. Temporary password: ' + result.temporaryPassword
+        : 'Employee saved.');
+      setDraft(undefined); await load();
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save employee.'); }
     finally { setBusy(false); }
   }
@@ -14250,6 +14258,29 @@ function SuperAdminEmployees({ token }: { token: string }) {
     {message && <p role="status">{message}</p>}
     {draft ? <form onSubmit={save}><div className="settings-fields three">{([['firstName','First Name'],['lastName','Last Name'],['employeeNumber','Employee Number'],['email','Login Email'],['location','Location']] as const).map(([key,label]) => <label key={key}>{label}<input required={key !== 'location'} type={key === 'email' ? 'email' : 'text'} value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })} /></label>)}<label>Role<select required value={draft.role} onChange={event => setDraft({ ...draft, role: event.target.value })}><option value="">Select a super admin role</option>{draft.role && !roles.includes(draft.role) && <option value={draft.role} disabled>{draft.role} (unavailable)</option>}{roles.map(role => <option key={role} value={role}>{role}</option>)}</select></label></div><h2>Super Admin Permissions</h2><p>Select each section this employee can access after login.</p><div className="staff-permission-grid">{sections.map(section => <label key={section}><input type="checkbox" checked={draft.sections.includes(section)} onChange={event => setDraft({ ...draft, sections: event.target.checked ? [...draft.sections, section] : draft.sections.filter(item => item !== section) })} />{section}</label>)}</div><button type="button" onClick={() => setDraft(undefined)}>Cancel</button><button className="run-payroll" disabled={busy}>{busy ? 'Saving...' : 'Save Employee'}</button></form> : <table><thead><tr><th>Employee</th><th>Employee #</th><th>Role</th><th>Location</th><th>Email</th><th>Actions</th></tr></thead><tbody>{staff.map(employee => <tr key={employee.id}><td><b>{employee.firstName} {employee.lastName}</b></td><td>{employee.employeeNumber}</td><td>{employee.role || '-'}</td><td>{employee.location || '-'}</td><td>{employee.email}</td><td className="table-actions"><button onClick={() => { setMessage(''); setDraft(employee); }}>Edit</button><button onClick={() => remove(employee)}>Delete</button></td></tr>)}{!staff.length && <tr><td colSpan={6}>No employees added yet.</td></tr>}</tbody></table>}
   </section>;
+}
+
+function StaffPasswordChange({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) { setError('New passwords do not match.'); return; }
+    setBusy(true); setError('');
+    try {
+      await api('/super-admin/auth/change-password', token, { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+      window.location.reload();
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not change password.'); }
+    finally { setBusy(false); }
+  }
+  return <main className="admin-content"><section className="admin-panel"><h1>Change your temporary password</h1><p>Choose a new password to access your account.</p><form onSubmit={submit}><div className="settings-fields three">
+    <label>Temporary password<input required type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
+    <label>New password<input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} /></label>
+    <label>Confirm new password<input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>
+    </div>{error && <p role="alert">{error}</p>}<button disabled={busy} className="run-payroll">{busy ? 'Saving...' : 'Change Password'}</button><button type="button" onClick={onLogout}>Logout</button></form></section></main>;
 }
 
 function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -14275,7 +14306,8 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const [t4FormatOptions, setT4FormatOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [allowedSections, setAllowedSections] = useState<string[]>([]);
   const [accessLoaded, setAccessLoaded] = useState(false);
-  useEffect(() => { api<{ sections: string[] }>('/super-admin/session', token).then(result => { setAllowedSections(result.sections); setPage(current => result.sections.includes(current) ? current : result.sections[0] || ''); setAccessLoaded(true); }).catch(() => setAccessLoaded(true)); }, [token]);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  useEffect(() => { api<{ sections: string[]; mustChangePassword: boolean }>('/super-admin/session', token).then(result => { setMustChangePassword(result.mustChangePassword); setAllowedSections(result.sections); setPage(current => result.sections.includes(current) ? current : result.sections[0] || ''); setAccessLoaded(true); }).catch(() => setAccessLoaded(true)); }, [token]);
   const nav = [
     { label: 'Dashboard' },
     { label: 'Employers' },
@@ -15425,7 +15457,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     'Remittance Schedule'
   ];
   return (
-    <div className="admin-shell super-admin-shell">
+    mustChangePassword ? <StaffPasswordChange token={token} onLogout={onLogout} /> : <div className="admin-shell super-admin-shell">
       <aside className="admin-sidebar">
         <Logo />
         {nav.filter(item => allowedSections.includes(item.label)).map((item) => (

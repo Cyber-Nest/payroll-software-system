@@ -25,13 +25,13 @@ function detailsTable(rows: Array<[string, string]>) {
     .join('')}</table>`;
 }
 
-function emailShell(title: string, greeting: string, intro: string, rows: Array<[string, string]>) {
+function emailShell(title: string, greeting: string, intro: string, rows: Array<[string, string]>, signInUrl = env.portalUrl) {
   return [
     `<h1 style="font-size:22px;margin:0 0 12px;color:#0f172a;">${escapeHtml(title)}</h1>`,
     `<p>Hello ${escapeHtml(greeting)},</p>`,
     `<p>${escapeHtml(intro)}</p>`,
     detailsTable(rows),
-    `<p><a href="${escapeHtml(env.portalUrl)}" style="display:inline-block;background:#1677d2;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:700;">Sign in to Payhours</a></p>`,
+    `<p><a href="${escapeHtml(signInUrl)}" style="display:inline-block;background:#1677d2;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:700;">Sign in to Payhours</a></p>`,
     '<p>Please sign in and change your password after your first login.</p>'
   ].join('');
 }
@@ -65,6 +65,26 @@ export async function sendEmployerCredentialsEmail(employerUserId: string, tempo
       `Your Payhours employer account${company ? ` for ${company.legalName}` : ''} has been created.`,
       rows
     )
+  });
+}
+
+export async function sendSuperAdminEmployeeCredentialsEmail(employee: { name: string; email: string }, temporaryPassword: string): Promise<void> {
+  const signInUrl = `${env.portalUrl.replace(/\/$/, '')}/payhours-admin`;
+  await emailService.send({
+    to: employee.email,
+    subject: 'Your Payhours super admin employee account is ready',
+    body: [
+      `Hello ${employee.name},`,
+      '',
+      'Your Payhours super admin employee account has been created.',
+      `Login email: ${employee.email}`,
+      `Temporary password: ${temporaryPassword}`,
+      `Sign in: ${signInUrl}`,
+      'Select the Super Admin login. You must replace this temporary password on your first sign-in.'
+    ].join('\n'),
+    html: emailShell('YOUR PAYHOURS STAFF ACCOUNT IS READY', employee.name,
+      'Select the Super Admin login. You must replace this temporary password on your first sign-in.',
+      [['Login email', employee.email], ['Temporary password', temporaryPassword], ['Sign in URL', signInUrl]], signInUrl)
   });
 }
 

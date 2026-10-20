@@ -18,7 +18,7 @@ import { SuperAdmin } from '../models/SuperAdmin';
 import { accessRoles, permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
 import { authenticate, AuthRequest, requirePermission, signSuperAdminToken } from '../middleware/auth';
 import { decryptSin, generateTemporaryPassword, hashPassword, verifyPassword } from '../utils/security';
-import { sendEmployerCredentialsEmail } from '../services/employerWelcome.service';
+import { sendEmployerCredentialsEmail, sendSuperAdminEmployeeCredentialsEmail } from '../services/employerWelcome.service';
 import { normalizeProvince, withVacationPolicy } from '../services/vacationPolicy.service';
 import { roleNames, permissionsForRole } from '../security/rbac';
 import { auditEvent } from '../utils/audit';
@@ -34,7 +34,19 @@ const staffSections = ["Dashboard","Employers","Employees","Payroll Runs","Payro
 router.get('/session', authenticate, async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const admin = await SuperAdmin.findById(req.superAdminContext!.superAdminId);
-  res.json({ sections: admin?.staffOwnerId ? admin.sectionPermissions || [] : staffSections });
+  res.json({ sections: admin?.staffOwnerId ? admin.sectionPermissions || [] : staffSections, mustChangePassword: Boolean(admin?.mustChangePassword) });
+});
+router.post('/auth/change-password', authenticate, async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const parsed = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Enter your current password and a new password of at least 8 characters.' });
+  const admin = await SuperAdmin.findById(req.superAdminContext!.superAdminId);
+  if (!admin || !(await verifyPassword(parsed.data.currentPassword, admin.passwordHash))) return res.status(400).json({ message: 'Current password is incorrect.' });
+  if (await verifyPassword(parsed.data.newPassword, admin.passwordHash)) return res.status(400).json({ message: 'Choose a different password from your temporary password.' });
+  admin.passwordHash = await hashPassword(parsed.data.newPassword);
+  admin.mustChangePassword = false;
+  await admin.save();
+  res.json({ changed: true });
 });
 async function activeStaffRoles(): Promise<string[]> {
   // Use the same saved roles and initial defaults as Users & Roles.
@@ -58,8 +70,16 @@ router.post('/employees', authenticate, requirePermission('employee.create'), as
   if (await SuperAdmin.exists({ staffOwnerId: req.superAdminContext!.superAdminId, 'staffProfile.employeeNumber': data.employeeNumber })) return res.status(409).json({ message: 'Employee number already exists.' });
   const temporaryPassword = generateTemporaryPassword();
   const { sections, ...profile } = data;
-  const employee = await SuperAdmin.create({ staffOwnerId: req.superAdminContext!.superAdminId, staffProfile: profile, sectionPermissions: sections, name: data.firstName + ' ' + data.lastName, email: data.email, role: data.role, passwordHash: await hashPassword(temporaryPassword), isActive: true });
-  res.status(201).json({ id: String(employee._id), temporaryPassword });
+  const employee = await SuperAdmin.create({ staffOwnerId: req.superAdminContext!.superAdminId, staffProfile: profile, sectionPermissions: sections, name: data.firstName + ' ' + data.lastName, email: data.email, role: data.role, passwordHash: await hashPassword(temporaryPassword), mustChangePassword: true, isActive: true });
+  let emailSent = false;
+  let emailError: string | undefined;
+  try {
+    await sendSuperAdminEmployeeCredentialsEmail(employee, temporaryPassword);
+    emailSent = true;
+  } catch (error) {
+    emailError = error instanceof Error ? error.message : 'Could not send login details.';
+  }
+  res.status(201).json({ id: String(employee._id), temporaryPassword, emailSent, emailError });
 });
 router.put('/employees/:id', authenticate, requirePermission('employee.edit'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;

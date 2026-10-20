@@ -64,7 +64,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
   } else if (reset.accountType === 'employer') {
     await EmployerUser.findByIdAndUpdate(reset.accountId, { passwordHash, mustChangePassword: false });
   } else {
-    await SuperAdmin.findByIdAndUpdate(reset.accountId, { passwordHash });
+    await SuperAdmin.findByIdAndUpdate(reset.accountId, { passwordHash, mustChangePassword: false });
   }
   reset.usedAt = new Date();
   await reset.save();

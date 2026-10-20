@@ -11,6 +11,7 @@ export interface ISuperAdmin {
   department?: string;
   permissions?: Record<string, string[]>;
   passwordHash: string;
+  mustChangePassword?: boolean;
   isActive: boolean;
   lastLoginAt?: Date;
   createdAt: Date;
@@ -28,6 +29,7 @@ const superAdminSchema = new Schema<ISuperAdmin>(
     department: String,
     permissions: { type: Schema.Types.Mixed, default: {} },
     passwordHash: { type: String, required: true },
+    mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     lastLoginAt: Date
   },

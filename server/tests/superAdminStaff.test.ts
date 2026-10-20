@@ -6,8 +6,8 @@ import { Response } from 'express';
 const id = '64b7f8f8f8f8f8f8f8f8f8f5';
 describe('Super admin staff access', () => {
   afterEach(() => jest.restoreAllMocks());
-  async function check(path: string, sections: string[], method = 'GET', body = {}) {
-    jest.spyOn(SuperAdmin, 'findOne').mockResolvedValue({ staffOwnerId: id, role: 'Platform Employee', sectionPermissions: sections } as never);
+  async function check(path: string, sections: string[], method = 'GET', body = {}, mustChangePassword = false) {
+    jest.spyOn(SuperAdmin, 'findOne').mockResolvedValue({ staffOwnerId: id, role: 'Platform Employee', sectionPermissions: sections, mustChangePassword } as never);
     jest.spyOn(AccessRole, 'findOne').mockResolvedValue(null);
     const req = { headers: { authorization: `Bearer ${signSuperAdminToken(id)}` }, query: {}, originalUrl: path, method, body } as AuthRequest;
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -35,5 +35,14 @@ describe('Super admin staff access', () => {
   });
   it('checks banking separately from account list access', async () => {
     expect((await check('/api/super-admin/payroll-accounts/123/banking', ['All Payroll Accounts'], 'PATCH')).res.status).toHaveBeenCalledWith(403);
+  });
+  it('blocks assigned sections until the temporary password is replaced', async () => {
+    expect((await check('/api/super-admin/employees', ['Employees'], 'GET', {}, true)).res.status).toHaveBeenCalledWith(403);
+  });
+  it('allows changing a temporary password without section permissions', async () => {
+    expect((await check('/api/super-admin/auth/change-password', [], 'POST', {}, true)).next).toHaveBeenCalled();
+  });
+  it('allows session discovery before the password is changed', async () => {
+    expect((await check('/api/super-admin/session', [], 'GET', {}, true)).next).toHaveBeenCalled();
   });
 });
