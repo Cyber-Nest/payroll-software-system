@@ -786,13 +786,14 @@ function splitAccessUserKey(userKey: string) {
 router.post('/auth/login', async (req, res) => {
   const parsed = z.object({ email: z.string().email(), password: z.string() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid login request' });
-  const admin = await SuperAdmin.findOne({ email: parsed.data.email.toLowerCase() });
+  const email = parsed.data.email.trim().toLowerCase();
+  const admin = await SuperAdmin.findOne({ email });
   const ok = admin ? await verifyPassword(parsed.data.password, admin.passwordHash) : false;
   await auditEvent(req, { userId: admin?._id, eventType: ok ? 'SUPER_ADMIN_LOGIN_SUCCESS' : 'SUPER_ADMIN_LOGIN_FAILURE' });
-  if (!admin || !ok || !admin.isActive) return res.status(401).json({ message: 'Invalid email or password' });
+  if (!admin || !ok || !admin.isActive) return res.status(401).json({ message: 'Invalid email or password. Check that you selected Super Admin login and entered the account email and current password.' });
   admin.lastLoginAt = new Date();
   await admin.save();
-  res.json({ token: signSuperAdminToken(String(admin._id)), user: { id: String(admin._id), name: admin.name, email: admin.email } });
+  res.json({ token: signSuperAdminToken(String(admin._id)), user: { id: String(admin._id), name: admin.name, email: admin.email, mustChangePassword: Boolean(admin.mustChangePassword) } });
 });
 
 router.get('/dashboard', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
