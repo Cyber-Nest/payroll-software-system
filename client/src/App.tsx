@@ -14222,6 +14222,35 @@ function SuperAdminTaxConfig() {
   );
 }
 
+type PlatformStaff = { id?: string; firstName: string; lastName: string; employeeNumber: string; email: string; position: string; location: string; sections: string[] };
+function SuperAdminEmployees({ token }: { token: string }) {
+  const [staff, setStaff] = useState<PlatformStaff[]>([]);
+  const [sections, setSections] = useState<string[]>([]);
+  const [draft, setDraft] = useState<PlatformStaff>();
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    try { const result = await api<{ employees: PlatformStaff[]; sections: string[] }>('/super-admin/employees', token); setStaff(result.employees); setSections(result.sections); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not load employees.'); }
+  }
+  useEffect(() => { void load(); }, [token]);
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); if (!draft) return; setBusy(true);
+    try { const result = await api<{ temporaryPassword?: string }>('/super-admin/employees' + (draft.id ? '/' + draft.id : ''), token, { method: draft.id ? 'PUT' : 'POST', body: JSON.stringify(draft) }); setMessage(result.temporaryPassword ? 'Employee created. Sign in through Super Admin with ' + draft.email + '. Temporary password: ' + result.temporaryPassword : 'Employee saved.'); setDraft(undefined); await load(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save employee.'); }
+    finally { setBusy(false); }
+  }
+  async function remove(employee: PlatformStaff) {
+    if (!window.confirm('Delete ' + employee.firstName + ' ' + employee.lastName + '?')) return;
+    try { await api('/super-admin/employees/' + employee.id, token, { method: 'DELETE' }); await load(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete employee.'); }
+  }
+  return <section className="admin-panel employees-page"><div className="employee-head"><div><h1>{draft ? draft.id ? 'Edit Employee' : 'Add Employee' : 'Employees'}</h1><p>Manage your super admin staff and their section access.</p></div>{!draft && <button className="run-payroll" onClick={() => { setMessage(''); setDraft({ firstName: '', lastName: '', employeeNumber: '', email: '', position: '', location: '', sections: [] }); }}>+ Add Employee</button>}</div>
+    {message && <p role="status">{message}</p>}
+    {draft ? <form onSubmit={save}><div className="settings-fields three">{([['firstName','First Name'],['lastName','Last Name'],['employeeNumber','Employee Number'],['email','Login Email'],['position','Position'],['location','Location']] as const).map(([key,label]) => <label key={key}>{label}<input required={!['position','location'].includes(key)} type={key === 'email' ? 'email' : 'text'} value={draft[key]} onChange={event => setDraft({ ...draft, [key]: event.target.value })} /></label>)}</div><h2>Super Admin Permissions</h2><p>Select each section this employee can access after login.</p><div className="permission-checks">{sections.map(section => <label key={section}><input type="checkbox" checked={draft.sections.includes(section)} onChange={event => setDraft({ ...draft, sections: event.target.checked ? [...draft.sections, section] : draft.sections.filter(item => item !== section) })} />{section}</label>)}</div><button type="button" onClick={() => setDraft(undefined)}>Cancel</button><button className="run-payroll" disabled={busy}>{busy ? 'Saving...' : 'Save Employee'}</button></form> : <table><thead><tr><th>Employee</th><th>Employee #</th><th>Position</th><th>Location</th><th>Email</th><th>Actions</th></tr></thead><tbody>{staff.map(employee => <tr key={employee.id}><td><b>{employee.firstName} {employee.lastName}</b></td><td>{employee.employeeNumber}</td><td>{employee.position || '-'}</td><td>{employee.location || '-'}</td><td>{employee.email}</td><td className="table-actions"><button onClick={() => { setMessage(''); setDraft(employee); }}>Edit</button><button onClick={() => remove(employee)}>Delete</button></td></tr>)}{!staff.length && <tr><td colSpan={6}>No employees added yet.</td></tr>}</tbody></table>}
+  </section>;
+}
+
 function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [data, setData] = useState<SuperAdminDashboard>();
   const [page, setPage] = useState('All Payroll Accounts');
@@ -14243,6 +14272,9 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const [resendingEmployerId, setResendingEmployerId] = useState('');
   const [paystubTemplateOptions, setPaystubTemplateOptions] = useState(['Standard']);
   const [t4FormatOptions, setT4FormatOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [allowedSections, setAllowedSections] = useState<string[]>([]);
+  const [accessLoaded, setAccessLoaded] = useState(false);
+  useEffect(() => { api<{ sections: string[] }>('/super-admin/session', token).then(result => { setAllowedSections(result.sections); setPage(current => result.sections.includes(current) ? current : result.sections[0] || ''); setAccessLoaded(true); }).catch(() => setAccessLoaded(true)); }, [token]);
   const nav = [
     { label: 'Dashboard' },
     { label: 'Employers' },
@@ -15395,7 +15427,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     <div className="admin-shell super-admin-shell">
       <aside className="admin-sidebar">
         <Logo />
-        {nav.map((item) => (
+        {nav.filter(item => allowedSections.includes(item.label)).map((item) => (
           <button
             key={item.label}
             className={`${page === item.label || (['Create Employer', 'Edit Employer'].includes(page) && item.label === 'Employers') || (page === 'Create Role' && item.label === 'Role Management') || (payrollPages.includes(page) && item.label === 'Payroll Accounts') ? 'active' : ''} ${item.section ? 'sub-nav-item' : ''}`}
@@ -15420,7 +15452,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <span>Search</span>
             <input placeholder="Search employers, users, payroll runs..." />
           </label>
-          <button onClick={() => setPage('Notifications')}>
+          <button hidden={!allowedSections.includes('Notifications')} onClick={() => setPage('Notifications')}>
             Alerts
           </button>
           <button>Help</button>
@@ -15431,7 +15463,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <button onClick={onLogout}>Logout</button>
         </header>
         <section className="admin-content">
-          {[
+          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
             'Users & Access',
             'All Users',
             'Role Management',
@@ -15683,7 +15715,7 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     if (portal === 'super-admin') {
-      api<SuperAdminDashboard>('/super-admin/dashboard', token)
+      api('/super-admin/session', token)
         .then(() => {
           setLoadError('');
         })
