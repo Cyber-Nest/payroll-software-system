@@ -6557,6 +6557,58 @@ th {
   margin: 0;
   flex: 0 0 16px;
 }
+.employees-page .super-staff-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 20px 0 16px;
+}
+.employees-page .super-staff-search {
+  display: grid;
+  gap: 6px;
+  min-width: min(360px, 100%);
+  color: #38538f;
+  font-size: 13px;
+  font-weight: 600;
+}
+.employees-page .super-staff-search input {
+  min-height: 40px;
+  border: 1px solid #cfdef1;
+  border-radius: 7px;
+  padding: 8px 12px;
+  color: #20365f;
+}
+.employees-page .super-staff-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.employees-page .super-staff-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8e4f3;
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: #fff;
+  color: #38538f;
+  cursor: pointer;
+}
+.employees-page .super-staff-tabs button.active {
+  border-color: #2457c5;
+  background: #edf4ff;
+  color: #1646a5;
+  font-weight: 700;
+}
+.employees-page .super-staff-tabs button span {
+  min-width: 20px;
+  border-radius: 10px;
+  padding: 1px 6px;
+  background: #e8eef8;
+  text-align: center;
+}
 .permission-checks label {
   align-items: center;
   color: #283b7c;

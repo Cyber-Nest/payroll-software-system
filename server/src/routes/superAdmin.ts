@@ -60,7 +60,7 @@ router.get('/employees', authenticate, requirePermission('employee.view'), async
   const currentAdmin = await SuperAdmin.findById(req.superAdminContext!.superAdminId).select('staffOwnerId');
   const staffOwnerId = currentAdmin?.staffOwnerId || req.superAdminContext!.superAdminId;
   const employees = await SuperAdmin.find({ staffOwnerId });
-  res.json({ sections: staffSections, roles: await activeStaffRoles(), employees: employees.map(item => ({ ...item.staffProfile, id: String(item._id), email: item.email, role: item.role || '', sections: item.sectionPermissions || [] })) });
+  res.json({ sections: staffSections, roles: await activeStaffRoles(), employees: employees.map(item => ({ ...item.staffProfile, id: String(item._id), name: item.name || [item.staffProfile?.firstName, item.staffProfile?.lastName].filter(Boolean).join(' '), email: item.email, role: item.role || '', status: item.isActive ? 'Active' : 'Inactive', sections: item.sectionPermissions || [] })) });
 });
 router.post('/employees', authenticate, requirePermission('employee.create'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
