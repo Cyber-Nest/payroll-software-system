@@ -7735,44 +7735,33 @@ th {
 
 /* Super Admin payroll accounts reference screen */
 .super-admin-shell:has(.payroll-accounts-page) {
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar {
-  gap: 2px;
-  padding: 10px 7px 12px;
-}
-.super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .logo {
-  background: transparent;
-  margin: -10px -7px 8px;
-  min-height: 44px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 18px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button {
-  border-radius: 4px;
-  font-size: 14px;
-  min-height: 40px;
-  padding: 9px 11px;
+  border-radius: 6px;
+  font-size: inherit;
+  min-height: 38px;
+  padding: 10px 12px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button > span {
-  align-items: center;
-  display: inline-flex;
-  font-size: 13px;
-  justify-content: center;
-  width: 24px;
+  font-size: inherit;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button.sub-nav-item {
-  margin-left: 0;
-  padding-left: 22px;
-  width: 100%;
+  font-size: 14px;
+  margin-left: 22px;
+  padding-left: 16px;
+  width: calc(100% - 22px);
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar button.sub-nav-item::before {
-  left: 7px;
+  left: -10px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-sidebar .built-canada {
-  border: 1px solid rgba(33, 117, 232, 0.38);
-  border-radius: 5px;
   margin-top: auto;
-  padding: 13px;
+  padding: 20px;
 }
 .super-admin-shell:has(.payroll-accounts-page) .admin-topbar {
   background: #f6fbff;
