@@ -13258,7 +13258,7 @@ function SuperAdminPayrollRuns({ token }: { token: string }) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
   return (
-    <section className="module-page payroll-accounts-page super-payroll-runs">
+    <section className="module-page super-payroll-runs">
       <div className="payroll-page-head">
         <div>
           <h1>Payroll Runs</h1>

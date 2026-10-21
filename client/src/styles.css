@@ -9867,6 +9867,11 @@ th {
 }
 
 /* Super Admin payroll runs */
+.super-payroll-runs { font-size: 14px; }
+.super-payroll-runs .payroll-page-head h1 { font-size: 28px; }
+.super-payroll-runs .payroll-page-head p { font-size: 14px; }
+.super-payroll-runs .payroll-kpis article b { font-size: 14px; }
+.super-payroll-runs .payroll-kpis article small { font-size: 12px; }
 .payroll-runs-filters {
   align-items: end;
   display: grid;
@@ -9877,7 +9882,7 @@ th {
 .payroll-runs-filters > label:not(.payroll-search) {
   color: #102d82;
   display: grid;
-  font-size: 11px;
+  font-size: 13px;
   gap: 3px;
 }
 .payroll-runs-filters select,
@@ -9901,6 +9906,13 @@ th {
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 310px;
 }
+.super-payroll-runs .remittance-table-wrap { overflow-x: auto; }
+.super-payroll-runs .payroll-runs-table { min-width: 1000px; font-size: 13px; }
+.super-payroll-runs .payroll-runs-table th,
+.super-payroll-runs .payroll-runs-table td { font-size: 13px; }
+.super-payroll-runs .run-status { font-size: 11px; }
+.super-payroll-runs .payroll-run-summary dl { font-size: 13px; }
+.super-payroll-runs .payroll-run-summary .cra-about { font-size: 12px; }
 .payroll-runs-table tbody tr {
   cursor: pointer;
 }
@@ -10025,8 +10037,8 @@ th {
   .payroll-runs-layout .remittance-table-wrap {
     overflow-x: auto;
   }
-  .payroll-runs-table {
-    min-width: 1080px;
+  .super-payroll-runs .payroll-runs-table {
+    min-width: 1000px;
   }
 }
 
