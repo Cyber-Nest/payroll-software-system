@@ -1665,8 +1665,8 @@ function Login({
 }
 
 function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal) => void }) {
-  const [email, setEmail] = useState('superadmin@payhours.ca');
-  const [password, setPassword] = useState('Payhours1!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   async function submit() {
@@ -14268,6 +14268,68 @@ function SuperAdminEmployees({ token }: { token: string }) {
   </section>;
 }
 
+type SuperAdminPlatformSettings = {
+  platformName: string;
+  supportEmail: string;
+  defaultTimeZone: string;
+  maintenanceMode: boolean;
+  sessionTimeoutMinutes: number;
+};
+
+const defaultSuperAdminPlatformSettings: SuperAdminPlatformSettings = {
+  platformName: 'Payhours',
+  supportEmail: 'support@payhours.ca',
+  defaultTimeZone: 'America/Edmonton',
+  maintenanceMode: false,
+  sessionTimeoutMinutes: 60
+};
+
+function SuperAdminSettings({ token }: { token: string }) {
+  const [settings, setSettings] = useState<SuperAdminPlatformSettings>(defaultSuperAdminPlatformSettings);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api<{ settings: SuperAdminPlatformSettings }>('/super-admin/settings', token)
+      .then(result => { if (active) setSettings({ ...defaultSuperAdminPlatformSettings, ...result.settings }); })
+      .catch(loadError => { if (active) setError(loadError instanceof Error ? loadError.message : 'Could not load platform settings.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  async function save() {
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const result = await api<{ settings: SuperAdminPlatformSettings }>('/super-admin/settings', token, { method: 'PUT', body: JSON.stringify(settings) });
+      setSettings({ ...defaultSuperAdminPlatformSettings, ...result.settings });
+      setMessage('Platform settings saved.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save platform settings.');
+    } finally { setSaving(false); }
+  }
+
+  return <section className="admin-panel super-admin-settings-page">
+    <div className="employee-head"><div><h1>Platform Settings</h1><p>Configure Payhours platform defaults. These settings are separate from employer company settings.</p></div></div>
+    {loading ? <p>Loading platform settings...</p> : <>
+      {error && <p role="alert" className="error">{error}</p>}
+      {message && <p role="status" className="success-note">{message}</p>}
+      <section className="settings-card wide"><header className="settings-card-head"><div><h2>Platform Defaults</h2><p>General settings used across the Super Admin platform.</p></div></header>
+        <div className="settings-fields two">
+          <label>Platform Name<input value={settings.platformName} onChange={event => setSettings(current => ({ ...current, platformName: event.target.value }))} /></label>
+          <label>Support Email<input type="email" value={settings.supportEmail} onChange={event => setSettings(current => ({ ...current, supportEmail: event.target.value }))} /></label>
+          <label>Default Time Zone<input value={settings.defaultTimeZone} onChange={event => setSettings(current => ({ ...current, defaultTimeZone: event.target.value }))} /></label>
+          <label>Session Timeout (minutes)<input type="number" min={5} max={1440} value={settings.sessionTimeoutMinutes} onChange={event => setSettings(current => ({ ...current, sessionTimeoutMinutes: Number(event.target.value) }))} /></label>
+          <label className="settings-toggle"><span>Maintenance Mode</span><button type="button" role="switch" aria-checked={settings.maintenanceMode} className={settings.maintenanceMode ? 'on' : ''} onClick={() => setSettings(current => ({ ...current, maintenanceMode: !current.maintenanceMode }))}><i /></button><b>{settings.maintenanceMode ? 'On' : 'Off'}</b></label>
+        </div>
+        <footer className="settings-actions"><span /> <button className="run-payroll" disabled={saving || loading} onClick={save}>{saving ? 'Saving...' : 'Save Platform Settings'}</button></footer>
+      </section>
+    </>}
+  </section>;
+}
+
 function StaffPasswordChange({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -15498,18 +15560,18 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <span>Search</span>
             <input placeholder="Search employers, users, payroll runs..." />
           </label>
-          <button hidden={!allowedSections.includes('Notifications')} onClick={() => setPage('Notifications')}>
+          <button className="super-admin-header-action" hidden={!allowedSections.includes('Notifications')} onClick={() => setPage('Notifications')}>
             Alerts
           </button>
-          <button>Help</button>
+          <button className="super-admin-header-action">Help</button>
           <div className="admin-profile">
             <b>Super Admin</b>
             <span>Payhours Inc.</span>
           </div>
-          <button onClick={onLogout}>Logout</button>
+          <button className="super-admin-header-action logout" onClick={onLogout}>Logout</button>
         </header>
         <section className="admin-content">
-          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
+          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
             'Users & Access',
             'All Users',
             'Role Management',

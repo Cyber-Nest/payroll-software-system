@@ -10,6 +10,7 @@ export interface ISuperAdmin {
   phone?: string;
   department?: string;
   permissions?: Record<string, string[]>;
+  platformSettings?: Record<string, unknown>;
   passwordHash: string;
   mustChangePassword?: boolean;
   isActive: boolean;
@@ -28,6 +29,7 @@ const superAdminSchema = new Schema<ISuperAdmin>(
     phone: String,
     department: String,
     permissions: { type: Schema.Types.Mixed, default: {} },
+    platformSettings: { type: Schema.Types.Mixed, default: {} },
     passwordHash: { type: String, required: true },
     mustChangePassword: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },

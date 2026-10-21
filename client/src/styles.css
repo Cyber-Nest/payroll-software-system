@@ -401,6 +401,42 @@ button {
   max-width: 520px;
 }
 
+.super-admin-shell .admin-topbar > .super-admin-header-action {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #bfd0e5;
+  border-radius: 7px;
+  background: #f8fbff;
+  color: #173d71;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.super-admin-shell .admin-topbar > .super-admin-header-action:hover {
+  border-color: #7fa7d8;
+  background: #edf5ff;
+  color: #0b55a0;
+}
+
+.super-admin-shell .admin-topbar > .super-admin-header-action:focus-visible {
+  outline: 3px solid #8bbcff;
+  outline-offset: 2px;
+}
+
+.super-admin-shell .admin-topbar > .super-admin-header-action.logout {
+  border-color: #e3b7bf;
+  background: #fff8f8;
+  color: #9d2638;
+}
+
+.super-admin-shell .admin-topbar > .super-admin-header-action.logout:hover {
+  border-color: #d88b98;
+  background: #fff0f2;
+  color: #7e1425;
+}
+
 .super-create .employee-head {
   align-items: start;
 }

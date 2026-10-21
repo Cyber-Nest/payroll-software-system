@@ -31,6 +31,31 @@ import { selectedT4Format } from '../services/t4Format.service';
 const router = express.Router();
 
 const staffSections = ["Dashboard","Employers","Employees","Payroll Runs","Payroll Accounts","All Payroll Accounts","Add Payroll Account","CRA Remittances","Banking & Funding","Remittance Schedule","Reports","Compliance & Tax","Deduction Types","Paystub Templates","T4 Formats","Year End (T4)","ROE","Notifications","Users & Access","Settings"];
+const defaultPlatformSettings = { platformName: 'Payhours', supportEmail: 'support@payhours.ca', defaultTimeZone: 'America/Edmonton', maintenanceMode: false, sessionTimeoutMinutes: 60 };
+const platformSettingsSchema = z.object({
+  platformName: z.string().trim().min(1).max(100),
+  supportEmail: z.string().email(),
+  defaultTimeZone: z.string().trim().min(1).max(100),
+  maintenanceMode: z.boolean(),
+  sessionTimeoutMinutes: z.number().int().min(5).max(1440)
+});
+router.get('/settings', authenticate, async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const currentAdmin = await SuperAdmin.findById(req.superAdminContext!.superAdminId).select('staffOwnerId');
+  const ownerId = currentAdmin?.staffOwnerId || req.superAdminContext!.superAdminId;
+  const owner = await SuperAdmin.findById(ownerId).select('platformSettings');
+  res.json({ settings: { ...defaultPlatformSettings, ...(owner?.platformSettings || {}) } });
+});
+router.put('/settings', authenticate, async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const parsed = platformSettingsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Enter valid platform settings.' });
+  const currentAdmin = await SuperAdmin.findById(req.superAdminContext!.superAdminId).select('staffOwnerId');
+  const ownerId = currentAdmin?.staffOwnerId || req.superAdminContext!.superAdminId;
+  const owner = await SuperAdmin.findByIdAndUpdate(ownerId, { platformSettings: parsed.data }, { new: true });
+  if (!owner) return res.status(404).json({ message: 'Super Admin account not found.' });
+  res.json({ settings: { ...defaultPlatformSettings, ...(owner.platformSettings || {}) }, saved: true });
+});
 router.get('/session', authenticate, async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const admin = await SuperAdmin.findById(req.superAdminContext!.superAdminId);
