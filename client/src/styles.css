@@ -6704,6 +6704,94 @@ th {
 .super-admin-compliance .settings-table { overflow-x: auto; }.super-admin-compliance table { min-width: 850px; }
 @media (max-width: 1000px) { .sa-compliance-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 650px) { .sa-compliance-metrics, .sa-compliance-forms, .sa-compliance-shortcuts { grid-template-columns: 1fr; }.sa-compliance-actions { width: 100%; }.sa-compliance-actions button { flex: 1; } }
+
+/* Super Admin adapts to reduced CSS viewport widths from browser zoom. */
+@media (max-width: 1100px) {
+  .super-admin-shell { grid-template-columns: minmax(0, 1fr); }
+  .super-admin-shell > .admin-sidebar {
+    position: static;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 12px;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+  .super-admin-shell .admin-sidebar .logo { flex: 0 0 auto; margin: 0 12px 0 0; }
+  .super-admin-shell .admin-sidebar button,
+  .super-admin-shell .admin-sidebar button.sub-nav-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 38px;
+    margin: 0;
+    padding: 8px 11px;
+    white-space: nowrap;
+  }
+  .super-admin-shell .admin-sidebar .built-canada { display: none; }
+  .super-admin-shell .admin-topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+    gap: 10px;
+    padding: 12px 18px;
+  }
+  .super-admin-shell .admin-topbar > .admin-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+    justify-self: stretch;
+  }
+  .super-admin-overview,
+  .super-admin-compliance,
+  .super-admin-reports { padding: 0; }
+  .sa-dashboard-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sa-dashboard-middle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sa-dashboard-middle .sa-alert-panel { grid-column: 1 / -1; }
+  .sa-dashboard-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .super-admin-shell .admin-topbar { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .super-admin-shell .admin-topbar > .admin-search { grid-column: 1 / -1; grid-row: auto; }
+  .super-admin-shell .admin-topbar > .admin-profile { grid-column: 1 / 3; grid-row: 2; }
+  .super-admin-shell .admin-topbar > .super-admin-header-action.logout { grid-column: 3; grid-row: 2; justify-self: end; }
+  .super-admin-shell .admin-topbar > .super-admin-header-action:not(.logout) { justify-self: end; }
+  .super-admin-shell .admin-content { padding: 16px; }
+  .sa-dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sa-dashboard-middle,
+  .sa-dashboard-bottom { grid-template-columns: minmax(0, 1fr); }
+  .sa-dashboard-middle .sa-alert-panel { grid-column: auto; }
+}
+
+@media (max-width: 600px) {
+  .super-admin-shell .admin-topbar { grid-template-columns: minmax(0, 1fr) auto auto; padding: 10px 12px; }
+  .super-admin-shell .admin-topbar > b { grid-column: 1 / -1; }
+  .super-admin-shell .admin-topbar > .admin-search { grid-column: 1 / -1; }
+  .super-admin-shell .admin-topbar > .admin-profile { grid-column: 1 / 3; grid-row: auto; }
+  .super-admin-shell .admin-topbar > .super-admin-header-action.logout { grid-column: 3; grid-row: auto; }
+  .super-admin-shell .admin-topbar > .super-admin-header-action { min-height: 36px; padding: 7px 9px; }
+  .super-admin-shell .admin-content { padding: 12px; }
+  .super-admin-shell .admin-sidebar { gap: 4px; }
+  .super-admin-shell .admin-sidebar .logo { display: none; }
+  .super-admin-shell .admin-sidebar button,
+  .super-admin-shell .admin-sidebar button.sub-nav-item { padding: 8px 10px; }
+  .sa-dashboard-metrics,
+  .sa-compliance-metrics,
+  .sa-compliance-forms,
+  .sa-compliance-shortcuts { grid-template-columns: minmax(0, 1fr); }
+  .sa-dashboard-middle,
+  .sa-dashboard-bottom { grid-template-columns: minmax(0, 1fr); }
+  .super-admin-overview .employee-head,
+  .super-admin-compliance .employee-head,
+  .super-admin-reports .employee-head { align-items: stretch; }
+  .platform-environment { align-self: flex-start; }
+  .super-admin-report-filters { align-items: stretch; }
+  .super-admin-report-filters label { min-width: 100%; }
+  .super-admin-report-filters .report-count { margin-left: 0; }
+}
 .super-admin-reports { display: grid; gap: 16px; }
 .super-admin-report-filters { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; padding: 16px; border: 1px solid #dbe6f2; border-radius: 9px; background: #fff; }
 .super-admin-report-filters label { display: grid; gap: 6px; min-width: min(280px, 100%); color: #385372; font-size: 12px; font-weight: 700; }

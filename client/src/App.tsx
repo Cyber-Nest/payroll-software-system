@@ -1580,7 +1580,7 @@ function Login({
                 body: JSON.stringify({ customerId, employeeNumber, password })
               });
       }
-      localStorage.setItem('payhours-token', result.token);
+      sessionStorage.setItem('payhours-token', result.token);
       localStorage.setItem('payhours-portal', portal);
       onLogin(result.token, portal, portal === 'employer' ? result.companies : undefined);
     } catch (error) {
@@ -1730,7 +1730,7 @@ function SuperAdminLogin({ onLogin }: { onLogin: (token: string, portal: Portal)
         method: 'POST',
         body: JSON.stringify({ email, password })
       });
-      localStorage.setItem('payhours-token', result.token);
+      sessionStorage.setItem('payhours-token', result.token);
       localStorage.setItem('payhours-portal', 'super-admin');
       onLogin(result.token, 'super-admin');
     } catch (error) {
@@ -15853,7 +15853,11 @@ export default function App() {
   const [lang, setLangState] = useState<Lang>(
     (localStorage.getItem('payhours-lang') as Lang) || 'en'
   );
-  const [token, setToken] = useState(localStorage.getItem('payhours-token') || '');
+  const [token, setToken] = useState(() => {
+    const tabToken = sessionStorage.getItem('payhours-token') || '';
+    localStorage.removeItem('payhours-token');
+    return tabToken;
+  });
   const [locationTimezone, setLocationTimezone] = useState<LocationTimezone>({
     status: localStorage.getItem('payhours-location-status') as LocationTimezone['status'] || 'unknown',
     timeZone: storedTimezone
@@ -15913,6 +15917,7 @@ export default function App() {
   function handleAuthFailure(error: unknown) {
     if ((error as { status?: number }).status === 401) {
       localStorage.removeItem('payhours-token');
+      sessionStorage.removeItem('payhours-token');
       setToken('');
       setLoadError('');
       return;
@@ -15932,6 +15937,25 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     if (locationTimezone.status === 'unknown') requestLocationTimezone();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const timeoutMs = 5 * 60 * 1000;
+    let timeoutId = 0;
+    const resetInactivityTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => logout(), timeoutMs);
+    };
+    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(eventName => window.addEventListener(eventName, resetInactivityTimer, { passive: true }));
+    document.addEventListener('visibilitychange', resetInactivityTimer);
+    resetInactivityTimer();
+    return () => {
+      window.clearTimeout(timeoutId);
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, resetInactivityTimer));
+      document.removeEventListener('visibilitychange', resetInactivityTimer);
+    };
   }, [token]);
 
   useEffect(() => {
@@ -16074,13 +16098,14 @@ export default function App() {
       token,
       { method: 'POST', body: JSON.stringify({ companyId }) }
     );
-    localStorage.setItem('payhours-token', result.token);
+    sessionStorage.setItem('payhours-token', result.token);
     setToken(result.token);
     setEmployerDashboard(undefined);
   }
 
   function logout() {
     localStorage.removeItem('payhours-token');
+    sessionStorage.removeItem('payhours-token');
     setToken('');
     setEmployerDashboard(undefined);
     setProfile(undefined);
