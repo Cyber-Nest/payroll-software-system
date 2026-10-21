@@ -490,6 +490,7 @@ type SuperAdminDashboard = {
     suspendedEmployers: number;
     activeEmployees: number;
     payrollRunsThisMonth: number;
+    payrollRunStatusesThisMonth: Record<string, number>;
     payrollProcessed: number;
     activeSubscriptions: number;
     actionRequired: number;
@@ -513,6 +514,47 @@ type SuperAdminDashboard = {
     lastPayroll?: string;
   }>;
 };
+
+function SuperAdminDashboardOverview({
+  data, error, allowedSections, onNavigate, onCreateEmployer, onViewEmployer
+}: {
+  data?: SuperAdminDashboard; error: string; allowedSections: string[];
+  onNavigate: (page: string) => void; onCreateEmployer: () => void;
+  onViewEmployer: (employer: SuperAdminDashboard['employers'][number]) => void;
+}) {
+  const money = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const date = (value?: string) => value ? formatDate(value, 'en') : '—';
+  const activeShare = data?.metrics.employers ? data.metrics.activeEmployers / data.metrics.employers * 100 : 0;
+  const monthStatuses = data?.metrics.payrollRunStatusesThisMonth || {};
+  const recentEmployers = data?.employers.slice(0, 5) || [];
+  const createdEmployers = data?.employers.slice(0, 4) || [];
+  const payrollMax = Math.max(1, ...(data?.metrics.payrollVolume || []).map(item => item.total));
+  const navigate = (page: string) => onNavigate(page === 'Payroll Accounts' ? 'All Payroll Accounts' : page);
+  return <section className="module-page super-admin-overview">
+    <header className="sa-dashboard-title"><div><h1>Super Admin Dashboard</h1><p>Manage employers, subscriptions, payroll configuration and platform operations</p></div><span className="platform-environment"><i />Platform</span></header>
+    {error && <p className="error-message" role="alert">Could not load platform data: {error}</p>}
+    <div className="sa-dashboard-metrics">
+      <article><span className="sa-dash-icon blue">▦</span><div><small>Total Employers</small><strong>{data?.metrics.employers ?? '—'}</strong><div className="sa-metric-foot"><span className="green-dot" />{data?.metrics.activeEmployers ?? '—'} Active <span className="yellow-dot" />{data?.metrics.pendingActivation ?? '—'} Pending</div><div className="sa-metric-foot"><span className="red-dot" />{data?.metrics.suspendedEmployers ?? '—'} Suspended <span className="gray-dot" />{data?.metrics.draftEmployers ?? '—'} Draft</div></div></article>
+      <article><span className="sa-dash-icon blue">♙</span><div><small>Active Employees</small><strong>{data?.metrics.activeEmployees.toLocaleString() ?? '—'}</strong><div className="sa-metric-foot">Across employer accounts</div></div></article>
+      <article><span className="sa-dash-icon blue">▦</span><div><small>Payroll Runs This Month</small><strong>{data?.metrics.payrollRunsThisMonth ?? '—'}</strong><div className="sa-metric-foot"><span className="green-dot" />{monthStatuses.finalized || monthStatuses.locked || 0} Finalized <span className="gray-dot" />{monthStatuses.draft || 0} Draft <span className="red-dot" />{monthStatuses.reversed || 0} Reversed</div></div></article>
+      <article><span className="sa-dash-icon green">$</span><div><small>Payroll Gross Paid</small><strong>{data ? money(data.metrics.payrollProcessed) : '—'}</strong><div className="sa-metric-foot">Finalized pay statements · last 6 months</div></div></article>
+      <article><span className="sa-dash-icon blue">▭</span><div><small>Active Subscriptions</small><strong>{data?.metrics.activeSubscriptions ?? '—'}</strong><div className="sa-metric-foot">Active employer accounts</div></div></article>
+      <article className="attention"><span className="sa-dash-icon red">!</span><div><small>Action Required</small><strong>{data?.metrics.actionRequired ?? '—'}</strong><div className="sa-metric-foot">{data?.metrics.pendingActivation ?? 0} pending · {data?.metrics.failedPayrollRuns ?? 0} reversed this month</div></div></article>
+    </div>
+    <div className="sa-dashboard-middle">
+      <section className="admin-panel sa-status-panel"><h2>Employers by Status</h2><div className="sa-status-content"><div className="sa-donut" style={{ '--active-share': `${activeShare}%` } as React.CSSProperties}><strong>{data?.metrics.employers ?? '—'}</strong><span>Total</span></div><ul><li><i className="green-dot" />Active <b>{data?.metrics.activeEmployers ?? '—'}</b></li><li><i className="yellow-dot" />Pending <b>{data?.metrics.pendingActivation ?? '—'}</b></li><li><i className="red-dot" />Suspended <b>{data?.metrics.suspendedEmployers ?? '—'}</b></li><li><i className="gray-dot" />Draft <b>{data?.metrics.draftEmployers ?? '—'}</b></li></ul></div></section>
+      <section className="admin-panel sa-volume-panel"><h2>Payroll Volume <small>Last 6 Months</small></h2><div className="sa-volume-chart">{(data?.metrics.payrollVolume || []).map(item => <div key={`${item.year}-${item.month}`}><span title={`${money(item.total)} · ${item.runCount} runs`} style={{ height: `${Math.max(3, item.total / payrollMax * 100)}%` }} /><small>{item.month}</small></div>)}{!data?.metrics.payrollVolume.length && <p>No payroll data for the last six months.</p>}</div></section>
+      <section className="admin-panel sa-alert-panel"><h2>Recent System Activity <button type="button" onClick={() => navigate('Activity Logs')}>View All →</button></h2>{data?.metrics.recentAlerts.length ? data.metrics.recentAlerts.map(alert => <article key={alert.id}><span className={`sa-alert-level ${alert.eventType.includes('FAILURE') ? 'high' : 'info'}`}>{alert.eventType.includes('FAILURE') ? 'Review' : 'Info'}</span><div><b>{alert.message}</b><small>{date(alert.createdAt)}</small></div></article>) : <p>No recent system activity.</p>}</section>
+    </div>
+    <section className="admin-panel sa-recent-employers"><h2>Recent Employers <button type="button" onClick={() => navigate('Employers')}>View All →</button></h2><div className="settings-table"><table><thead><tr><th>Employer ID</th><th>Business Name</th><th>Status</th><th>Employees</th><th>Subscription</th><th>Last Payroll</th><th>Onboarding</th><th>Actions</th></tr></thead><tbody>{recentEmployers.map(employer => <tr key={employer.id}><td>{employer.customerId}</td><td>{employer.operatingName || employer.legalName}</td><td><span className={`sa-status-pill ${employer.status}`}>{employer.status.replace(/_/g, ' ')}</span></td><td>{employer.employeeCount}</td><td>{employer.plan}</td><td>{date(employer.lastPayroll)}</td><td><span className={`sa-status-pill ${employer.status === 'active' ? 'active' : 'pending'}`}>{employer.status === 'active' ? 'Complete' : 'In Progress'}</span></td><td><button type="button" onClick={() => onViewEmployer(employer)}>•••</button></td></tr>)}</tbody></table></div><footer className="sa-employer-table-footer"><span>Showing 1 – {recentEmployers.length} of {data?.metrics.employers || 0} employers</span><button type="button" onClick={() => navigate('Employers')}>View all employers</button></footer>{!data?.employers.length && <p>No employers found.</p>}</section>
+    <div className="sa-dashboard-bottom">
+      <section className="admin-panel"><h2>Quick Actions</h2><button className="sa-quick-action" onClick={onCreateEmployer}><b>＋ Create Employer</b><small>Add a new employer account</small></button><button className="sa-quick-action" onClick={() => navigate('Payroll Accounts')}><b>▤ Payroll Accounts</b><small>Manage payroll accounts</small></button><button className="sa-quick-action" onClick={() => navigate('Reports')}><b>▥ View Reports</b><small>Access platform reports</small></button></section>
+      <section className="admin-panel sa-created-panel"><h2>Recently Created Employers <button onClick={() => navigate('Employers')}>View All →</button></h2>{createdEmployers.map(employer => <article key={employer.id}><b>{employer.operatingName || employer.legalName}</b><small>{date(employer.createdAt)} · {employer.status.replace(/_/g, ' ')}</small></article>)}{!createdEmployers.length && <p>No recently created employers.</p>}</section>
+      <section className="admin-panel sa-plan-panel"><h2>Top Subscription Plans</h2>{data?.metrics.plans.length ? data.metrics.plans.map((plan, index) => <div key={plan.plan}><i className={`plan-color color-${index % 4}`} /><span>{plan.plan}</span><b>{plan.count}</b><small>{data.metrics.activeSubscriptions ? Math.round(plan.count / data.metrics.activeSubscriptions * 100) : 0}%</small></div>) : <p>No active subscriptions found.</p>}</section>
+      <section className="admin-panel sa-links-panel"><h2>Quick Links</h2>{[['Compliance & Tax', 'Manage tax and compliance'], ['Activity Logs', 'Review system activity'], ['Settings', 'Platform configuration']].filter(([label]) => allowedSections.includes(label)).map(([label, description]) => <button key={label} onClick={() => navigate(label)}><b>{label}</b><small>{description}</small></button>)}</section>
+    </div>
+  </section>;
+}
 type PaystubTemplateItem = {
   id: string;
   name: string;
@@ -15521,19 +15563,10 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     </section>
   );
   const dashboard = (
-    <section className="module-page super-admin-overview">
-      <div className="employee-head"><div><h1>Platform Dashboard</h1><p>Overview of the Payhours platform and quick access to administration tools.</p></div></div>
-      {dashboardError && <p className="error-message" role="alert">Could not load platform metrics: {dashboardError}</p>}
-      <div className="metric-grid">
-        <article><p>Total Employers</p><strong>{data?.metrics.employers ?? '—'}</strong><small>Organizations on the platform</small></article>
-        <article><p>Active Employers</p><strong>{data?.metrics.activeEmployers ?? '—'}</strong><small>Currently active accounts</small></article>
-        <article><p>Pending Activation</p><strong>{data?.metrics.pendingActivation ?? '—'}</strong><small>Waiting for activation</small></article>
-        <article><p>Employees Across Platform</p><strong>{data?.employers.reduce((sum, employer) => sum + employer.employeeCount, 0) ?? '—'}</strong><small>Across all employer accounts</small></article>
-      </div>
-      <section className="admin-panel super-admin-quick-links"><h2>Administration</h2><p>Open a platform area to manage accounts and operations.</p><div>{[
-        ['Employers', 'Manage employer accounts'], ['Employees', 'Manage Super Admin staff'], ['Payroll Runs', 'Review payroll activity'], ['Payroll Accounts', 'Manage payroll accounts'], ['Users & Access', 'Manage platform users and roles'], ['Settings', 'Configure platform defaults']
-      ].filter(([label]) => allowedSections.includes(label)).map(([label, description]) => <button key={label} type="button" onClick={() => setPage(label === 'Payroll Accounts' ? 'All Payroll Accounts' : label)}><b>{label}</b><span>{description}</span><i aria-hidden="true">→</i></button>)}</div></section>
-    </section>
+    <SuperAdminDashboardOverview data={data} error={dashboardError} allowedSections={allowedSections}
+      onNavigate={setPage}
+      onCreateEmployer={() => { setForm(defaultEmployerForm); setEditingEmployerId(''); setEditingStatus('active'); setPage('Create Employer'); setStep(1); }}
+      onViewEmployer={editEmployer} />
   );
   const create = (
     <section className="module-page super-create">
