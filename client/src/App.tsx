@@ -487,6 +487,16 @@ type SuperAdminDashboard = {
     activeEmployers: number;
     pendingActivation: number;
     draftEmployers: number;
+    suspendedEmployers: number;
+    activeEmployees: number;
+    payrollRunsThisMonth: number;
+    payrollProcessed: number;
+    activeSubscriptions: number;
+    actionRequired: number;
+    failedPayrollRuns: number;
+    payrollVolume: Array<{ month: string; year: number; total: number; runCount: number }>;
+    plans: Array<{ plan: string; count: number }>;
+    recentAlerts: Array<{ id: string; eventType: string; message: string; createdAt: string }>;
   };
   employers: Array<{
     id: string;
@@ -496,9 +506,11 @@ type SuperAdminDashboard = {
     status: string;
     businessNumber?: string;
     employeeCount: number;
+    activeEmployeeCount: number;
     plan: string;
     primaryContact?: { name: string; email: string };
     createdAt: string;
+    lastPayroll?: string;
   }>;
 };
 type PaystubTemplateItem = {
@@ -14330,6 +14342,45 @@ function SuperAdminSettings({ token }: { token: string }) {
   </section>;
 }
 
+type SuperAdminEmployeeReportRow = {
+  id: string; employeeName: string; employeeNumber: string; email: string; role: string; employer: string;
+  employerId?: string; status: string; createdAt?: string | null; lastPayrollDate?: string | null; grossPay?: string | null; netPay?: string | null;
+};
+
+function SuperAdminEmployeeReports({ token }: { token: string }) {
+  const [source, setSource] = useState<'super-admin' | 'employer'>('super-admin');
+  const [rows, setRows] = useState<SuperAdminEmployeeReportRow[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError('');
+    api<{ rows: SuperAdminEmployeeReportRow[] }>(`/super-admin/reports/employees?source=${source}`, token)
+      .then(result => { if (active) setRows(result.rows); })
+      .catch(loadError => { if (active) { setRows([]); setError(loadError instanceof Error ? loadError.message : 'Could not load employee reports.'); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [source, token]);
+
+  const filtered = rows.filter(row => `${row.employeeName} ${row.employeeNumber} ${row.email} ${row.role} ${row.employer} ${row.employerId || ''} ${row.status}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const exportCsv = () => {
+    const columns = ['Employee Name', 'Employee Number', 'Email', 'Role', 'Employer', 'Employer ID', 'Status', 'Start Date', 'Last Payroll Date', 'Latest Gross Pay', 'Latest Net Pay'];
+    const values = filtered.map(row => [row.employeeName, row.employeeNumber, row.email, row.role, row.employer, row.employerId || '', row.status, row.createdAt || '', row.lastPayrollDate || '', row.grossPay || '', row.netPay || '']);
+    const csv = [columns, ...values].map(line => line.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = `super-admin-${source}-employee-report.csv`; link.click(); URL.revokeObjectURL(url);
+  };
+
+  return <section className="module-page super-admin-reports">
+    <div className="employee-head"><div><h1>Employee Reports</h1><p>Review employee records and latest payroll details across the selected group.</p></div><button className="run-payroll" type="button" onClick={exportCsv} disabled={loading || !filtered.length}>Export CSV</button></div>
+    <div className="super-admin-report-filters"><label>Report employees from<select value={source} onChange={event => setSource(event.target.value as 'super-admin' | 'employer')}><option value="super-admin">Super Admin Employees</option><option value="employer">Employer Employees</option></select></label><label>Search<input type="search" placeholder="Name, ID, email, employer..." value={search} onChange={event => setSearch(event.target.value)} /></label><div className="report-count"><b>{filtered.length}</b><span>{source === 'super-admin' ? 'Super Admin staff' : 'Employer employees'}</span></div></div>
+    {error && <p role="alert" className="error-message">{error}</p>}
+    <section className="admin-panel"><div className="settings-table"><table><thead><tr><th>Employee</th><th>Employee #</th><th>Email</th><th>Role / Position</th>{source === 'employer' && <th>Employer</th>}<th>Status</th><th>{source === 'super-admin' ? 'Added' : 'Start Date'}</th><th>Last Payroll</th><th>Latest Gross</th><th>Latest Net</th></tr></thead><tbody>{!loading && filtered.map(row => <tr key={row.id}><td><b>{row.employeeName}</b></td><td>{row.employeeNumber}</td><td>{row.email}</td><td>{row.role}</td>{source === 'employer' && <td>{row.employer}<small>{row.employerId}</small></td>}<td><span className={`sa-status-pill ${row.status.toLowerCase()}`}>{row.status}</span></td><td>{row.createdAt ? formatDate(row.createdAt, 'en') : '—'}</td><td>{row.lastPayrollDate ? formatDate(row.lastPayrollDate, 'en') : '—'}</td><td>{row.grossPay ? `$${Number(row.grossPay).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td><td>{row.netPay ? `$${Number(row.netPay).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td></tr>)}{!loading && !filtered.length && <tr><td colSpan={source === 'employer' ? 10 : 9}>No employee records match this report.</td></tr>}{loading && <tr><td colSpan={source === 'employer' ? 10 : 9}>Loading employee report...</td></tr>}</tbody></table></div></section>
+  </section>;
+}
+
 function StaffPasswordChange({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -14355,7 +14406,7 @@ function StaffPasswordChange({ token, onLogout }: { token: string; onLogout: () 
 
 function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [data, setData] = useState<SuperAdminDashboard>();
-  const [page, setPage] = useState('All Payroll Accounts');
+  const [page, setPage] = useState('Dashboard');
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(defaultEmployerForm);
   const [editingEmployerId, setEditingEmployerId] = useState('');
@@ -15469,6 +15520,21 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
       </section>
     </section>
   );
+  const dashboard = (
+    <section className="module-page super-admin-overview">
+      <div className="employee-head"><div><h1>Platform Dashboard</h1><p>Overview of the Payhours platform and quick access to administration tools.</p></div></div>
+      {dashboardError && <p className="error-message" role="alert">Could not load platform metrics: {dashboardError}</p>}
+      <div className="metric-grid">
+        <article><p>Total Employers</p><strong>{data?.metrics.employers ?? '—'}</strong><small>Organizations on the platform</small></article>
+        <article><p>Active Employers</p><strong>{data?.metrics.activeEmployers ?? '—'}</strong><small>Currently active accounts</small></article>
+        <article><p>Pending Activation</p><strong>{data?.metrics.pendingActivation ?? '—'}</strong><small>Waiting for activation</small></article>
+        <article><p>Employees Across Platform</p><strong>{data?.employers.reduce((sum, employer) => sum + employer.employeeCount, 0) ?? '—'}</strong><small>Across all employer accounts</small></article>
+      </div>
+      <section className="admin-panel super-admin-quick-links"><h2>Administration</h2><p>Open a platform area to manage accounts and operations.</p><div>{[
+        ['Employers', 'Manage employer accounts'], ['Employees', 'Manage Super Admin staff'], ['Payroll Runs', 'Review payroll activity'], ['Payroll Accounts', 'Manage payroll accounts'], ['Users & Access', 'Manage platform users and roles'], ['Settings', 'Configure platform defaults']
+      ].filter(([label]) => allowedSections.includes(label)).map(([label, description]) => <button key={label} type="button" onClick={() => setPage(label === 'Payroll Accounts' ? 'All Payroll Accounts' : label)}><b>{label}</b><span>{description}</span><i aria-hidden="true">→</i></button>)}</div></section>
+    </section>
+  );
   const create = (
     <section className="module-page super-create">
       <div className="sa-breadcrumb">Employers &gt; Create Employer</div>
@@ -15571,7 +15637,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <button className="super-admin-header-action logout" onClick={onLogout}>Logout</button>
         </header>
         <section className="admin-content">
-          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
+          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Dashboard' ? dashboard : page === 'Reports' ? <SuperAdminEmployeeReports token={token} /> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
             'Users & Access',
             'All Users',
             'Role Management',

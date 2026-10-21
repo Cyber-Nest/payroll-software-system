@@ -15,6 +15,7 @@ import { PlatformNotification } from '../models/PlatformNotification';
 import { DeductionType } from '../models/DeductionType';
 import { PaystubTemplate } from '../models/PaystubTemplate';
 import { SuperAdmin } from '../models/SuperAdmin';
+import { User } from '../models/User';
 import { accessRoles, permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
 import { authenticate, AuthRequest, requirePermission, signSuperAdminToken } from '../middleware/auth';
 import { decryptSin, generateTemporaryPassword, hashPassword, verifyPassword } from '../utils/security';
@@ -831,12 +832,23 @@ router.post('/auth/login', async (req, res) => {
 
 router.get('/dashboard', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
-  const [companies, employerUsers, employeeCounts] = await Promise.all([
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5, 1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+  const [companies, employerUsers, employeeCounts, employeeUserCounts, payrollRuns, recentAudit] = await Promise.all([
     Company.find().sort({ createdAt: -1 }),
     EmployerUser.find().sort({ createdAt: 1 }),
     Employee.aggregate<{ _id: unknown; count: number }>([
       { $group: { _id: '$companyId', count: { $sum: 1 } } }
-    ])
+    ]),
+    Employee.aggregate<{ _id: unknown; count: number }>([
+      { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $match: { 'user.isActive': true } },
+      { $group: { _id: '$companyId', count: { $sum: 1 } } }
+    ]),
+    PayrollRun.find({ payDate: { $gte: sixMonthsAgo } }).sort({ payDate: -1 }).limit(500),
+    AuditLog.find({ eventType: { $in: ['PAYROLL_STATUS_CHANGED', 'PAYROLL_UPDATED', 'EMPLOYER_CREATED', 'EMPLOYER_UPDATED', 'PAYROLL_ACCOUNT_UPDATED', 'REMITTANCE_PAYMENT_RECORDED', 'SUPER_ADMIN_LOGIN_FAILURE'] } }).sort({ createdAt: -1 }).limit(5)
   ]);
   const primaryByCompany = new Map<string, (typeof employerUsers)[number]>();
   for (const user of employerUsers) {
@@ -852,13 +864,38 @@ router.get('/dashboard', authenticate, requirePermission('reports.view'), async 
   const employeeCountByCompany = new Map(
     employeeCounts.map((entry) => [String(entry._id), entry.count])
   );
+  const activeEmployeeCountByCompany = new Map(employeeUserCounts.map((entry) => [String(entry._id), entry.count]));
+  const latestRunByCompany = new Map<string, (typeof payrollRuns)[number]>();
+  for (const run of payrollRuns) if (!latestRunByCompany.has(String(run.companyId))) latestRunByCompany.set(String(run.companyId), run);
+  const monthlyPayroll = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(sixMonthsAgo);
+    date.setMonth(date.getMonth() + index);
+    const monthRuns = payrollRuns.filter((run) => run.payDate.getFullYear() === date.getFullYear() && run.payDate.getMonth() === date.getMonth());
+    return { month: date.toLocaleString('en-CA', { month: 'short' }), year: date.getFullYear(), total: monthRuns.filter((run) => ['approved', 'finalized', 'locked'].includes(run.status)).reduce((sum, run) => sum + Number(run.estimatedGross?.toString() || 0), 0), runCount: monthRuns.length };
+  });
+  const activePlans = companies.filter((company) => (company.status || 'active') === 'active').reduce<Record<string, number>>((counts, company) => {
+    const plan = company.subscription?.plan || 'Standard'; counts[plan] = (counts[plan] || 0) + 1; return counts;
+  }, {});
+  const totalPayrollProcessed = payrollRuns.filter((run) => ['approved', 'finalized', 'locked'].includes(run.status)).reduce((sum, run) => sum + Number(run.estimatedGross?.toString() || 0), 0);
+  const failedPayrollRuns = await PayrollRun.countDocuments({ status: 'reversed', updatedAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } });
   res.json({
     user: { name: 'Super Admin', organization: 'Payhours Inc.' },
     metrics: {
       employers: companies.length,
       activeEmployers: companies.filter((company) => (company.status || 'active') === 'active').length,
       pendingActivation: companies.filter((company) => company.status === 'pending_activation').length,
-      draftEmployers: companies.filter((company) => company.status === 'draft').length
+      draftEmployers: companies.filter((company) => company.status === 'draft').length,
+      suspendedEmployers: companies.filter((company) => company.status === 'suspended').length,
+      closedEmployers: 0,
+      activeEmployees: employeeUserCounts.reduce((sum, item) => sum + item.count, 0),
+      payrollRunsThisMonth: payrollRuns.filter((run) => run.payDate.getFullYear() === new Date().getFullYear() && run.payDate.getMonth() === new Date().getMonth()).length,
+      payrollProcessed: totalPayrollProcessed,
+      activeSubscriptions: companies.filter((company) => (company.status || 'active') === 'active').length,
+      actionRequired: companies.filter((company) => ['pending_activation', 'draft', 'suspended'].includes(company.status || '')).length + failedPayrollRuns,
+      failedPayrollRuns,
+      payrollVolume: monthlyPayroll,
+      plans: Object.entries(activePlans).map(([plan, count]) => ({ plan, count })),
+      recentAlerts: recentAudit.map((log) => ({ id: String(log._id), eventType: log.eventType, message: String(log.metadata?.action || log.metadata?.description || log.eventType.replaceAll('_', ' ').toLowerCase()), createdAt: log.createdAt }))
     },
     employers: companies.map((company) => {
       const primary = primaryByCompany.get(String(company._id));
@@ -870,12 +907,54 @@ router.get('/dashboard', authenticate, requirePermission('reports.view'), async 
         status: company.status || 'active',
         businessNumber: company.businessNumber,
         employeeCount: employeeCountByCompany.get(String(company._id)) || 0,
+        activeEmployeeCount: activeEmployeeCountByCompany.get(String(company._id)) || 0,
         plan: company.subscription?.plan || 'Standard',
         primaryContact: primary ? { name: primary.name, email: primary.email } : undefined,
-        createdAt: company.createdAt
+        createdAt: company.createdAt,
+        lastPayroll: latestRunByCompany.has(String(company._id)) ? latestRunByCompany.get(String(company._id))!.payDate : undefined
       };
     })
   });
+});
+
+router.get('/reports/employees', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const source = req.query.source === 'super-admin' ? 'super-admin' : req.query.source === 'employer' ? 'employer' : '';
+  if (!source) return res.status(400).json({ message: 'Choose either super-admin or employer employee reports.' });
+  if (source === 'super-admin') {
+    const current = await SuperAdmin.findById(req.superAdminContext!.superAdminId).select('staffOwnerId');
+    const ownerId = current?.staffOwnerId || req.superAdminContext!.superAdminId;
+    const staff = await SuperAdmin.find({ staffOwnerId: ownerId }).sort({ createdAt: -1 });
+    return res.json({ source, total: staff.length, rows: staff.map((person) => ({
+      id: String(person._id), employeeName: person.name || [person.staffProfile?.firstName, person.staffProfile?.lastName].filter(Boolean).join(' ') || 'Super Admin',
+      employeeNumber: person.staffProfile?.employeeNumber || '—', email: person.email, role: person.role || 'Super Admin',
+      employer: 'Payhours Inc.', status: person.isActive ? 'Active' : 'Inactive', createdAt: person.createdAt,
+      lastPayrollDate: null, grossPay: null, netPay: null
+    })) });
+  }
+  const [employees, companies] = await Promise.all([Employee.find().sort({ legalLastName: 1, legalFirstName: 1 }), Company.find().select('legalName operatingName customerId')]);
+  const companyById = new Map(companies.map((company) => [String(company._id), company]));
+  const employeeIds = employees.map((employee) => employee._id);
+  const [users, statements] = await Promise.all([
+    User.find({ _id: { $in: employees.map((employee) => employee.userId) } }).select('_id isActive email'),
+    PayStatement.find({ employeeId: { $in: employeeIds }, supersededByStatementId: { $exists: false } }).sort({ payDate: -1 })
+  ]);
+  const userById = new Map(users.map((user) => [String(user._id), user]));
+  const latestStatementByEmployee = new Map<string, (typeof statements)[number]>();
+  for (const statement of statements) if (!latestStatementByEmployee.has(String(statement.employeeId))) latestStatementByEmployee.set(String(statement.employeeId), statement);
+  const rows = employees.map((employee) => {
+    const company = companyById.get(String(employee.companyId));
+    const user = userById.get(String(employee.userId));
+    const statement = latestStatementByEmployee.get(String(employee._id));
+    return {
+      id: String(employee._id), employeeName: `${employee.legalFirstName} ${employee.legalLastName}`.trim(), employeeNumber: employee.employeeNumber,
+      email: user?.email || employee.companyEmail || employee.personalEmail || '—', role: employee.occupation || employee.payGroup || 'Employee',
+      employer: company?.operatingName || company?.legalName || 'Unknown employer', employerId: company?.customerId || '—',
+      status: user?.isActive ? 'Active' : 'Inactive', createdAt: employee.startDate || null,
+      lastPayrollDate: statement?.payDate || null, grossPay: statement?.grossPay?.toString() || '0', netPay: statement?.netPay?.toString() || '0'
+    };
+  });
+  res.json({ source, total: rows.length, rows });
 });
 
 router.get('/payroll-runs', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
