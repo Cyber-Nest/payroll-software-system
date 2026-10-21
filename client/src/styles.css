@@ -6689,6 +6689,21 @@ th {
   font-style: normal;
 }
 .super-admin-overview { display: grid; gap: 16px; }
+.super-admin-compliance { display: grid; gap: 16px; }
+.sa-compliance-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sa-compliance-actions button, .sa-compliance-panel-head > button { border: 1px solid #c8d9eb; border-radius: 7px; padding: 9px 12px; background: #fff; color: #185ca8; font-weight: 700; cursor: pointer; }
+.sa-compliance-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.sa-compliance-metrics article { display: grid; gap: 10px; min-width: 0; padding: 16px; border: 1px solid #dbe6f2; border-radius: 9px; background: #fff; }
+.sa-compliance-metrics small { color: #526b89; font-size: 12px; }.sa-compliance-metrics strong { color: #17345e; font-size: 22px; }.sa-compliance-metrics .green-text { color: #078460; }.sa-compliance-metrics .amber-text { color: #aa7400; }.sa-compliance-metrics .red-text { color: #c33240; }
+.sa-compliance-tabs { display: flex; gap: 6px; overflow-x: auto; border-bottom: 1px solid #dbe6f2; }
+.sa-compliance-tabs button { flex: 0 0 auto; padding: 10px 14px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #526b89; font-weight: 700; cursor: pointer; }
+.sa-compliance-tabs button.active { border-bottom-color: #1268d5; color: #125bb3; }
+.sa-compliance-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }.sa-compliance-panel-head h2 { margin: 0 0 5px; color: #17345e; font-size: 16px; }.sa-compliance-panel-head p { margin: 0; color: #62758e; font-size: 12px; }
+.sa-compliance-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }.sa-compliance-forms article { display: grid; gap: 5px; padding: 11px 0; border-top: 1px solid #edf1f6; color: #274568; font-size: 13px; }.sa-compliance-forms article span, .sa-compliance-forms article small { color: #6e819a; font-size: 11px; }
+.sa-compliance-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }.sa-compliance-shortcuts button { display: grid; gap: 7px; padding: 16px; border: 1px solid #dbe6f2; border-radius: 9px; background: #fff; color: #204873; text-align: left; cursor: pointer; }.sa-compliance-shortcuts button:hover { border-color: #93b4da; background: #f7faff; }.sa-compliance-shortcuts span { color: #62758e; font-size: 12px; }
+.super-admin-compliance .settings-table { overflow-x: auto; }.super-admin-compliance table { min-width: 850px; }
+@media (max-width: 1000px) { .sa-compliance-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .sa-compliance-metrics, .sa-compliance-forms, .sa-compliance-shortcuts { grid-template-columns: 1fr; }.sa-compliance-actions { width: 100%; }.sa-compliance-actions button { flex: 1; } }
 .super-admin-reports { display: grid; gap: 16px; }
 .super-admin-report-filters { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; padding: 16px; border: 1px solid #dbe6f2; border-radius: 9px; background: #fff; }
 .super-admin-report-filters label { display: grid; gap: 6px; min-width: min(280px, 100%); color: #385372; font-size: 12px; font-weight: 700; }

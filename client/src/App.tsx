@@ -14384,6 +14384,44 @@ function SuperAdminSettings({ token }: { token: string }) {
   </section>;
 }
 
+type SuperAdminComplianceData = {
+  metrics: { totalFilings: number; filed: number; pending: number; overdue: number; outstandingAmount: number; t4Documents: number; roeDocuments: number; taxVersions: number; publishedTaxVersions: number };
+  filings: Array<{ id: string; employer: string; employerId: string; type: string; title: string; year: number; period: string; dueDate: string; status: string; amount: number; reference: string }>;
+  taxVersions: Array<{ id: string; jurisdiction: string; status: string; sourceYear: number; source: string; effectiveFrom: string; effectiveTo?: string; verified: boolean; publishedAt?: string; bracketCount: number }>;
+  recentT4: Array<{ id: string; employer: string; taxYear: number; formType: string; generatedAt: string }>;
+  recentRoe: Array<{ id: string; employer: string; employeeId: string; generatedAt: string }>;
+};
+
+function SuperAdminCompliance({ token, onNavigate }: { token: string; onNavigate: (page: string) => void }) {
+  const [data, setData] = useState<SuperAdminComplianceData>();
+  const [tab, setTab] = useState<'Overview' | 'Government Filings' | 'Tax Config Versions' | 'Generated Forms'>('Overview');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('All Statuses');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    api<SuperAdminComplianceData>('/super-admin/compliance/overview', token)
+      .then(result => { if (active) setData(result); })
+      .catch(loadError => { if (active) setError(loadError instanceof Error ? loadError.message : 'Could not load compliance records.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+  const visibleFilings = (data?.filings || []).filter(row => (status === 'All Statuses' || row.status === status.toLowerCase()) && `${row.employer} ${row.employerId} ${row.type} ${row.title} ${row.year} ${row.period} ${row.status}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const money = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const date = (value?: string) => value ? formatDate(value, 'en') : '—';
+  return <section className="module-page super-admin-compliance">
+    <header className="employee-head"><div><h1>Compliance &amp; Tax</h1><p>Monitor government filings, tax configuration versions, and generated year-end documents across all employers.</p></div><div className="sa-compliance-actions"><button type="button" onClick={() => onNavigate('Year End (T4)')}>Year End (T4)</button><button type="button" onClick={() => onNavigate('ROE')}>Generate ROE</button></div></header>
+    {error && <p className="error-message" role="alert">{error}</p>}
+    <div className="sa-compliance-metrics"><article><small>Total Government Filings</small><strong>{data?.metrics.totalFilings ?? '—'}</strong></article><article><small>Filed</small><strong className="green-text">{data?.metrics.filed ?? '—'}</strong></article><article><small>Pending / Prepared</small><strong className="amber-text">{data?.metrics.pending ?? '—'}</strong></article><article><small>Overdue</small><strong className="red-text">{data?.metrics.overdue ?? '—'}</strong></article><article><small>Outstanding Filing Amount</small><strong>{data ? money(data.metrics.outstandingAmount) : '—'}</strong></article><article><small>Published Tax Versions</small><strong>{data?.metrics.publishedTaxVersions ?? '—'}</strong></article></div>
+    <nav className="sa-compliance-tabs" aria-label="Compliance sections">{(['Overview', 'Government Filings', 'Tax Config Versions', 'Generated Forms'] as const).map(item => <button type="button" key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item}</button>)}</nav>
+    {tab === 'Government Filings' || tab === 'Overview' ? <section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>{tab === 'Overview' ? 'Recent Government Filings' : 'Government Filings'}</h2><p>Filing records from all employer accounts.</p></div>{tab === 'Overview' && <button onClick={() => setTab('Government Filings')}>View All →</button>}</header>{tab === 'Government Filings' && <div className="super-admin-report-filters"><label>Search<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Employer, filing type, period..." /></label><label>Status<select value={status} onChange={event => setStatus(event.target.value)}>{['All Statuses', 'Filed', 'Pending', 'Prepared', 'Overdue'].map(item => <option key={item}>{item}</option>)}</select></label></div>}<div className="settings-table"><table><thead><tr><th>Employer</th><th>Filing</th><th>Period</th><th>Due Date</th><th>Amount</th><th>Status</th><th>Reference</th></tr></thead><tbody>{(tab === 'Overview' ? (data?.filings || []).slice(0, 6) : visibleFilings).map(row => <tr key={row.id}><td>{row.employer}<small>{row.employerId}</small></td><td>{row.title}<small>{row.type.replace(/_/g, ' ')}</small></td><td>{row.period} / {row.year}</td><td>{date(row.dueDate)}</td><td>{money(row.amount)}</td><td><span className={`sa-status-pill ${row.status}`}>{row.status}</span></td><td>{row.reference || '—'}</td></tr>)}{loading && <tr><td colSpan={7}>Loading filing records...</td></tr>}{!loading && !(tab === 'Overview' ? data?.filings.length : visibleFilings.length) && <tr><td colSpan={7}>No government filing records found.</td></tr>}</tbody></table></div></section> : null}
+    {tab === 'Tax Config Versions' && <section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>Tax Configuration Versions</h2><p>Published and in-progress federal and provincial tax configurations.</p></div><span>{data?.metrics.taxVersions ?? 0} versions</span></header><div className="settings-table"><table><thead><tr><th>Jurisdiction</th><th>Tax Year</th><th>Status</th><th>Effective From</th><th>Effective To</th><th>Source</th><th>Verified</th><th>Brackets</th></tr></thead><tbody>{data?.taxVersions.map(item => <tr key={item.id}><td>{item.jurisdiction}</td><td>{item.sourceYear}</td><td><span className={`sa-status-pill ${item.status}`}>{item.status.replace(/_/g, ' ')}</span></td><td>{date(item.effectiveFrom)}</td><td>{date(item.effectiveTo)}</td><td>{item.source}</td><td>{item.verified ? 'Yes' : 'No'}</td><td>{item.bracketCount}</td></tr>)}{!loading && !data?.taxVersions.length && <tr><td colSpan={8}>No tax configuration versions are stored yet.</td></tr>}</tbody></table></div></section>}
+    {tab === 'Generated Forms' && <div className="sa-compliance-forms"><section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>Recent T4 Documents</h2><p>{data?.metrics.t4Documents ?? 0} generated records</p></div><button onClick={() => onNavigate('Year End (T4)')}>Open T4 →</button></header>{data?.recentT4.length ? data.recentT4.map(item => <article key={item.id}><b>{item.employer}</b><span>{item.formType} · {item.taxYear}</span><small>{date(item.generatedAt)}</small></article>) : <p>No generated T4 records found.</p>}</section><section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>Recent ROE Documents</h2><p>{data?.metrics.roeDocuments ?? 0} generated records</p></div><button onClick={() => onNavigate('ROE')}>Open ROE →</button></header>{data?.recentRoe.length ? data.recentRoe.map(item => <article key={item.id}><b>{item.employer}</b><span>Employee {item.employeeId.slice(-6)}</span><small>{date(item.generatedAt)}</small></article>) : <p>No generated ROE records found.</p>}</section></div>}
+    {tab === 'Overview' && <div className="sa-compliance-shortcuts"><button onClick={() => setTab('Tax Config Versions')}><b>Tax Config Versions</b><span>{data?.metrics.taxVersions ?? 0} stored versions · {data?.metrics.publishedTaxVersions ?? 0} published</span></button><button onClick={() => setTab('Generated Forms')}><b>Year End Forms</b><span>{data?.metrics.t4Documents ?? 0} T4 documents · {data?.metrics.roeDocuments ?? 0} ROE documents</span></button><button onClick={() => onNavigate('Deduction Types')}><b>Deduction Types</b><span>Manage platform statutory and custom deduction types</span></button></div>}
+  </section>;
+}
+
 type SuperAdminEmployeeReportRow = {
   id: string; employeeName: string; employeeNumber: string; email: string; role: string; employer: string;
   employerId?: string; status: string; createdAt?: string | null; lastPayrollDate?: string | null; grossPay?: string | null; netPay?: string | null;
@@ -15670,7 +15708,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <button className="super-admin-header-action logout" onClick={onLogout}>Logout</button>
         </header>
         <section className="admin-content">
-          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Dashboard' ? dashboard : page === 'Reports' ? <SuperAdminEmployeeReports token={token} /> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
+          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Dashboard' ? dashboard : page === 'Compliance & Tax' ? <SuperAdminCompliance token={token} onNavigate={setPage} /> : page === 'Reports' ? <SuperAdminEmployeeReports token={token} /> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
             'Users & Access',
             'All Users',
             'Role Management',

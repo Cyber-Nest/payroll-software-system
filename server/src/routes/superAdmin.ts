@@ -16,6 +16,7 @@ import { DeductionType } from '../models/DeductionType';
 import { PaystubTemplate } from '../models/PaystubTemplate';
 import { SuperAdmin } from '../models/SuperAdmin';
 import { User } from '../models/User';
+import { TaxConfigVersion } from '../models/TaxConfigVersion';
 import { accessRoles, permissionModules, superAdminAccessPayload } from '../data/superAdminAccess';
 import { authenticate, AuthRequest, requirePermission, signSuperAdminToken } from '../middleware/auth';
 import { decryptSin, generateTemporaryPassword, hashPassword, verifyPassword } from '../utils/security';
@@ -959,6 +960,44 @@ router.get('/reports/employees', authenticate, requirePermission('reports.view')
     };
   });
   res.json({ source, total: rows.length, rows });
+});
+
+router.get('/compliance/overview', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const [companies, filings, t4Documents, roeDocuments, taxVersions] = await Promise.all([
+    Company.find().select('legalName operatingName customerId'),
+    GovernmentFiling.find().sort({ dueDate: 1 }),
+    TaxFormDocument.find().sort({ generatedAt: -1 }),
+    RoeDocument.find().sort({ generatedAt: -1 }),
+    TaxConfigVersion.find().sort({ effectiveFrom: -1, createdAt: -1 }).limit(100)
+  ]);
+  const companyById = new Map(companies.map((company) => [String(company._id), company]));
+  const now = new Date();
+  const rows = filings.map((filing) => {
+    const company = companyById.get(String(filing.companyId));
+    const overdue = filing.status !== 'filed' && filing.dueDate < now;
+    return { id: String(filing._id), companyId: String(filing.companyId), employer: company?.operatingName || company?.legalName || 'Unknown employer', employerId: company?.customerId || '—', type: filing.type, title: filing.title, year: filing.year, period: filing.period, dueDate: filing.dueDate, status: overdue ? 'overdue' : filing.status, amount: Number(filing.amount?.toString() || 0), reference: filing.reference || filing.confirmationNumber || '' };
+  });
+  res.json({
+    metrics: {
+      totalFilings: rows.length, filed: rows.filter((row) => row.status === 'filed').length,
+      pending: rows.filter((row) => row.status === 'pending' || row.status === 'prepared').length,
+      overdue: rows.filter((row) => row.status === 'overdue').length,
+      outstandingAmount: rows.filter((row) => row.status !== 'filed').reduce((sum, row) => sum + row.amount, 0),
+      t4Documents: t4Documents.length, roeDocuments: roeDocuments.length,
+      taxVersions: taxVersions.length, publishedTaxVersions: taxVersions.filter((item) => item.status === 'published').length
+    },
+    filings: rows.slice(0, 500),
+    taxVersions: taxVersions.map((item) => ({ id: String(item._id), jurisdiction: item.jurisdiction, status: item.status, sourceYear: item.sourceYear, source: item.source, effectiveFrom: item.effectiveFrom, effectiveTo: item.effectiveTo, verified: item.verified, publishedAt: item.publishedAt, bracketCount: item.brackets.length })),
+    recentT4: t4Documents.slice(0, 8).map((item) => ({ id: String(item._id), companyId: String(item.companyId), employer: companyById.get(String(item.companyId))?.operatingName || companyById.get(String(item.companyId))?.legalName || 'Unknown employer', taxYear: item.taxYear, formType: item.formType, generatedAt: item.generatedAt })),
+    recentRoe: roeDocuments.slice(0, 8).map((item) => ({ id: String(item._id), companyId: String(item.companyId), employer: companyById.get(String(item.companyId))?.operatingName || companyById.get(String(item.companyId))?.legalName || 'Unknown employer', employeeId: String(item.employeeId), generatedAt: item.generatedAt }))
+  });
+});
+
+router.get('/tax-config/versions', authenticate, requirePermission('tax.manage'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const versions = await TaxConfigVersion.find().sort({ effectiveFrom: -1, createdAt: -1 }).limit(100);
+  res.json({ versions: versions.map((item) => ({ id: String(item._id), jurisdiction: item.jurisdiction, status: item.status, sourceYear: item.sourceYear, source: item.source, effectiveFrom: item.effectiveFrom, effectiveTo: item.effectiveTo, verified: item.verified, publishedAt: item.publishedAt, bracketCount: item.brackets.length })) });
 });
 
 router.get('/payroll-runs', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
