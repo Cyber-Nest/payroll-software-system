@@ -171,6 +171,11 @@ button {
   margin-top: 4px;
 }
 
+.login-story :is(h1, p, li b, li span) {
+  -webkit-text-stroke: 0.65px #fff;
+  paint-order: stroke fill;
+}
+
 .login-story h1 {
   font-size: 58px;
   line-height: 1.08;
