@@ -129,10 +129,10 @@ button {
 
 .login-story {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.34)),
+    linear-gradient(110deg, rgba(7, 27, 58, 0.76) 0%, rgba(7, 27, 58, 0.59) 58%, rgba(7, 27, 58, 0.28) 100%),
     url('https://images.unsplash.com/photo-1517935706615-2717063c2225?auto=format&fit=crop&w=1400&q=80')
       center bottom / cover;
-  color: #08265a;
+  color: #fff;
   display: flex;
   flex-direction: column;
   gap: 42px;
@@ -172,8 +172,9 @@ button {
 }
 
 .login-story :is(h1, p, li b, li span) {
-  -webkit-text-stroke: 0.65px #fff;
+  -webkit-text-stroke: 0.8px rgba(5, 24, 52, 0.9);
   paint-order: stroke fill;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .login-story h1 {
@@ -183,7 +184,7 @@ button {
 }
 
 .login-story p {
-  color: #27435f;
+  color: #fff;
   font-size: 22px;
   line-height: 1.45;
   max-width: 620px;
@@ -204,12 +205,12 @@ button {
 }
 
 .login-story li b {
-  color: #082b65;
+  color: #fff;
   font-size: 17px;
 }
 
 .login-story li span {
-  color: #27435f;
+  color: #fff;
 }
 
 .canada {
