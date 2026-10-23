@@ -14449,6 +14449,15 @@ function SuperAdminEmployeeReports({ token }: { token: string }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const selectTab = (event: Event) => {
+      const section = (event as CustomEvent<string>).detail;
+      if (section) setTab(section);
+    };
+    window.addEventListener('super-admin-report-tab', selectTab);
+    return () => window.removeEventListener('super-admin-report-tab', selectTab);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     setLoading(true); setError('');
     Promise.all([api<SuperAdminReportsData>('/super-admin/reports/overview', token), tab === 'Employees' ? api<{ rows: SuperAdminEmployeeReportRow[] }>(`/super-admin/reports/employees?source=${source}`, token) : Promise.resolve(undefined)])
@@ -14516,6 +14525,7 @@ function StaffPasswordChange({ token, onLogout }: { token: string; onLogout: () 
 function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [data, setData] = useState<SuperAdminDashboard>();
   const [page, setPage] = useState('Dashboard');
+  const [reportsExpanded, setReportsExpanded] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(defaultEmployerForm);
   const [editingEmployerId, setEditingEmployerId] = useState('');
@@ -15697,22 +15707,23 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
     'Banking & Funding',
     'Remittance Schedule'
   ];
+  const reportPages = ['Overview', 'Payroll Reports', 'Tax (CRA)', 'Employees', 'Hours & Attendance', 'Financial', 'Compliance', 'Custom Reports'];
   return (
     mustChangePassword ? <StaffPasswordChange token={token} onLogout={onLogout} /> : <div className="admin-shell super-admin-shell">
       <aside className="admin-sidebar">
         <Logo />
-        {nav.filter(item => allowedSections.includes(item.label)).map((item) => (
-          <button
-            key={item.label}
-            className={`${page === item.label || (['Create Employer', 'Edit Employer'].includes(page) && item.label === 'Employers') || (page === 'Create Role' && item.label === 'Role Management') || (payrollPages.includes(page) && item.label === 'Payroll Accounts') ? 'active' : ''} ${item.section ? 'sub-nav-item' : ''}`}
-            onClick={() =>
-              setPage(item.label === 'Payroll Accounts' ? 'All Payroll Accounts' : item.label)
-            }
-          >
-            <span>{item.label.charAt(0)}</span>
-            {item.label}
-          </button>
-        ))}
+        {nav.filter(item => allowedSections.includes(item.label)).map((item) => item.label === 'Reports' ? (
+          <div className="sa-sidebar-group" key={item.label}>
+            <button type="button" aria-expanded={reportsExpanded || page === 'Reports'} className={reportPages.includes(page) ? 'active' : ''} onClick={() => { setReportsExpanded(value => !value); setPage('Reports'); }}>
+              <span>{item.label.charAt(0)}</span>{item.label}<span className="sa-sidebar-chevron">{reportsExpanded || page === 'Reports' ? '⌃' : '⌄'}</span>
+            </button>
+            {(reportsExpanded || reportPages.includes(page)) && reportPages.map(section => <button type="button" key={section} className={`sub-nav-item ${page === section || (section === 'Overview' && page === 'Reports') ? 'active' : ''}`} onClick={() => { setPage('Reports'); window.dispatchEvent(new CustomEvent('super-admin-report-tab', { detail: section })); }}><span>•</span>{section}</button>)}
+          </div>
+        ) : <button
+          key={item.label}
+          className={`${page === item.label || (['Create Employer', 'Edit Employer'].includes(page) && item.label === 'Employers') || (page === 'Create Role' && item.label === 'Role Management') || (payrollPages.includes(page) && item.label === 'Payroll Accounts') ? 'active' : ''} ${item.section ? 'sub-nav-item' : ''}`}
+          onClick={() => setPage(item.label === 'Payroll Accounts' ? 'All Payroll Accounts' : item.label)}
+        ><span>{item.label.charAt(0)}</span>{item.label}</button>)}
         <div className="built-canada">
           Need Help?
           <br />

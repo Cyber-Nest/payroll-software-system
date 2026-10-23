@@ -393,6 +393,11 @@ button {
 .super-admin-shell .admin-sidebar button.sub-nav-item span {
   opacity: 0.85;
 }
+.sa-sidebar-group { display: grid; gap: 2px; }
+.super-admin-shell .sa-sidebar-group > button:first-child { position: relative; }
+.super-admin-shell .sa-sidebar-group .sa-sidebar-chevron { margin-left: auto; width: auto; font-size: 13px; }
+.super-admin-shell .sa-sidebar-group > button.sub-nav-item { min-height: 34px; margin-left: 18px; padding: 7px 10px 7px 14px; width: calc(100% - 18px); font-size: 13px; }
+.super-admin-shell .sa-sidebar-group > button.sub-nav-item.active { background: rgba(18, 104, 255, 0.28); }
 
 .super-admin-shell .admin-main {
   min-width: 0;
