@@ -6743,6 +6743,24 @@ th {
     padding: 8px 11px;
     white-space: nowrap;
   }
+  .super-admin-shell .admin-sidebar .sa-sidebar-group {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    overflow: visible;
+    height: auto;
+    max-height: none;
+    padding: 0;
+  }
+  .super-admin-shell .admin-sidebar .sa-sidebar-group > button.sub-nav-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 34px;
+    margin: 0 0 0 12px;
+    padding: 7px 10px;
+  }
+  .super-admin-shell .admin-sidebar .sa-sidebar-group > button.sub-nav-item::before { display: none; }
   .super-admin-shell .admin-sidebar .built-canada { display: none; }
   .super-admin-shell .admin-topbar {
     grid-template-columns: minmax(0, 1fr) auto auto auto auto;

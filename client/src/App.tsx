@@ -14447,6 +14447,7 @@ function SuperAdminEmployeeReports({ token }: { token: string }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  useEffect(() => { window.dispatchEvent(new CustomEvent('super-admin-report-tab-change', { detail: tab })); }, [tab]);
 
   useEffect(() => {
     const selectTab = (event: Event) => {
@@ -14526,6 +14527,12 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
   const [data, setData] = useState<SuperAdminDashboard>();
   const [page, setPage] = useState('Dashboard');
   const [reportsExpanded, setReportsExpanded] = useState(false);
+  const [activeReportSection, setActiveReportSection] = useState('Overview');
+  useEffect(() => {
+    const syncReportSection = (event: Event) => setActiveReportSection((event as CustomEvent<string>).detail || 'Overview');
+    window.addEventListener('super-admin-report-tab-change', syncReportSection);
+    return () => window.removeEventListener('super-admin-report-tab-change', syncReportSection);
+  }, []);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(defaultEmployerForm);
   const [editingEmployerId, setEditingEmployerId] = useState('');
@@ -15714,10 +15721,10 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         <Logo />
         {nav.filter(item => allowedSections.includes(item.label)).map((item) => item.label === 'Reports' ? (
           <div className="sa-sidebar-group" key={item.label}>
-            <button type="button" aria-expanded={reportsExpanded || page === 'Reports'} className={reportPages.includes(page) ? 'active' : ''} onClick={() => { setReportsExpanded(value => !value); setPage('Reports'); }}>
-              <span>{item.label.charAt(0)}</span>{item.label}<span className="sa-sidebar-chevron">{reportsExpanded || page === 'Reports' ? '⌃' : '⌄'}</span>
+            <button type="button" aria-expanded={reportsExpanded || reportPages.includes(page)} className={reportPages.includes(page) ? 'active' : ''} onClick={() => setReportsExpanded(value => !value)}>
+              <span>{item.label.charAt(0)}</span>{item.label}<span className="sa-sidebar-chevron">{reportsExpanded || reportPages.includes(page) ? '⌃' : '⌄'}</span>
             </button>
-            {(reportsExpanded || reportPages.includes(page)) && reportPages.map(section => <button type="button" key={section} className={`sub-nav-item ${page === section || (section === 'Overview' && page === 'Reports') ? 'active' : ''}`} onClick={() => { setPage('Reports'); window.dispatchEvent(new CustomEvent('super-admin-report-tab', { detail: section })); }}><span>•</span>{section}</button>)}
+            {(reportsExpanded || reportPages.includes(page)) && reportPages.map(section => <button type="button" key={section} className={`sub-nav-item ${section === activeReportSection ? 'active' : ''}`} onClick={() => { setPage('Reports'); setReportsExpanded(true); window.dispatchEvent(new CustomEvent('super-admin-report-tab', { detail: section })); }}><span>•</span>{section}</button>)}
           </div>
         ) : <button
           key={item.label}
