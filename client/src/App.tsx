@@ -2801,11 +2801,11 @@ function OldEmployerDashboard({
     'Settings'
   ];
   const reportSubNav = [
-    'All Reports',
     'Payroll Reports',
     'Employee Reports',
-    'Tax & Compliance',
-    'Government Liabilities Report',
+    'Hours & Attendance',
+    'Financial Reports',
+    'Compliance Reports',
     'Benefits & Deductions',
     'Custom Reports',
     'Scheduled Reports'
@@ -7043,11 +7043,11 @@ function EmployerDashboard({
     'Settings'
   ];
   const reportSubNav = [
-    'All Reports',
     'Payroll Reports',
     'Employee Reports',
-    'Tax & Compliance',
-    'Government Liabilities Report',
+    'Hours & Attendance',
+    'Financial Reports',
+    'Compliance Reports',
     'Benefits & Deductions',
     'Custom Reports',
     'Scheduled Reports'
@@ -7364,7 +7364,7 @@ function EmployerDashboard({
         onOpenT4Summary={() => setAdminPage('T4 Summary Report')}
         onOpenHistory={() => setAdminPage('Employee History Report')}
       />
-    ) : ['All Reports', 'Tax & Compliance', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'].includes(adminPage) ? (
+    ) : ['Payroll Reports', 'Employee Reports', 'Hours & Attendance', 'Financial Reports', 'Compliance Reports', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'].includes(adminPage) ? (
       <EmployerReportsPage
         token={token}
         initialTab={adminPage}
@@ -7439,9 +7439,9 @@ function EmployerDashboard({
           </button>
           {item === 'Reports' && reportPages.includes(adminPage) && reportSubNav.map((subItem) => (
             <button
-              className={`sub-nav-item ${adminPage === subItem || (subItem === 'All Reports' && adminPage === 'Reports') ? 'active' : ''}`}
+            className={`sub-nav-item ${adminPage === subItem ? 'active' : ''}`}
               key={subItem}
-              onClick={() => setAdminPage(subItem === 'All Reports' ? 'Reports' : subItem)}
+              onClick={() => setAdminPage(subItem)}
             >
               <span>•</span>
               {subItem}
@@ -7529,7 +7529,7 @@ function EmployerReportsPage({
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
-  const tabs = ['All Reports', 'Payroll Reports', 'Employee Reports', 'Tax & Compliance', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'];
+  const tabs = ['All Reports', 'Payroll Reports', 'Employee Reports', 'Hours & Attendance', 'Financial Reports', 'Compliance Reports', 'Benefits & Deductions', 'Custom Reports', 'Scheduled Reports'];
   function openBuilder(section: string, action = '') {
     setActiveTab(section); setBuilderAction(action); setBuilderVersion((value) => value + 1);
   }
@@ -7540,7 +7540,11 @@ function EmployerReportsPage({
   </section>;
   const normalized = search.trim().toLowerCase();
   const visibleGroups = (data?.groups || [])
-    .filter((group) => activeTab === 'All Reports' || group.title.startsWith(activeTab))
+    .filter((group) => activeTab === 'All Reports' ||
+      (activeTab === 'Compliance Reports' && group.title.startsWith('Tax & Compliance')) ||
+      (activeTab === 'Hours & Attendance' && (group.title.startsWith('Employee Reports') || group.title.startsWith('Payroll Reports'))) ||
+      (activeTab === 'Financial Reports' && (group.title.startsWith('Payroll Reports') || group.title.startsWith('Benefits & Deductions'))) ||
+      group.title.startsWith(activeTab))
     .filter((group) => category === 'All Categories' || group.title === category)
     .map((group) => ({
       ...group,
@@ -14427,8 +14431,18 @@ type SuperAdminEmployeeReportRow = {
   employerId?: string; status: string; createdAt?: string | null; lastPayrollDate?: string | null; grossPay?: string | null; netPay?: string | null;
 };
 
+type SuperAdminReportsData = {
+  metrics: { companies: number; employees: number; activeEmployees: number; totalGross: number; totalNet: number; totalDeductions: number; employerCost: number; totalRuns: number; filed: number; pendingFilings: number };
+  monthly: Array<{ month: string; gross: number; net: number }>;
+  runs: Array<{ id: string; employer: string; customerId: string; periodStart: string; periodEnd: string; payDate: string; employeeCount: number; totalHours: number; grossPay: number; deductions: number; netPay: number; status: string }>;
+  companiesBreakdown: Array<{ id: string; name: string; gross: number; net: number; deductions: number; count: number }>;
+  filings: Array<{ id: string; companyId: string; employer: string; title: string; type: string; period: string; year: number; dueDate: string; status: string; amount: number }>;
+};
+
 function SuperAdminEmployeeReports({ token }: { token: string }) {
-  const [source, setSource] = useState<'super-admin' | 'employer'>('super-admin');
+  const [source, setSource] = useState<'super-admin' | 'employer'>('employer');
+  const [tab, setTab] = useState('Overview');
+  const [data, setData] = useState<SuperAdminReportsData>();
   const [rows, setRows] = useState<SuperAdminEmployeeReportRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -14437,12 +14451,12 @@ function SuperAdminEmployeeReports({ token }: { token: string }) {
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    api<{ rows: SuperAdminEmployeeReportRow[] }>(`/super-admin/reports/employees?source=${source}`, token)
-      .then(result => { if (active) setRows(result.rows); })
-      .catch(loadError => { if (active) { setRows([]); setError(loadError instanceof Error ? loadError.message : 'Could not load employee reports.'); } })
+    Promise.all([api<SuperAdminReportsData>('/super-admin/reports/overview', token), tab === 'Employees' ? api<{ rows: SuperAdminEmployeeReportRow[] }>(`/super-admin/reports/employees?source=${source}`, token) : Promise.resolve(undefined)])
+      .then(([report, employeeRows]) => { if (active) { setData(report); if (employeeRows) setRows(employeeRows.rows); } })
+      .catch(loadError => { if (active) { setData(undefined); setRows([]); setError(loadError instanceof Error ? loadError.message : 'Could not load reports.'); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [source, token]);
+  }, [source, tab, token]);
 
   const filtered = rows.filter(row => `${row.employeeName} ${row.employeeNumber} ${row.email} ${row.role} ${row.employer} ${row.employerId || ''} ${row.status}`.toLowerCase().includes(search.trim().toLowerCase()));
   const exportCsv = () => {
@@ -14453,8 +14467,23 @@ function SuperAdminEmployeeReports({ token }: { token: string }) {
     const link = document.createElement('a'); link.href = url; link.download = `super-admin-${source}-employee-report.csv`; link.click(); URL.revokeObjectURL(url);
   };
 
+  const reportMoney = (value: number) => `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const reportTabs = ['Overview', 'Payroll Reports', 'Tax (CRA)', 'Employees', 'Hours & Attendance', 'Financial', 'Compliance', 'Custom Reports'];
+  const exportPayrollCsv = () => {
+    const lines = [['Employer', 'Period Start', 'Period End', 'Pay Date', 'Employees', 'Gross Pay', 'Deductions', 'Net Pay', 'Status'], ...(data?.runs || []).map(row => [row.employer, row.periodStart, row.periodEnd, row.payDate, String(row.employeeCount), String(row.grossPay), String(row.deductions), String(row.netPay), row.status])];
+    downloadTextFile('super-admin-payroll-report.csv', 'text/csv;charset=utf-8', lines.map(line => line.map(value => `"${value.replace(/"/g, '""')}"`).join(',')).join('\r\n'));
+  };
   return <section className="module-page super-admin-reports">
-    <div className="employee-head"><div><h1>Employee Reports</h1><p>Review employee records and latest payroll details across the selected group.</p></div><button className="run-payroll" type="button" onClick={exportCsv} disabled={loading || !filtered.length}>Export CSV</button></div>
+    <header className="sa-reports-heading"><div><div className="report-breadcrumb">Reports <span>›</span> {tab}</div><h1>{tab === 'Overview' ? 'Reports' : tab === 'Tax (CRA)' ? 'Tax (CRA) Reports' : tab === 'Employees' ? 'Employees' : tab === 'Financial' ? 'Financial Reports' : tab === 'Compliance' ? 'Compliance Reports' : tab}</h1><p>Generate and review payroll, tax, employee and compliance reports across all companies.</p></div><select aria-label="Report date range" defaultValue="12"><option value="12">Last 12 Months</option><option value="2026">Jan 1, 2026 - Dec 31, 2026</option><option value="2025">Jan 1, 2025 - Dec 31, 2025</option></select></header>
+    <nav className="sa-report-tabs">{reportTabs.map(item => <button type="button" key={item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setSearch(''); }}>{item}</button>)}</nav>
+    {error && <p role="alert" className="error-message">{error}</p>}
+    {loading && !data && <p className="report-empty">Loading reports...</p>}
+    {data && <>
+      <div className="sa-report-metrics">{(tab === 'Overview' ? [['Total Companies', String(data.metrics.companies)], ['Total Employees', String(data.metrics.employees)], ['Total Gross Pay', reportMoney(data.metrics.totalGross)], ['Total Deductions', reportMoney(data.metrics.totalDeductions)], ['Total Net Pay', reportMoney(data.metrics.totalNet)]] : tab === 'Payroll Reports' ? [['Total Gross Pay', reportMoney(data.metrics.totalGross)], ['Total Net Pay', reportMoney(data.metrics.totalNet)], ['Total Deductions', reportMoney(data.metrics.totalDeductions)], ['Total Employer Cost', reportMoney(data.metrics.employerCost)]] : tab === 'Tax (CRA)' || tab === 'Compliance' ? [['Total Filings', String(data.filings.length)], ['Filed', String(data.metrics.filed)], ['Pending Filings', String(data.metrics.pendingFilings)], ['Total Remitted', reportMoney(data.filings.reduce((sum, row) => sum + row.amount, 0))]] : tab === 'Employees' ? [['Total Employees', String(data.metrics.employees)], ['Active Employees', String(data.metrics.activeEmployees)], ['Employers', String(data.metrics.companies)]] : tab === 'Hours & Attendance' ? [['Payroll Runs', String(data.metrics.totalRuns)], ['Total Hours', data.runs.reduce((sum, row) => sum + row.totalHours, 0).toLocaleString()], ['Employees', String(data.metrics.employees)]] : [['Total Payroll Cost', reportMoney(data.metrics.employerCost)], ['Total Net Pay', reportMoney(data.metrics.totalNet)], ['Total Deductions', reportMoney(data.metrics.totalDeductions)], ['Companies', String(data.companiesBreakdown.length)]]).map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong><small>Across all companies</small></article>)}</div>
+      {(tab === 'Overview' || tab === 'Payroll Reports' || tab === 'Financial' || tab === 'Hours & Attendance') && <section className="admin-panel sa-report-chart"><header><h2>{tab === 'Overview' ? 'Payroll Cost Trend' : tab === 'Hours & Attendance' ? 'Hours & Attendance by Pay Period' : 'Payroll Trend'}</h2><span>Gross Pay　 Net Pay</span></header><div className="sa-report-bars">{data.monthly.map(item => { const max = Math.max(1, ...data.monthly.map(value => value.gross)); return <div key={item.month}><span style={{ height: `${Math.max(3, item.gross / max * 100)}%` }} title={reportMoney(item.gross)} /><i style={{ height: `${Math.max(3, item.net / max * 100)}%` }} title={reportMoney(item.net)} /><small>{item.month}</small></div>; })}</div></section>}
+      {tab === 'Overview' && <div className="sa-report-actions"><button type="button" onClick={() => setTab('Payroll Reports')}>View All Payroll Reports　→</button><button type="button" onClick={() => setTab('Custom Reports')}>Create Custom Report</button><button type="button" onClick={() => setTab('Compliance')}>View Compliance Reports</button></div>}
+      {tab === 'Employees' ? <><div className="super-admin-report-filters"><label>Report employees from<select value={source} onChange={event => setSource(event.target.value as 'super-admin' | 'employer')}><option value="employer">Employer Employees</option><option value="super-admin">Super Admin Employees</option></select></label><label>Search<input type="search" placeholder="Name, ID, email, employer..." value={search} onChange={event => setSearch(event.target.value)} /></label><button type="button" onClick={exportCsv} disabled={loading || !filtered.length}>Export CSV</button></div><section className="admin-panel"><div className="settings-table"><table><thead><tr><th>Employee</th><th>Employee #</th><th>Email</th><th>Role / Position</th>{source === 'employer' && <th>Employer</th>}<th>Status</th><th>Start Date</th><th>Last Payroll</th><th>Latest Gross</th><th>Latest Net</th></tr></thead><tbody>{!loading && filtered.map(row => <tr key={row.id}><td><b>{row.employeeName}</b></td><td>{row.employeeNumber}</td><td>{row.email}</td><td>{row.role}</td>{source === 'employer' && <td>{row.employer}<small>{row.employerId}</small></td>}<td>{row.status}</td><td>{row.createdAt ? formatDate(row.createdAt, 'en') : '—'}</td><td>{row.lastPayrollDate ? formatDate(row.lastPayrollDate, 'en') : '—'}</td><td>{row.grossPay ? reportMoney(Number(row.grossPay)) : '—'}</td><td>{row.netPay ? reportMoney(Number(row.netPay)) : '—'}</td></tr>)}{loading && <tr><td colSpan={10}>Loading employees...</td></tr>}{!loading && !filtered.length && <tr><td colSpan={10}>No employee records match this report.</td></tr>}</tbody></table></div></section></> : (tab === 'Tax (CRA)' || tab === 'Compliance') ? <section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>{tab === 'Tax (CRA)' ? 'CRA Remittance History' : 'Company Filing Status'}</h2><p>Filing and remittance records from employer accounts.</p></div></header><div className="settings-table"><table><thead><tr><th>Company</th><th>Filing</th><th>Period</th><th>Due Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>{data.filings.map(row => <tr key={row.id}><td>{row.employer}</td><td>{row.title}</td><td>{row.period} {row.year}</td><td>{formatDate(row.dueDate, 'en')}</td><td>{reportMoney(row.amount)}</td><td><span className={`sa-status-pill ${row.status}`}>{row.status}</span></td></tr>)}{!data.filings.length && <tr><td colSpan={6}>No filing records found.</td></tr>}</tbody></table></div></section> : tab === 'Custom Reports' ? <section className="admin-panel sa-custom-report-placeholder"><h2>Custom Reports</h2><p>Export payroll data across all companies.</p><button type="button" onClick={exportPayrollCsv}>Export Payroll Data</button></section> : <section className="admin-panel"><header className="sa-compliance-panel-head"><div><h2>{tab === 'Financial' ? 'Financial Details by Company' : tab === 'Hours & Attendance' ? 'Payroll Hours by Company' : 'Payroll Details'}</h2><p>Latest payroll totals across employer accounts.</p></div><button type="button" onClick={exportPayrollCsv}>Export CSV</button></header><div className="settings-table"><table><thead><tr><th>#</th><th>Company</th><th>Pay Period</th><th>Pay Date</th><th>Employees</th><th>{tab === 'Hours & Attendance' ? 'Hours' : 'Gross Pay'}</th><th>Deductions</th><th>Net Pay</th><th>Status</th></tr></thead><tbody>{data.runs.filter(row => !search || `${row.employer} ${row.customerId} ${row.status}`.toLowerCase().includes(search.toLowerCase())).map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.employer}<small>{row.customerId}</small></td><td>{formatDate(row.periodStart, 'en')} - {formatDate(row.periodEnd, 'en')}</td><td>{formatDate(row.payDate, 'en')}</td><td>{row.employeeCount}</td><td>{tab === 'Hours & Attendance' ? row.totalHours.toLocaleString() : reportMoney(row.grossPay)}</td><td>{reportMoney(row.deductions)}</td><td>{reportMoney(row.netPay)}</td><td><span className={`sa-status-pill ${row.status}`}>{row.status}</span></td></tr>)}{!data.runs.length && <tr><td colSpan={9}>No payroll data is available for this date range.</td></tr>}</tbody></table></div></section>}
+    </>}
     <div className="super-admin-report-filters"><label>Report employees from<select value={source} onChange={event => setSource(event.target.value as 'super-admin' | 'employer')}><option value="super-admin">Super Admin Employees</option><option value="employer">Employer Employees</option></select></label><label>Search<input type="search" placeholder="Name, ID, email, employer..." value={search} onChange={event => setSearch(event.target.value)} /></label><div className="report-count"><b>{filtered.length}</b><span>{source === 'super-admin' ? 'Super Admin staff' : 'Employer employees'}</span></div></div>
     {error && <p role="alert" className="error-message">{error}</p>}
     <section className="admin-panel"><div className="settings-table"><table><thead><tr><th>Employee</th><th>Employee #</th><th>Email</th><th>Role / Position</th>{source === 'employer' && <th>Employer</th>}<th>Status</th><th>{source === 'super-admin' ? 'Added' : 'Start Date'}</th><th>Last Payroll</th><th>Latest Gross</th><th>Latest Net</th></tr></thead><tbody>{!loading && filtered.map(row => <tr key={row.id}><td><b>{row.employeeName}</b></td><td>{row.employeeNumber}</td><td>{row.email}</td><td>{row.role}</td>{source === 'employer' && <td>{row.employer}<small>{row.employerId}</small></td>}<td><span className={`sa-status-pill ${row.status.toLowerCase()}`}>{row.status}</span></td><td>{row.createdAt ? formatDate(row.createdAt, 'en') : '—'}</td><td>{row.lastPayrollDate ? formatDate(row.lastPayrollDate, 'en') : '—'}</td><td>{row.grossPay ? `$${Number(row.grossPay).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td><td>{row.netPay ? `$${Number(row.netPay).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td></tr>)}{!loading && !filtered.length && <tr><td colSpan={source === 'employer' ? 10 : 9}>No employee records match this report.</td></tr>}{loading && <tr><td colSpan={source === 'employer' ? 10 : 9}>Loading employee report...</td></tr>}</tbody></table></div></section>

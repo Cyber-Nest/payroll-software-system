@@ -962,6 +962,34 @@ router.get('/reports/employees', authenticate, requirePermission('reports.view')
   res.json({ source, total: rows.length, rows });
 });
 
+router.get('/reports/overview', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  const [companies, employees, activeEmployees, runs, statements, filings] = await Promise.all([
+    Company.countDocuments(), Employee.countDocuments(),
+    User.countDocuments({ isActive: true }),
+    PayrollRun.find().sort({ payDate: -1 }).limit(250),
+    PayStatement.find({ supersededByStatementId: { $exists: false } }).sort({ payDate: -1 }).limit(5000),
+    GovernmentFiling.find().sort({ dueDate: 1 }).limit(500)
+  ]);
+  const companyIds = [...new Set([...runs.map(row => String(row.companyId)), ...statements.map(row => String(row.companyId))])];
+  const companyRows = await Company.find({ _id: { $in: companyIds } }).select('legalName operatingName customerId');
+  const companyMap = new Map(companyRows.map(row => [String(row._id), row]));
+  const amount = (value: unknown) => Number((value as { toString?: () => string } | null)?.toString?.() || 0);
+  const runRows = runs.map(run => ({ id: String(run._id), employer: companyMap.get(String(run.companyId))?.operatingName || companyMap.get(String(run.companyId))?.legalName || 'Unknown employer', customerId: companyMap.get(String(run.companyId))?.customerId || '—', periodStart: run.periodStart, periodEnd: run.periodEnd, payDate: run.payDate, employeeCount: run.employeeCount, totalHours: run.totalHours, grossPay: amount(run.estimatedGross), deductions: amount(run.totalDeductions), netPay: amount(run.totalNetPay), status: run.status }));
+  const monthly = Array.from({ length: 12 }, (_, index) => {
+    const month = new Date(Date.UTC(new Date().getUTCFullYear(), index, 1));
+    const monthRuns = runRows.filter(row => new Date(row.payDate).getUTCMonth() === index && new Date(row.payDate).getUTCFullYear() === month.getUTCFullYear());
+    return { month: month.toLocaleString('en', { month: 'short', timeZone: 'UTC' }), gross: monthRuns.reduce((sum, row) => sum + row.grossPay, 0), net: monthRuns.reduce((sum, row) => sum + row.netPay, 0) };
+  });
+  const gross = statements.reduce((sum, row) => sum + amount(row.grossPay), 0);
+  const net = statements.reduce((sum, row) => sum + amount(row.netPay), 0);
+  const deductions = statements.reduce((sum, row) => sum + row.deductions.reduce((lineSum, line) => lineSum + amount(line.amount), 0), 0);
+  const employerNames = new Map(companyRows.map(row => [String(row._id), row.operatingName || row.legalName]));
+  const byCompany = new Map<string, { gross: number; net: number; deductions: number; count: number }>();
+  for (const row of statements) { const key = String(row.companyId); const data = byCompany.get(key) || { gross: 0, net: 0, deductions: 0, count: 0 }; data.gross += amount(row.grossPay); data.net += amount(row.netPay); data.deductions += row.deductions.reduce((sum, line) => sum + amount(line.amount), 0); data.count++; byCompany.set(key, data); }
+  res.json({ metrics: { companies, employees, activeEmployees, totalGross: gross, totalNet: net, totalDeductions: deductions, employerCost: gross, totalRuns: runRows.length, filed: filings.filter(row => row.status === 'filed').length, pendingFilings: filings.filter(row => row.status !== 'filed').length }, monthly, runs: runRows, companiesBreakdown: [...byCompany].map(([id, data]) => ({ id, name: employerNames.get(id) || 'Unknown employer', ...data })), filings: filings.map(row => ({ id: String(row._id), companyId: String(row.companyId), employer: employerNames.get(String(row.companyId)) || 'Unknown employer', title: row.title, type: row.type, period: row.period, year: row.year, dueDate: row.dueDate, status: row.status, amount: amount(row.amount) })) });
+});
+
 router.get('/compliance/overview', authenticate, requirePermission('reports.view'), async (req: AuthRequest, res) => {
   if (!requireSuperAdmin(req, res)) return;
   const [companies, filings, t4Documents, roeDocuments, taxVersions] = await Promise.all([

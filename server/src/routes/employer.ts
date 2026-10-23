@@ -1429,6 +1429,27 @@ router.get(
         ]
       },
       {
+        title: 'Hours & Attendance Reports',
+        description: 'Reports for employee hours, attendance and overtime.',
+        tone: 'cyan',
+        reports: [
+          ['Employee Hours Report', 'Total hours and overtime by employee and pay period.'],
+          ['Attendance Summary Report', 'Review recorded work hours and attendance by employee.'],
+          ['Overtime Report', 'Compare regular and overtime hours across pay periods.']
+        ]
+      },
+      {
+        title: 'Financial Reports',
+        description: 'Reports for payroll costs, earnings and financial summaries.',
+        tone: 'blue',
+        reports: [
+          ['Payroll Summary Report', 'Total hours, gross pay, deductions and net pay by pay period.'],
+          ['Employer Cost Report', 'Total employer costs including CPP and EI.'],
+          ['Year to Date Summary', 'YTD earnings, hours and deductions.'],
+          ['Payroll Variance Report', 'Changes between draft, approved and finalized runs.']
+        ]
+      },
+      {
         title: 'Tax & Compliance Reports',
         description: 'Reports for CRA remittances and year-end requirements.',
         tone: 'yellow',
