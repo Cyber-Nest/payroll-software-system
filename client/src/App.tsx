@@ -15773,7 +15773,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
         <header className="admin-topbar">
           <b>Super Admin</b>
           <label className="admin-search">
-            <span>Search</span>
+            <svg className="admin-search-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
             <input placeholder="Search employers, users, payroll runs..." />
           </label>
           <button className="super-admin-header-action" hidden={!allowedSections.includes('Notifications')} onClick={() => setPage('Notifications')}>

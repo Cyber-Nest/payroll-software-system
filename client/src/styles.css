@@ -2107,6 +2107,9 @@ button {
 .admin-search input {
   width: 100%;
 }
+.admin-search .admin-search-icon { flex: 0 0 17px; width: 17px; height: 17px; margin: 0 9px 0 12px; fill: none; stroke: #123fdb; stroke-width: 2; stroke-linecap: round; }
+.super-admin-shell .admin-search { overflow: hidden; border: 1px solid #cbd8e8; border-radius: 7px; background: #fff; }
+.super-admin-shell .admin-search input { min-height: 38px; border: 0; outline: 0; }
 
 .admin-topbar button {
   background: #fff;
