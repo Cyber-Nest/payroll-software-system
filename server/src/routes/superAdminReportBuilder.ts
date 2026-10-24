@@ -5,6 +5,9 @@ import { authenticate, AuthRequest, requirePermission } from '../middleware/auth
 import { Company } from '../models/Company';
 import { Employee } from '../models/Employee';
 import { EmployerReport, EmployerReportRun, EmployerReportSchedule, EmployerReportTemplate } from '../models/EmployerReport';
+import { PayrollRun } from '../models/PayrollRun';
+import { PayStatement } from '../models/PayStatement';
+import { GovernmentFiling } from '../models/GovernmentFiling';
 import { buildReport, reportFields, reportFile, runReport } from '../services/employerReports.service';
 import { reportDefinitionSchema, reportScheduleSchema } from './employerReportBuilder';
 
@@ -22,6 +25,41 @@ const serialize = (value: { _id: unknown; toObject(): any }) => { const { _id, _
 router.get('/options', async (_req, res) => {
   const companies = await Company.find({ status: { $ne: 'suspended' } }).select('legalName operatingName customerId').sort({ legalName: 1 });
   res.json({ fields: reportFields, employees: [], emailConfigured: false, companies: companies.map(company => ({ id: String(company._id), name: company.operatingName || company.legalName, customerId: company.customerId })) });
+});
+router.get('/export', requirePermission('reports.export'), async (req: AuthRequest, res) => {
+  const section = z.enum(['Overview', 'Payroll Reports', 'Financial', 'Employees', 'Tax (CRA)', 'Compliance', 'Scheduled Reports']).safeParse(req.query.section);
+  const format = z.enum(['pdf', 'excel', 'csv']).safeParse(req.query.format);
+  if (!section.success || !format.success) return res.status(400).json({ message: 'Choose a report section and PDF, Excel or CSV format.' });
+  let companyId: mongoose.Types.ObjectId | undefined;
+  if (req.query.companyId !== undefined) { const parsed = id.safeParse(req.query.companyId); if (!parsed.success) return res.status(400).json({ message: 'Choose a valid company.' }); companyId = new mongoose.Types.ObjectId(parsed.data); if (!await Company.exists({ _id: companyId })) return res.status(404).json({ message: 'Company not found.' }); }
+  const companies = await Company.find(companyId ? { _id: companyId } : {}).select('legalName operatingName customerId businessNumber address').sort({ legalName: 1 });
+  const companyMap = new Map(companies.map(company => [String(company._id), company]));
+  const money = (value: unknown) => Number((value as { toString?: () => string } | null)?.toString?.() || 0);
+  const columns: Array<{ key: string; label: string }> = [];
+  const rows: Array<Record<string, string | number>> = [];
+  const title = `${section.data} Report`;
+  const date = (value: Date | string | undefined) => value ? new Date(value).toISOString().slice(0, 10) : '';
+  if (['Overview', 'Payroll Reports', 'Financial'].includes(section.data)) {
+    columns.push(...[['company', 'Company'], ['customerId', 'Account ID'], ['period', 'Pay Period'], ['payDate', 'Pay Date'], ['employees', 'Employees'], ['gross', 'Gross Pay'], ['deductions', 'Deductions'], ['net', 'Net Pay'], ['status', 'Status']].map(([key, label]) => ({ key, label })));
+    const runs = await PayrollRun.find({ ...(companyId ? { companyId } : {}) }).sort({ payDate: -1 }).limit(5000);
+    rows.push(...runs.map(run => ({ company: companyMap.get(String(run.companyId))?.operatingName || companyMap.get(String(run.companyId))?.legalName || 'Unknown company', customerId: companyMap.get(String(run.companyId))?.customerId || '', period: `${date(run.periodStart)} – ${date(run.periodEnd)}`, payDate: date(run.payDate), employees: run.employeeCount, gross: money(run.estimatedGross), deductions: money(run.totalDeductions), net: money(run.totalNetPay), status: run.status })));
+  } else if (section.data === 'Employees') {
+    columns.push(...[['company', 'Company'], ['employeeNumber', 'Employee ID'], ['employeeName', 'Employee Name'], ['email', 'Email'], ['department', 'Department'], ['jobTitle', 'Job Title'], ['province', 'Province'], ['startDate', 'Start Date']].map(([key, label]) => ({ key, label })));
+    const employees = await Employee.find({ ...(companyId ? { companyId } : {}) }).select('companyId employeeNumber legalFirstName legalLastName companyEmail occupation taxProvince startDate adminProfile').sort({ employeeNumber: 1 }).limit(10000);
+    rows.push(...employees.map(employee => ({ company: companyMap.get(String(employee.companyId))?.operatingName || companyMap.get(String(employee.companyId))?.legalName || 'Unknown company', employeeNumber: employee.employeeNumber, employeeName: `${employee.legalFirstName} ${employee.legalLastName}`.trim(), email: employee.companyEmail || '', department: String(employee.adminProfile?.employment?.department || ''), jobTitle: employee.occupation || '', province: employee.taxProvince || '', startDate: date(employee.startDate) })));
+  } else if (section.data === 'Tax (CRA)' || section.data === 'Compliance') {
+    columns.push(...[['company', 'Company'], ['filing', 'Filing'], ['period', 'Period'], ['year', 'Year'], ['dueDate', 'Due Date'], ['amount', 'Amount'], ['status', 'Status'], ['reference', 'Reference']].map(([key, label]) => ({ key, label })));
+    const filings = await GovernmentFiling.find({ ...(companyId ? { companyId } : {}) }).sort({ dueDate: 1 }).limit(10000);
+    rows.push(...filings.map(filing => ({ company: companyMap.get(String(filing.companyId))?.operatingName || companyMap.get(String(filing.companyId))?.legalName || 'Unknown company', filing: filing.title, period: filing.period, year: filing.year, dueDate: date(filing.dueDate), amount: money(filing.amount), status: filing.status, reference: filing.reference || filing.confirmationNumber || '' })));
+  } else {
+    columns.push(...[['name', 'Schedule'], ['report', 'Report Type'], ['frequency', 'Frequency'], ['nextRunAt', 'Next Run'], ['recipients', 'Recipients'], ['status', 'Status']].map(([key, label]) => ({ key, label })));
+    const schedules = await EmployerReportSchedule.find({ ...(companyId ? { companyId } : {}) }).sort({ nextRunAt: 1 }).limit(10000);
+    rows.push(...schedules.map(schedule => ({ name: schedule.name, report: schedule.reportType || String(schedule.reportId || 'Custom Report'), frequency: schedule.frequency, nextRunAt: date(schedule.nextRunAt), recipients: schedule.recipients.join('; '), status: schedule.enabled ? 'Active' : 'Paused' })));
+  }
+  const employer = companyId ? (companies[0]?.operatingName || companies[0]?.legalName || 'Employer') : 'Payhours Inc.';
+  const details: string[] = companyId ? [companies[0]?.address?.street || '', [companies[0]?.address?.city, companies[0]?.address?.province, companies[0]?.address?.postalCode].filter(Boolean).join(', '), companies[0]?.businessNumber ? `Business Number: ${companies[0].businessNumber}` : '', `Account: ${companies[0]?.customerId || ''}`].filter((value): value is string => Boolean(value)) : ['Platform wide report across all companies', `${companies.length} employer accounts`];
+  const output = reportFile(title, format.data, columns, rows, employer, details);
+  res.type(output.contentType).setHeader('Cache-Control', 'no-store').setHeader('Content-Disposition', `attachment; filename="${output.filename}"`).send(output.file);
 });
 router.get('/definitions', async (req: AuthRequest, res) => { const company = await scope(req, res); if (!company) return; res.json({ reports: (await EmployerReport.find({ companyId: company._id }).sort({ name: 1 })).map(serialize) }); });
 router.get('/templates', async (req: AuthRequest, res) => { const company = await scope(req, res); if (!company) return; res.json({ templates: (await EmployerReportTemplate.find({ companyId: company._id }).sort({ name: 1 })).map(serialize) }); });

@@ -14514,10 +14514,19 @@ function SuperAdminEmployeeReports({ token, initialTab = 'Overview' }: { token: 
     const lines = [['Employer', 'Period Start', 'Period End', 'Pay Date', 'Employees', 'Gross Pay', 'Deductions', 'Net Pay', 'Status'], ...(data?.runs || []).map(row => [row.employer, row.periodStart, row.periodEnd, row.payDate, String(row.employeeCount), String(row.grossPay), String(row.deductions), String(row.netPay), row.status])];
     downloadTextFile('super-admin-payroll-report.csv', 'text/csv;charset=utf-8', lines.map(line => line.map(value => `"${value.replace(/"/g, '""')}"`).join(',')).join('\r\n'));
   };
+  const downloadReport = async (format: 'pdf' | 'excel' | 'csv') => {
+    setError('');
+    try {
+      const response = await fetch(`${apiBase}/super-admin/reports/builder/export?section=${encodeURIComponent(tab)}&format=${format}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) { const result = await response.json(); throw new Error(result.message || 'Could not download this report.'); }
+      const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || `${tab.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-report.${format === 'excel' ? 'xls' : format}`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not download this report.'); }
+  };
   if (tab === 'Custom Reports') return <div className="sa-report-builder-screen"><EmployerReportBuilder key={`super-admin-custom-reports-${token}`} token={token} section="Custom Reports" action="" onCreateReport={() => undefined} apiPrefix="/super-admin/reports/builder" superAdmin /></div>;
   return <section className="module-page super-admin-reports">
     <header className="sa-reports-heading"><div><div className="report-breadcrumb">Reports <span>›</span> {tab}</div><h1>{tab === 'Overview' ? 'Reports' : tab === 'Tax (CRA)' ? 'Tax (CRA) Reports' : tab === 'Employees' ? 'Employees' : tab === 'Financial' ? 'Financial Reports' : tab === 'Compliance' ? 'Compliance Reports' : tab}</h1><p>Generate and review payroll, tax, employee and compliance reports across all companies.</p></div><select aria-label="Report date range" defaultValue="12"><option value="12">Last 12 Months</option><option value="2026">Jan 1, 2026 - Dec 31, 2026</option><option value="2025">Jan 1, 2025 - Dec 31, 2025</option></select></header>
     <nav className="sa-report-tabs">{reportTabs.map(item => <button type="button" key={item} className={tab === item ? 'active' : ''} onClick={() => { setTab(item); setSearch(''); }}>{item}</button>)}</nav>
+    <div className="sa-report-downloads"><span>Download this report:</span>{(['pdf', 'excel', 'csv'] as const).map(format => <button key={format} type="button" onClick={() => void downloadReport(format)}>{format === 'pdf' ? 'PDF' : format === 'excel' ? 'Excel' : 'CSV'}</button>)}</div>
     {error && <p role="alert" className="error-message">{error}</p>}
     {loading && !data && <p className="report-empty">Loading reports...</p>}
     {data && tab === 'Custom Reports' ? <EmployerReportBuilder key={`super-admin-custom-reports-${token}`} token={token} section="Custom Reports" action="" onCreateReport={() => undefined} apiPrefix="/super-admin/reports/builder" superAdmin /> : data && tab === 'Scheduled Reports' ? <ScheduledReportsPanel companies={data.companiesBreakdown.map(company => company.name)} /> : data && <>

@@ -6832,6 +6832,7 @@ th {
 .sa-report-tabs { display: grid; grid-template-columns: repeat(8, minmax(max-content, 1fr)); overflow-x: auto; border: 1px solid #e0eaf5; border-radius: 8px; background: #f5f8fc; }
 .sa-report-tabs button { min-height: 44px; padding: 8px 14px; border: 0; background: transparent; color: #233d68; cursor: pointer; }
 .sa-report-tabs button.active { background: #e5efff; color: #123dd5; font-weight: 800; }
+.sa-report-downloads { display: flex; align-items: center; justify-content: flex-end; gap: 8px; color: #526989; font-size: 12px; }.sa-report-downloads button { min-height: 34px; padding: 6px 12px; border: 1px solid #ccd9ea; border-radius: 6px; background: white; color: #1742b4; font-weight: 700; cursor: pointer; }
 .sa-report-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
 .sa-report-metrics article { display: grid; gap: 7px; padding: 16px; border: 1px solid #dce7f3; border-radius: 8px; background: #fff; }
 .sa-report-metrics article span { color: #345075; font-size: 12px; }
