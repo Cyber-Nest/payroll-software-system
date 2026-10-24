@@ -6845,6 +6845,7 @@ th {
 .sa-report-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .sa-report-actions button, .sa-custom-report-placeholder button { min-height: 44px; border: 1px solid #cbd9ea; border-radius: 7px; background: #fff; color: #164fbd; font-weight: 700; cursor: pointer; }
 .sa-report-builder { display: grid; gap: 12px; color: #142b55; }
+.sa-report-builder-page,.sa-report-builder-screen { width: 100%; min-width: 0; }.sa-report-builder-page { display: grid; gap: 10px; }.sa-builder-back { justify-self: start; padding: 6px 0 !important; border: 0 !important; background: transparent !important; color: #2049bb !important; }
 .sa-builder-title { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(200px, 340px) auto auto; align-items: end; gap: 12px; }
 .sa-builder-title h2 { margin: 6px 0 0; color: #102bd1; font-size: 29px; }.sa-builder-title p,.sa-report-builder p { margin: 3px 0 0; color: #435c84; font-size: 12px; }
 .sa-builder-title label,.sa-builder-filter-grid label { display: grid; gap: 5px; color: #1a315d; font-size: 11px; font-weight: 700; }.sa-builder-title input,.sa-builder-filter-grid input,.sa-builder-filter-grid select,.sa-builder-preview select { min-width: 0; min-height: 38px; padding: 7px 10px; border: 1px solid #d6e0ed; border-radius: 6px; background: white; color: #183259; font-size: 12px; }
