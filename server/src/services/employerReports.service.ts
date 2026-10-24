@@ -2,6 +2,7 @@ import { Company } from '../models/Company';
 import { Employee } from '../models/Employee';
 import { PayStatement } from '../models/PayStatement';
 import { EmployerUser } from '../models/EmployerUser';
+import { SuperAdmin } from '../models/SuperAdmin';
 import { AccessRole } from '../models/AccessRole';
 import { EmployerReport, EmployerReportRun, EmployerReportSchedule, IReportDefinition, IReportSchedule } from '../models/EmployerReport';
 import { moneyToNumber, sumMoney } from '../utils/money';
@@ -146,11 +147,13 @@ export async function processReportSchedules() {
       let error = '';
       let generationStarted = false;
       try {
-        const [actor, company] = await Promise.all([EmployerUser.findOne({ _id: schedule.createdBy, isActive: true, $or: [{ companyId: schedule.companyId }, { companyIds: schedule.companyId }] }), Company.findById(schedule.companyId)]);
-        if (!actor || !company) throw new Error('The schedule owner no longer has access to this employer.');
-        const custom = await AccessRole.findOne({ name: actor.role, userType: 'employer' });
-        const permissions = employerPermissionOverride(company.settings, actor.role) ?? (custom ? custom.status === 'Active' ? employerRolePermissions(custom.permissions) : [] : permissionsForRole(actor.role));
-        if (!permissions.includes('reports.export')) throw new Error('The schedule owner no longer has report export permission.');
+        const [employerActor, superAdminActor, company] = await Promise.all([EmployerUser.findOne({ _id: schedule.createdBy, isActive: true, $or: [{ companyId: schedule.companyId }, { companyIds: schedule.companyId }] }), SuperAdmin.findOne({ _id: schedule.createdBy, isActive: true }), Company.findById(schedule.companyId)]);
+        if (!company || (!employerActor && !superAdminActor)) throw new Error('The schedule owner no longer has access to this employer.');
+        if (employerActor) {
+          const custom = await AccessRole.findOne({ name: employerActor.role, userType: 'employer' });
+          const permissions = employerPermissionOverride(company.settings, employerActor.role) ?? (custom ? custom.status === 'Active' ? employerRolePermissions(custom.permissions) : [] : permissionsForRole(employerActor.role));
+          if (!permissions.includes('reports.export')) throw new Error('The schedule owner no longer has report export permission.');
+        }
         generationStarted = true;
         const run = await runReport(schedule.reportId || schedule._id, schedule.companyId, schedule.format, schedule._id, schedule.recipients, scheduledDefinition(schedule));
         error = run.deliveryError || '';

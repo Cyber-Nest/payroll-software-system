@@ -29,8 +29,10 @@ import { decimalToMoney } from '../utils/money';
 import { roePdf, t4sPdf, T4PdfData } from '../utils/pdf';
 import t4FormatRoutes from './t4Formats';
 import { selectedT4Format } from '../services/t4Format.service';
+import superAdminReportBuilder from './superAdminReportBuilder';
 
 const router = express.Router();
+router.use('/reports/builder', superAdminReportBuilder);
 
 const staffSections = ["Dashboard","Employers","Employees","Payroll Runs","Payroll Accounts","All Payroll Accounts","Add Payroll Account","CRA Remittances","Banking & Funding","Remittance Schedule","Reports","Compliance & Tax","Deduction Types","Paystub Templates","T4 Formats","Year End (T4)","ROE","Notifications","Users & Access","Settings"];
 const defaultPlatformSettings = { platformName: 'Payhours', supportEmail: 'support@payhours.ca', defaultTimeZone: 'America/Edmonton', maintenanceMode: false, sessionTimeoutMinutes: 60 };

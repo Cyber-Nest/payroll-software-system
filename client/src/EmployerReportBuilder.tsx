@@ -4,7 +4,7 @@ import ReportFieldManager from './ReportFieldManager';
 type Definition = { id?: string; name: string; description: string; source: string; fields: string[]; fieldLabels?: Record<string, string>; dateRange: string; fromDate: string; toDate: string; employeeIds: string[] };
 type Schedule = { id?: string; name: string; reportId: string; reportType?: string; anchorDay?: number; untilDate?: string; dateRange?: string; fromDate?: string; toDate?: string; frequency: string; format: string; nextRunAt: string; enabled: boolean; recipients: string[]; lastRunAt?: string; lastError?: string };
 type Run = { id: string; reportName: string; status: string; format: string; rowCount: number; filename?: string; createdAt: string; delivery: string; error?: string; deliveryError?: string };
-type Options = { fields: Record<string, Record<string, string>>; employees: Array<{ id: string; name: string; employeeNumber: string }>; emailConfigured: boolean };
+type Options = { fields: Record<string, Record<string, string>>; employees: Array<{ id: string; name: string; employeeNumber: string }>; emailConfigured: boolean; companies?: Array<{ id: string; name: string }> };
 type Preview = { columns: Array<{ key: string; label: string }>; rows: Array<Record<string, string | number>>; totalRows: number };
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const blankReport = (): Definition => ({ name: '', description: '', source: 'custom', fields: ['employeeNumber', 'employeeName', 'department'], dateRange: 'all', fromDate: '', toDate: '', employeeIds: [] });
@@ -16,7 +16,7 @@ const templates = [
   { name: 'Deduction Detail', source: 'deductions', fields: ['employeeNumber', 'employeeName', 'payDate', 'code', 'description', 'amount'] }
 ];
 
-export default function EmployerReportBuilder({ token, section, action, onCreateReport }: { token: string; section: string; action: string; onCreateReport: () => void }) {
+export default function EmployerReportBuilder({ token, section, action, onCreateReport, apiPrefix = '/employer/reports/builder', superAdmin = false }: { token: string; section: string; action: string; onCreateReport: () => void; apiPrefix?: string; superAdmin?: boolean }) {
   const scheduled = section === 'Scheduled Reports';
   const [savedTemplates, setSavedTemplates] = useState<Definition[]>([]);
   const [templateEditing, setTemplateEditing] = useState(false);
@@ -25,7 +25,8 @@ export default function EmployerReportBuilder({ token, section, action, onCreate
   const [reports, setReports] = useState<Definition[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
-  const [options, setOptions] = useState<Options>({ fields: {}, employees: [], emailConfigured: false });
+  const [options, setOptions] = useState<Options & { companies?: Array<{ id: string; name: string }> }>({ fields: {}, employees: [], emailConfigured: false, companies: [] });
+  const [companyId, setCompanyId] = useState('');
   const [view, setView] = useState(action === 'Delivery History' ? 'history' : action === 'Report Templates' ? 'templates' : action === 'Manage Report Fields' ? 'fields' : action === 'Create Custom Report' ? 'report-form' : action === 'Create Schedule' ? 'schedule-form' : action === 'Scheduled Reports List' ? 'schedule-list' : 'list');
   const [report, setReport] = useState<Definition>(blankReport);
   const [schedule, setSchedule] = useState<Schedule>(blankSchedule);
@@ -42,18 +43,20 @@ export default function EmployerReportBuilder({ token, section, action, onCreate
   const [scheduleStatus, setScheduleStatus] = useState('all');
   const [historyStatus, setHistoryStatus] = useState('all');
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await fetch(`${apiBase}/employer/reports/builder${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+    const response = await fetch(`${apiBase}${apiPrefix}${path}${superAdmin && companyId ? `${path.includes('?') ? '&' : '?'}companyId=${encodeURIComponent(companyId)}` : ''}`, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
     const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Report action failed.'); return data;
   }
   async function load() {
-    const [meta, saved, automation, history, templateData] = await Promise.all([
-      request<Options>('/options'), request<{ reports: Definition[] }>('/definitions'), request<{ schedules: Schedule[] }>('/schedules'), request<{ runs: Run[] }>('/runs'), request<{ templates: Definition[] }>('/templates')
+    const meta = await request<Options>('/options'); setOptions(meta);
+    if (superAdmin && !companyId) { if (meta.companies?.length) setCompanyId(meta.companies[0].id); return; }
+    const [saved, automation, history, templateData] = await Promise.all([
+      request<{ reports: Definition[] }>('/definitions'), request<{ schedules: Schedule[] }>('/schedules'), request<{ runs: Run[] }>('/runs'), request<{ templates: Definition[] }>('/templates')
     ]);
     setSavedTemplates(templateData.templates); setOptions(meta); setReports(saved.reports); setSchedules(automation.schedules); setRuns(history.runs);
   }
-  useEffect(() => { let current = true; void load().catch((cause: Error) => current && setError(cause.message)).finally(() => current && setLoading(false)); return () => { current = false; }; }, [token]);
+  useEffect(() => { let current = true; void load().catch((cause: Error) => current && setError(cause.message)).finally(() => current && setLoading(false)); return () => { current = false; }; }, [token, apiPrefix, companyId]);
   const perform = async (work: () => Promise<void>) => { setBusy(true); setError(''); setNotice(''); try { await work(); } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); } };
-  const reportBody = () => ({ ...report, source: 'custom', fromDate: report.dateRange === 'custom' ? report.fromDate : undefined, toDate: report.dateRange === 'custom' ? report.toDate : undefined });
+  const reportBody = () => ({ ...report, fromDate: report.dateRange === 'custom' ? report.fromDate : undefined, toDate: report.dateRange === 'custom' ? report.toDate : undefined });
   const editReport = (item?: Definition) => { setTemplateEditing(false); setReport(item ? { ...blankReport(), ...item } : blankReport()); setAllEmployees(!item?.employeeIds.length); setPreview(undefined); setView('report-form'); setError(''); };
   const update = (next: Partial<Definition>) => { setReport((current) => ({ ...current, ...next })); setPreview(undefined); };
   const editSchedule = (item?: Schedule) => { setSchedule(item ? { ...item, nextRunAt: new Date(item.nextRunAt).toISOString().slice(0, 16) } : { ...blankSchedule(), reportId: reports[0]?.id || '' }); setRecipients(item?.recipients.join(', ') || ''); setView('schedule-form'); setError(''); };
@@ -73,7 +76,7 @@ export default function EmployerReportBuilder({ token, section, action, onCreate
   const tabs = scheduled ? [['list', 'Manage Schedules'], ['schedule-list', 'Scheduled Reports List'], ['history', 'Delivery History'], ['schedule-form', 'Create Schedule']] : [['report-form', 'Create Custom Report'], ['list', 'Saved Custom Reports'], ['templates', 'Report Templates'], ['fields', 'Manage Report Fields'], ['history', 'Run History']];
   return <section className="report-builder">
     <header className="employee-head"><div><h2>{section}</h2><p>{scheduled ? 'Generate saved reports automatically. Reports are retained in run history for download.' : 'Choose your fields and filters, preview results, and save reusable reports.'}</p></div>
-      <div className="head-actions"><button disabled={loading || busy} onClick={() => perform(load)}>Refresh</button><button className="run-payroll" disabled={loading || busy} onClick={() => scheduled ? editSchedule() : editReport()}>{scheduled ? 'Create Schedule' : 'Create Custom Report'}</button></div>
+      <div className="head-actions">{superAdmin && <label>Company<select value={companyId} onChange={event => { setLoading(true); setCompanyId(event.target.value); }}><option value="">Select company</option>{options.companies?.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}<button disabled={loading || busy} onClick={() => perform(load)}>Refresh</button><button className="run-payroll" disabled={loading || busy || (superAdmin && !companyId)} onClick={() => scheduled ? editSchedule() : editReport()}>{scheduled ? 'Create Schedule' : 'Create Custom Report'}</button></div>
     </header>
     <div className="report-field-summary" aria-label="Report counts"><div><span>Saved custom reports</span><strong>{reports.length}</strong></div><div><span>Saved templates</span><strong>{savedTemplates.length}</strong></div><div><span>Active schedules</span><strong>{schedules.filter((item) => item.enabled).length}</strong></div><div><span>Completed downloads in recent history</span><strong>{runs.filter((item) => item.status === 'completed').length}</strong></div></div>
     {error && <p role="alert" className="field-error">{error}</p>}{notice && <p role="status" className="success-note">{notice}</p>}
@@ -84,11 +87,12 @@ export default function EmployerReportBuilder({ token, section, action, onCreate
       <form onSubmit={(event) => { event.preventDefault(); void perform(async () => { const collection = templateEditing ? 'templates' : 'definitions'; await request(report.id ? `/${collection}/${report.id}` : `/${collection}`, { method: report.id ? 'PUT' : 'POST', body: JSON.stringify(reportBody()) }); await load(); setView(templateEditing ? 'templates' : 'list'); setNotice(templateEditing ? 'Report template saved.' : 'Custom report saved.'); }); }}>
         <fieldset disabled={busy}><div className="settings-fields two">
           <label>Report Name<input required minLength={2} maxLength={90} value={report.name} onChange={(event) => update({ name: event.target.value })} /></label>
+          <label>Data Source<select value={report.source} onChange={(event) => update({ source: event.target.value, fields: [] })}><option value="custom">Employees, Payroll & Deductions</option><option value="employees">Employees</option><option value="payroll">Payroll</option><option value="deductions">Deductions</option></select></label>
           <label>Description<input maxLength={500} value={report.description} onChange={(event) => update({ description: event.target.value })} /></label>
           <label>Date Filter<select value={report.dateRange} onChange={(event) => update({ dateRange: event.target.value })}><option value="all">All dates</option><option value="last30">Last 30 days</option><option value="year">Year to date</option><option value="custom">Custom range</option></select></label>
           {report.dateRange === 'custom' && <><label>From<input required type="date" value={report.fromDate} onChange={(event) => update({ fromDate: event.target.value })} /></label><label>To<input required type="date" min={report.fromDate} value={report.toDate} onChange={(event) => update({ toDate: event.target.value })} /></label></>}
         </div>
-        <h3>Report Fields</h3><p>Choose unique columns across employee, payroll, hours, earnings, tax and deduction reports. Employee-only reports use start dates; combined reports use pay dates and one row per statement. Line descriptions are separated by semicolons and line amounts are totaled.</p><div className="report-builder-checks">{Object.entries(options.fields.custom || {}).map(([key, label]) => <label key={key}><input type="checkbox" checked={report.fields.includes(key)} onChange={(event) => update({ fields: event.target.checked ? [...report.fields, key] : report.fields.filter((field) => field !== key) })} />{label}</label>)}</div>
+        <h3>Report Fields</h3><p>Choose unique columns for your report. Employee-only reports use employee records; payroll and deduction reports use pay statement records.</p><div className="report-builder-checks">{Object.entries(options.fields[report.source] || {}).map(([key, label]) => <label key={key}><input type="checkbox" checked={report.fields.includes(key)} onChange={(event) => update({ fields: event.target.checked ? [...report.fields, key] : report.fields.filter((field) => field !== key) })} />{label}</label>)}</div>
         <h3>Employees</h3><label><input type="checkbox" checked={allEmployees} onChange={(event) => { setAllEmployees(event.target.checked); update({ employeeIds: [] }); }} />All employees</label>
         <input placeholder="Search employee name or ID" aria-label="Filter report employees" value={employeeSearch} onChange={(event) => setEmployeeSearch(event.target.value)} />
         <div className="deduction-employee-list">{options.employees.filter((employee) => `${employee.name} ${employee.employeeNumber}`.toLowerCase().includes(employeeSearch.toLowerCase())).map((employee) => <label key={employee.id}><input type="checkbox" checked={report.employeeIds.includes(employee.id)} onChange={(event) => { setAllEmployees(false); update({ employeeIds: event.target.checked ? [...report.employeeIds, employee.id] : report.employeeIds.filter((id) => id !== employee.id) }); }} />{employee.name} ({employee.employeeNumber})</label>)}</div>
