@@ -14470,9 +14470,9 @@ function ScheduledReportsPanel({ companies }: { companies: string[] }) {
   </section>;
 }
 
-function SuperAdminEmployeeReports({ token }: { token: string }) {
+function SuperAdminEmployeeReports({ token, initialTab = 'Overview' }: { token: string; initialTab?: string }) {
   const [source, setSource] = useState<'super-admin' | 'employer'>('employer');
-  const [tab, setTab] = useState('Overview');
+  const [tab, setTab] = useState(initialTab);
   const [data, setData] = useState<SuperAdminReportsData>();
   const [rows, setRows] = useState<SuperAdminEmployeeReportRow[]>([]);
   const [search, setSearch] = useState('');
@@ -15756,7 +15756,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
             <button type="button" aria-expanded={reportsExpanded || reportPages.includes(page)} className={reportPages.includes(page) ? 'active' : ''} onClick={() => setReportsExpanded(value => !value)}>
               <span>{item.label.charAt(0)}</span>{item.label}<span className="sa-sidebar-chevron">{reportsExpanded || reportPages.includes(page) ? '⌃' : '⌄'}</span>
             </button>
-            {(reportsExpanded || reportPages.includes(page)) && reportPages.map(section => <button type="button" key={section} className={`sub-nav-item ${section === activeReportSection ? 'active' : ''}`} onClick={() => { setPage('Reports'); setReportsExpanded(true); window.dispatchEvent(new CustomEvent('super-admin-report-tab', { detail: section })); }}><span>•</span>{section}</button>)}
+            {(reportsExpanded || reportPages.includes(page)) && reportPages.map(section => <button type="button" key={section} className={`sub-nav-item ${section === activeReportSection ? 'active' : ''}`} onClick={() => { setActiveReportSection(section); setPage('Reports'); setReportsExpanded(true); window.dispatchEvent(new CustomEvent('super-admin-report-tab', { detail: section })); }}><span>•</span>{section}</button>)}
           </div>
         ) : <button
           key={item.label}
@@ -15787,7 +15787,7 @@ function SuperAdminDashboard({ token, onLogout }: { token: string; onLogout: () 
           <button className="super-admin-header-action logout" onClick={onLogout}>Logout</button>
         </header>
         <section className="admin-content">
-          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Dashboard' ? dashboard : page === 'Compliance & Tax' ? <SuperAdminCompliance token={token} onNavigate={setPage} /> : page === 'Reports' ? <SuperAdminEmployeeReports token={token} /> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
+          {!accessLoaded ? <p>Loading access...</p> : !allowedSections.length ? <p>No sections have been assigned to your account.</p> : page === 'Dashboard' ? dashboard : page === 'Compliance & Tax' ? <SuperAdminCompliance token={token} onNavigate={setPage} /> : page === 'Reports' ? <SuperAdminEmployeeReports token={token} initialTab={activeReportSection} /> : page === 'Settings' ? <SuperAdminSettings token={token} /> : page === 'Employees' ? <SuperAdminEmployees token={token} /> : [
             'Users & Access',
             'All Users',
             'Role Management',
