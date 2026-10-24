@@ -14517,7 +14517,8 @@ function SuperAdminEmployeeReports({ token, initialTab = 'Overview' }: { token: 
   const downloadReport = async (format: 'pdf' | 'excel' | 'csv') => {
     setError('');
     try {
-      const response = await fetch(`${apiBase}/super-admin/reports/builder/export?section=${encodeURIComponent(tab)}&format=${format}`, { headers: { Authorization: `Bearer ${token}` } });
+      const sourceParam = tab === 'Employees' ? `&source=${encodeURIComponent(source)}` : '';
+      const response = await fetch(`${apiBase}/super-admin/reports/builder/export?section=${encodeURIComponent(tab)}&format=${format}${sourceParam}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) { const result = await response.json(); throw new Error(result.message || 'Could not download this report.'); }
       const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || `${tab.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-report.${format === 'excel' ? 'xls' : format}`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not download this report.'); }

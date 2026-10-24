@@ -8,6 +8,7 @@ import { EmployerReport, EmployerReportRun, EmployerReportSchedule, EmployerRepo
 import { PayrollRun } from '../models/PayrollRun';
 import { PayStatement } from '../models/PayStatement';
 import { GovernmentFiling } from '../models/GovernmentFiling';
+import { SuperAdmin } from '../models/SuperAdmin';
 import { buildReport, reportFields, reportFile, runReport } from '../services/employerReports.service';
 import { reportDefinitionSchema, reportScheduleSchema } from './employerReportBuilder';
 
@@ -44,9 +45,17 @@ router.get('/export', requirePermission('reports.export'), async (req: AuthReque
     const runs = await PayrollRun.find({ ...(companyId ? { companyId } : {}) }).sort({ payDate: -1 }).limit(5000);
     rows.push(...runs.map(run => ({ company: companyMap.get(String(run.companyId))?.operatingName || companyMap.get(String(run.companyId))?.legalName || 'Unknown company', customerId: companyMap.get(String(run.companyId))?.customerId || '', period: `${date(run.periodStart)} – ${date(run.periodEnd)}`, payDate: date(run.payDate), employees: run.employeeCount, gross: money(run.estimatedGross), deductions: money(run.totalDeductions), net: money(run.totalNetPay), status: run.status })));
   } else if (section.data === 'Employees') {
-    columns.push(...[['company', 'Company'], ['employeeNumber', 'Employee ID'], ['employeeName', 'Employee Name'], ['email', 'Email'], ['department', 'Department'], ['jobTitle', 'Job Title'], ['province', 'Province'], ['startDate', 'Start Date']].map(([key, label]) => ({ key, label })));
-    const employees = await Employee.find({ ...(companyId ? { companyId } : {}) }).select('companyId employeeNumber legalFirstName legalLastName companyEmail occupation taxProvince startDate adminProfile').sort({ employeeNumber: 1 }).limit(10000);
-    rows.push(...employees.map(employee => ({ company: companyMap.get(String(employee.companyId))?.operatingName || companyMap.get(String(employee.companyId))?.legalName || 'Unknown company', employeeNumber: employee.employeeNumber, employeeName: `${employee.legalFirstName} ${employee.legalLastName}`.trim(), email: employee.companyEmail || '', department: String(employee.adminProfile?.employment?.department || ''), jobTitle: employee.occupation || '', province: employee.taxProvince || '', startDate: date(employee.startDate) })));
+    if (req.query.source === 'super-admin') {
+      columns.push(...[['employeeNumber', 'Employee ID'], ['employeeName', 'Employee Name'], ['email', 'Email'], ['role', 'Role'], ['employer', 'Employer'], ['status', 'Status'], ['createdAt', 'Added Date']].map(([key, label]) => ({ key, label })));
+      const current = await SuperAdmin.findById(req.superAdminContext!.superAdminId).select('staffOwnerId');
+      const ownerId = current?.staffOwnerId || req.superAdminContext!.superAdminId;
+      const staff = await SuperAdmin.find({ staffOwnerId: ownerId }).sort({ createdAt: -1 }).limit(10000);
+      rows.push(...staff.map(person => ({ employeeNumber: person.staffProfile?.employeeNumber || '', employeeName: person.name || [person.staffProfile?.firstName, person.staffProfile?.lastName].filter(Boolean).join(' ') || 'Super Admin', email: person.email, role: person.role || 'Super Admin', employer: 'Payhours Inc.', status: person.isActive ? 'Active' : 'Inactive', createdAt: date(person.createdAt) })));
+    } else {
+      columns.push(...[['company', 'Company'], ['employeeNumber', 'Employee ID'], ['employeeName', 'Employee Name'], ['email', 'Email'], ['department', 'Department'], ['jobTitle', 'Job Title'], ['province', 'Province'], ['startDate', 'Start Date']].map(([key, label]) => ({ key, label })));
+      const employees = await Employee.find({ ...(companyId ? { companyId } : {}) }).select('companyId employeeNumber legalFirstName legalLastName companyEmail occupation taxProvince startDate adminProfile').sort({ employeeNumber: 1 }).limit(10000);
+      rows.push(...employees.map(employee => ({ company: companyMap.get(String(employee.companyId))?.operatingName || companyMap.get(String(employee.companyId))?.legalName || 'Unknown company', employeeNumber: employee.employeeNumber, employeeName: `${employee.legalFirstName} ${employee.legalLastName}`.trim(), email: employee.companyEmail || '', department: String(employee.adminProfile?.employment?.department || ''), jobTitle: employee.occupation || '', province: employee.taxProvince || '', startDate: date(employee.startDate) })));
+    }
   } else if (section.data === 'Tax (CRA)' || section.data === 'Compliance') {
     columns.push(...[['company', 'Company'], ['filing', 'Filing'], ['period', 'Period'], ['year', 'Year'], ['dueDate', 'Due Date'], ['amount', 'Amount'], ['status', 'Status'], ['reference', 'Reference']].map(([key, label]) => ({ key, label })));
     const filings = await GovernmentFiling.find({ ...(companyId ? { companyId } : {}) }).sort({ dueDate: 1 }).limit(10000);
